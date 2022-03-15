@@ -1,12 +1,16 @@
 """
 Testing code for finding hopf bifurcations of coupled FE VF models
 """
+from os import path
 from petsc4py import PETSc
+
+from femvf.dynamicalmodels import solid as sldm, fluid as fldm
+from femvf.load import load_dynamical_fsi_model
 
 import blocklinalg.genericops as gops
 import blocklinalg.linalg as bla
-from blocklinalg.vec import BlockVec, concatenate_vec
-from blocklinalg.mat import concatenate_mat, zero_mat, BlockMat
+from blocklinalg import vec as bvec
+from blocklinalg import mat as bmat
 
 def hopf_state(res):
     """
@@ -16,20 +20,20 @@ def hopf_state(res):
 
     _mode_real_vecs = res.state.copy().array
     _mode_real_labels = tuple(tuple([label+'_mode_real' for label in X_state.labels[0]]))
-    X_mode_real = BlockVec(_mode_real_vecs, _model_real_labels)
+    X_mode_real = bvec.BlockVec(_mode_real_vecs, _mode_real_labels)
 
     _mode_imag_vecs = res.state.copy().array
     _mode_imag_labels = tuple(tuple([label+'_mode_imag' for label in X_state.labels[0]]))
-    X_mode_imag = BlockVec(_mode_imag_vecs, _mode_imag_labels)
+    X_mode_imag = bvec.BlockVec(_mode_imag_vecs, _mode_imag_labels)
 
     X_psub = res.control[['psub']].copy()
 
     _omega = X_psub['psub'].copy()
     _omega_vecs = tuple([_omega])
     _omega_labels = tuple(tuple(['omega']))
-    X_omega = BlockVec(_omega_vec, _omega_labels)
+    X_omega = bvec.BlockVec(_omega_vecs, _omega_labels)
 
-    ret = concatenate_vec([X_state, X_mode_real, X_mode_imag, X_psub, X_omega])
+    ret = bvec.concatenate_vec([X_state, X_mode_real, X_mode_imag, X_psub, X_omega])
     state_labels = X_state.labels[0]
     mode_real_labels = X_mode_real.labels[0]
     mode_imag_labels = X_mode_imag.labels[0]
@@ -54,7 +58,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         The linearized fixed-point system residual w.r.t ut. This represents
         dF/dut dut
     """
-    for model in (res, res_u, res_ut):
+    for model in (res, dres_u, dres_ut):
         model.set_properties(props)
 
     # Create the input vector for the system
@@ -65,7 +69,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
     EBVEC['u'][0] = 1.0
     def hopf_res(x):
         # Set the model state and subglottal pressure (bifurcation parameter)
-        for model in (res, res_u, res_ut):
+        for model in (res, dres_u, dres_ut):
             model.set_state(x[state_labels])
 
             _control = model.control.copy()
@@ -91,29 +95,33 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         res_omega = x[['omega']].copy()
         res_psub['omega'][0] = bla.dot(EBVEC, x[mode_imag_labels])
 
-        return concatenate_vec([res_state, res_mode_real, res_mode_imag, res_psub, res_omega])
+        return bvec.concatenate_vec([res_state, res_mode_real, res_mode_imag, res_psub, res_omega])
 
 
     # Make null matrix constants
     mats = [
-        [zero_mat(row_size, col_size) for col_size in x[state_labels].bshape[0]] 
+        [bmat.zero_mat(row_size, col_size) for col_size in x[state_labels].bshape[0]] 
         for row_size in x[state_labels].bshape[0]]
-    NULL_MAT_STATE_STATE = BlockMat(mats, (x[state_labels].bshape[0], x[state_labels].bshape[0]))
+    NULL_MAT_STATE_STATE = bmat.BlockMat(mats, (x[state_labels].bshape[0], x[state_labels].bshape[0]))
 
     mats = [
-        [zero_mat(row_size, col_size) for col_size in [1]] 
+        [bmat.zero_mat(row_size, col_size) for col_size in [1]] 
         for row_size in x[state_labels].bshape[0]]
-    NULL_MAT_STATE_SCALAR = BlockMat(mats, (('1'), x[state_labels].bshape[0]))
+    NULL_MAT_STATE_SCALAR = bmat.BlockMat(mats, (x[state_labels].bshape[0], ('1',)))
 
     mats = [
-        [zero_mat(row_size, col_size) for col_size in x[state_labels].bshape[0]] 
+        [bmat.zero_mat(row_size, col_size) for col_size in x[state_labels].bshape[0]] 
         for row_size in [1]]
-    NULL_MAT_OMEGA_STATE = BlockMat(mats, (('omega',), x[state_labels].bshape[0]))
-    NULL_MAT_PSUB_STATE = BlockMat(mats, (('psub',), x[state_labels].bshape[0]))
+    NULL_MAT_SCALAR_STATE = bmat.BlockMat(mats, (('1',), x[state_labels].bshape[0]))
+
+    mats = [
+        [bmat.zero_mat(row_size, col_size) for col_size in [1]] 
+        for row_size in [1]]
+    NULL_MAT_SCALAR_SCALAR = bmat.BlockMat(mats, (('1',), ('1',)))
 
     def hopf_jac(x):
         # Set the model state and subglottal pressure (bifurcation parameter)
-        for model in (res, res_u, res_ut):
+        for model in (res, dres_u, dres_ut):
             model.set_state(x[state_labels])
 
             _control = model.control.copy()
@@ -139,8 +147,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
             dres_dstate, 
             omega*dres_dstatet, 
             dres_u.assem_dres_dcontrol()[:, ['psub']] + omega*dres_ut.assem_dres_dcontrol()[:, ['psub']], 
-            dres_ut.assem_res()]
-        # TODO: the last entry of the row ((dres_ut.assem_res()) must be converted to a column matrix
+            bvec.convert_bvec_to_petsc_colbmat(dres_ut.assem_res())]
 
         # Set appropriate linearization directions
         dres_u.set_dstate(x[mode_imag_labels])
@@ -150,27 +157,50 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
             -omega*dres_dstatet, 
             dres_dstate, 
             dres_u.assem_dres_dcontrol()[:, ['psub']] - omega*dres_ut.assem_dres_dcontrol()[:, ['psub']], 
-            dres_ut.assem_res()]
-        # TODO: the last entry of the row (dres_ut.assem_res()) must be converted to a column matrix
+            bvec.convert_bvec_to_petsc_colbmat(dres_ut.assem_res())]
 
         jac_4 = [
-            NULL_MAT_SCALAR_SCALAR,
-            EBVEC, # TODO: have to convert this to appropriate, row matrix
-            NULL_MAT_SCALAR_SCALAR,
+            NULL_MAT_SCALAR_STATE,
+            bvec.convert_bvec_to_petsc_rowbmat(EBVEC),
+            NULL_MAT_SCALAR_STATE,
             NULL_MAT_SCALAR_SCALAR,
             NULL_MAT_SCALAR_SCALAR
             ]
 
         jac_5 = [
-            NULL_MAT_SCALAR_SCALAR,
-            NULL_MAT_SCALAR_SCALAR,
-            EBVEC, # TODO: have to convert this to appropriate, row matrix
+            NULL_MAT_SCALAR_STATE,
+            NULL_MAT_SCALAR_STATE,
+            bvec.convert_bvec_to_petsc_rowbmat(EBVEC),
             NULL_MAT_SCALAR_SCALAR,
             NULL_MAT_SCALAR_SCALAR
             ]
 
         mats = [jac_1, jac_2, jac_3, jac_4, jac_5]
 
-        return concatenate_mat(mats)
+        return bmat.concatenate_mat(mats)
 
     return x, hopf_res, hopf_jac, labels
+
+if __name__ == '__main__':
+    print("heyhey yoyo")
+
+    mesh_name = 'BC-dcov5.00e-02-cl1.00'
+    mesh_path = path.join('./mesh', mesh_name+'.xml')
+
+    res = load_dynamical_fsi_model(
+        mesh_path, None, SolidType = sldm.KelvinVoigt,
+        FluidType = fldm.Bernoulli1DDynamicalSystem,
+        fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
+
+    dres_u = load_dynamical_fsi_model(
+        mesh_path, None, SolidType = sldm.LinearStateKelvinVoigt,
+        FluidType = fldm.LinearStateBernoulli1DDynamicalSystem,
+        fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
+
+    dres_ut = load_dynamical_fsi_model(
+        mesh_path, None, SolidType = sldm.LinearStatetKelvinVoigt,
+        FluidType = fldm.LinearStatetBernoulli1DDynamicalSystem,
+        fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
+
+    props = res.properties.copy()
+    x, hopf_res, hopf_jac, labels = make_hopf_system(res, dres_u, dres_ut, props)
