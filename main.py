@@ -19,26 +19,27 @@ def hopf_state(res):
     X_state = res.state.copy()
 
     _mode_real_vecs = res.state.copy().array
-    _mode_real_labels = tuple(tuple([label+'_mode_real' for label in X_state.labels[0]]))
+    _mode_real_labels = [label+'_mode_real' for label in X_state.labels[0]]
     X_mode_real = bvec.BlockVec(_mode_real_vecs, _mode_real_labels)
 
     _mode_imag_vecs = res.state.copy().array
-    _mode_imag_labels = tuple(tuple([label+'_mode_imag' for label in X_state.labels[0]]))
+    _mode_imag_labels = [label+'_mode_imag' for label in X_state.labels[0]]
     X_mode_imag = bvec.BlockVec(_mode_imag_vecs, _mode_imag_labels)
 
+    breakpoint()
     X_psub = res.control[['psub']].copy()
 
     _omega = X_psub['psub'].copy()
-    _omega_vecs = tuple([_omega])
-    _omega_labels = tuple(tuple(['omega']))
+    _omega_vecs = [_omega]
+    _omega_labels = [['omega']]
     X_omega = bvec.BlockVec(_omega_vecs, _omega_labels)
 
     ret = bvec.concatenate_vec([X_state, X_mode_real, X_mode_imag, X_psub, X_omega])
-    state_labels = X_state.labels[0]
-    mode_real_labels = X_mode_real.labels[0]
-    mode_imag_labels = X_mode_imag.labels[0]
-    psub_labels = X_psub.labels[0]
-    omega_labels = X_omega.labels[0]
+    state_labels = list(X_state.labels[0])
+    mode_real_labels = list(X_mode_real.labels[0])
+    mode_imag_labels = list(X_mode_imag.labels[0])
+    psub_labels = list(X_psub.labels[0])
+    omega_labels = list(X_omega.labels[0])
     return ret, state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels
 
 def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
@@ -82,18 +83,18 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         omega = x['omega'][0]
         dres_u.set_dstate(x[mode_real_labels])
         dres_ut.set_dstate(x[mode_imag_labels])
-        res_mode_real = dres_u.assem_dres_u() + omega*dres_ut.assem_res()
+        res_mode_real = dres_u.assem_res() + omega*dres_ut.assem_res()
 
         # Set appropriate linearization directions
         dres_u.set_dstate(x[mode_imag_labels])
         dres_ut.set_dstate(x[mode_real_labels])
-        res_mode_imag = dres_u.assem_dres_u() - omega*dres_ut.assem_res()
+        res_mode_imag = dres_u.assem_res() - omega*dres_ut.assem_res()
 
         res_psub = x[['psub']].copy()
         res_psub['psub'][0] = bla.dot(EBVEC, x[mode_real_labels])
 
         res_omega = x[['omega']].copy()
-        res_psub['omega'][0] = bla.dot(EBVEC, x[mode_imag_labels])
+        res_psub['psub'][0] = bla.dot(EBVEC, x[mode_imag_labels])
 
         return bvec.concatenate_vec([res_state, res_mode_real, res_mode_imag, res_psub, res_omega])
 
@@ -204,3 +205,6 @@ if __name__ == '__main__':
 
     props = res.properties.copy()
     x, hopf_res, hopf_jac, labels = make_hopf_system(res, dres_u, dres_ut, props)
+
+    g = hopf_res(x)
+    dgdx = hopf_jac(x)
