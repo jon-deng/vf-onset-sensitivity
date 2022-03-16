@@ -103,17 +103,17 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
     mats = [
         [bmat.zero_mat(row_size, col_size) for col_size in x[state_labels].bshape[0]] 
         for row_size in x[state_labels].bshape[0]]
-    NULL_MAT_STATE_STATE = bmat.BlockMat(mats, (x[state_labels].bshape[0], x[state_labels].bshape[0]))
+    NULL_MAT_STATE_STATE = bmat.BlockMat(mats, (x[state_labels].labels[0], x[state_labels].labels[0]))
 
     mats = [
         [bmat.zero_mat(row_size, col_size) for col_size in [1]] 
         for row_size in x[state_labels].bshape[0]]
-    NULL_MAT_STATE_SCALAR = bmat.BlockMat(mats, (x[state_labels].bshape[0], ('1',)))
+    NULL_MAT_STATE_SCALAR = bmat.BlockMat(mats, (x[state_labels].labels[0], ('1',)))
 
     mats = [
         [bmat.zero_mat(row_size, col_size) for col_size in x[state_labels].bshape[0]] 
         for row_size in [1]]
-    NULL_MAT_SCALAR_STATE = bmat.BlockMat(mats, (('1',), x[state_labels].bshape[0]))
+    NULL_MAT_SCALAR_STATE = bmat.BlockMat(mats, (('1',), x[state_labels].labels[0]))
 
     mats = [
         [bmat.zero_mat(row_size, col_size) for col_size in [1]] 
