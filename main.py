@@ -3,6 +3,7 @@ Testing code for finding hopf bifurcations of coupled FE VF models
 """
 from os import path
 from petsc4py import PETSc
+import numpy as np
 
 from femvf.dynamicalmodels import solid as sldm, fluid as fldm
 from femvf.load import load_dynamical_fsi_model
@@ -26,7 +27,7 @@ def hopf_state(res):
     _mode_imag_labels = [label+'_mode_imag' for label in X_state.labels[0]]
     X_mode_imag = bvec.BlockVec(_mode_imag_vecs, _mode_imag_labels)
 
-    breakpoint()
+    # breakpoint()
     X_psub = res.control[['psub']].copy()
 
     _omega = X_psub['psub'].copy()
@@ -61,6 +62,8 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
     """
     for model in (res, dres_u, dres_ut):
         model.set_properties(props)
+
+    IDX_DIRICHLET = np.array(list(res.solid.forms['bc.dirichlet'].get_boundary_values().keys()), dtype=np.int32)
 
     # Create the input vector for the system
     x, state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels = hopf_state(res)
@@ -176,9 +179,23 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
             NULL_MAT_SCALAR_SCALAR
             ]
 
-        mats = [jac_1, jac_2, jac_3, jac_4, jac_5]
+        ret_mats = [jac_1, jac_2, jac_3, jac_4, jac_5]
+        ret_axis_labels = tuple(
+            state_labels + mode_real_labels + mode_imag_labels + psub_labels + omega_labels)
+        ret_labels = (ret_axis_labels, ret_axis_labels)
+        ret_bmat = bmat.concatenate_mat(ret_mats, ret_labels)
 
-        return bmat.concatenate_mat(mats)
+        breakpoint()
+        # apply dirichlet BC to mats
+        for label in ['u', 'v', 'u_mode_real', 'v_mode_real', 'u_mode_imag', 'v_mode_imag']:
+            # zero the rows associated with each dirichlet DOF
+            for mat in ret_bmat[label, :].array:
+                mat.zeroRows(IDX_DIRICHLET, diag=0)
+
+            # Set 1 on the diagonal (zero's one block twice but it shouldn't matter much)
+            ret_bmat[label, label].zeroRows(IDX_DIRICHLET, diag=1)
+
+        return ret_bmat
 
     return x, hopf_res, hopf_jac, labels
 
