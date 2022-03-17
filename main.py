@@ -2,6 +2,7 @@
 Testing code for finding hopf bifurcations of coupled FE VF models
 """
 from os import path
+from functools import reduce
 from petsc4py import PETSc
 import numpy as np
 
@@ -69,6 +70,8 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
     x, state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels = hopf_state(res)
     labels = (state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels)
 
+    HOPF_SYSTEM_LABELS = tuple(reduce(lambda a, b: a+b, labels))
+
     EBVEC = x[state_labels].copy()
     EBVEC['u'][0] = 1.0
     def hopf_res(x):
@@ -99,7 +102,8 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         res_omega = x[['omega']].copy()
         res_psub['psub'][0] = bla.dot(EBVEC, x[mode_imag_labels])
 
-        return bvec.concatenate_vec([res_state, res_mode_real, res_mode_imag, res_psub, res_omega])
+        return bvec.concatenate_vec(
+            [res_state, res_mode_real, res_mode_imag, res_psub, res_omega], labels=HOPF_SYSTEM_LABELS)
 
 
     # Make null matrix constants
@@ -185,7 +189,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         ret_labels = (ret_axis_labels, ret_axis_labels)
         ret_bmat = bmat.concatenate_mat(ret_mats, ret_labels)
 
-        breakpoint()
+        # breakpoint()
         # apply dirichlet BC to mats
         for label in ['u', 'v', 'u_mode_real', 'v_mode_real', 'u_mode_imag', 'v_mode_imag']:
             # zero the rows associated with each dirichlet DOF
@@ -197,11 +201,15 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
 
         return ret_bmat
 
-    return x, hopf_res, hopf_jac, labels
+    def apply_dirichlet_vec(vec):
+        for label in ['u', 'v', 'u_mode_real', 'v_mode_real', 'u_mode_imag', 'v_mode_imag']:
+            # zero the rows associated with each dirichlet DOF
+            subvec = vec[label]
+            subvec.array[IDX_DIRICHLET] = 0
+
+    return x, hopf_res, hopf_jac, apply_dirichlet_vec, labels
 
 if __name__ == '__main__':
-    print("heyhey yoyo")
-
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
     mesh_path = path.join('./mesh', mesh_name+'.xml')
 
@@ -221,7 +229,40 @@ if __name__ == '__main__':
         fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
 
     props = res.properties.copy()
-    x, hopf_res, hopf_jac, labels = make_hopf_system(res, dres_u, dres_ut, props)
+    props['psub'].array[:] = 800 * 10
+    props['psup'].array[:] = 800 * 10
+    props['emod'].array[:] = 5e3 * 10
 
-    g = hopf_res(x)
+    y_gap = 0.5 / 10 # Set y gap to 0.5 mm
+    y_contact_offset = 0.1 / 10
+    y_max = res.solid.forms['mesh.mesh'].coordinates()[:, 1].max()
+    y_mid = y_max + y_gap
+    y_contact = y_mid - y_contact_offset
+    props['ycontact'].array[:] = y_contact
+    props['kcontact'].array[:] = 1e16
+    for model in (res, dres_u, dres_ut):
+        model.ymid = y_mid
+
+
+    x, hopf_res, hopf_jac, apply_dirichlet_vec, labels = make_hopf_system(res, dres_u, dres_ut, props)
+
+    x0 = x.copy()
+    dx = x.copy()
+    dx['u'].array[:] = 1.0
+    apply_dirichlet_vec(dx)
+    apply_dirichlet_vec(x0)
+    x1 = x0 + dx
+
+    g0 = hopf_res(x0)
+    g1 = hopf_res(x1)
     dgdx = hopf_jac(x)
+
+    dg_exact = g1 - g0
+    dg_linear = bla.mult_mat_vec(dgdx, dx)
+    print(f"||g0|| = {g0.norm():.4e}")
+    print(f"||g1|| = {g1.norm():.4e}")
+
+    print(f"||dg_exact|| = {dg_exact.norm():.4e}")
+    print(f"||dg_linear|| = {dg_linear.norm():.4e}")
+
+    print(f"||dg_exact-dg_linear|| = {(dg_exact-dg_linear).norm():.4e}")
