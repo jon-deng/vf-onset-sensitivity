@@ -5,7 +5,7 @@ from os import path
 import itertools
 from functools import reduce
 from petsc4py import PETSc
-# from slepc4py import SLEPc
+from slepc4py import SLEPc
 import numpy as np
 
 from femvf.dynamicalmodels import solid as sldm, fluid as fldm
@@ -160,17 +160,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
             res.assem_dres_dcontrol()[:, ['psub']], 
             NULL_MAT_STATE_SCALAR]
 
-        # Set appropriate linearization directions
         omega = x['omega'][0]
-        dres_u.set_dstate(x[mode_real_labels])
-        dres_ut.set_dstate(x[mode_imag_labels])
-        jac_3 = [
-            dres_u.assem_dres_dstate() + omega*dres_ut.assem_dres_dstate(), 
-            dres_dstate, 
-            omega*dres_dstatet, 
-            dres_u.assem_dres_dcontrol()[:, ['psub']] + omega*dres_ut.assem_dres_dcontrol()[:, ['psub']], 
-            bvec.convert_bvec_to_petsc_colbmat(dres_ut.assem_res())]
-
         # Set appropriate linearization directions
         dres_u.set_dstate(x[mode_imag_labels])
         dres_ut.set_dstate(x[mode_real_labels])
@@ -179,6 +169,16 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
             -omega*dres_dstatet, 
             dres_dstate, 
             dres_u.assem_dres_dcontrol()[:, ['psub']] - omega*dres_ut.assem_dres_dcontrol()[:, ['psub']], 
+            bvec.convert_bvec_to_petsc_colbmat(dres_ut.assem_res())]
+
+        # Set appropriate linearization directions
+        dres_u.set_dstate(x[mode_real_labels])
+        dres_ut.set_dstate(x[mode_imag_labels])
+        jac_3 = [
+            dres_u.assem_dres_dstate() + omega*dres_ut.assem_dres_dstate(), 
+            dres_dstate, 
+            omega*dres_dstatet, 
+            dres_u.assem_dres_dcontrol()[:, ['psub']] + omega*dres_ut.assem_dres_dcontrol()[:, ['psub']], 
             bvec.convert_bvec_to_petsc_colbmat(dres_ut.assem_res())]
 
         jac_4 = [
@@ -292,7 +292,7 @@ if __name__ == '__main__':
     x0 = x.copy()
     x0['psub'].array[:] = 800.0*10
     # This value is set to ensure the correct df/dxt matrix when computing eigvals
-    # x0['omega'].array[:] = 1.0
+    x0['omega'].array[:] = 1.0
     dx = x.copy()
     for subvec in dx:
         subvec.set(0)
@@ -344,23 +344,28 @@ if __name__ == '__main__':
     x_n, info = nleq.newton_solve(x_n, linear_subproblem, norm=bvec.norm, params=newton_params)
 
     ## Test solving for stabilty (modal analysis of the jacobian)
-    # jac = hopf_jac(x_n)
-    # _jac = jac.to_petsc()
-    # _x_n = x_n.to_petsc()
+    xhopf_n[state_labels] = x_n
+    jac = hopf_jac(xhopf_n)
+    df_dx = jac[state_labels, state_labels]
+    df_dxt = jac[mode_imag_labels, mode_imag_labels]
+    _df_dx = df_dx.to_petsc()
+    _df_dxt = df_dxt.to_petsc()
 
-    # eps = SLEPc.EPS().create()
-    # eps.setOperators(_df_dxt, _df_dx)
-    # eps.setProblemType(SLEPc.EPS.ProblemType.NHEP)
+    eps = SLEPc.EPS().create()
+    eps.setOperators(_df_dxt, _df_dx)
+    eps.setProblemType(SLEPc.EPS.ProblemType.GNHEP)
 
     # # number of eigenvalues to solve for and dimension of subspace to approximate problem
-    # num_eig = 5
-    # num_col = 5*num_eig
-    # eps.setDimensions(num_eig, num_col)
-    # eps.setWhichEigenpairs(SLEPc.EPS.WHICH.LARGEST_REAL)
+    num_eig = 5
+    num_col = 10*num_eig
+    eps.setDimensions(num_eig, num_col)
+    eps.setWhichEigenpairs(SLEPc.EPS.Which.LARGEST_MAGNITUDE)
+    eps.solve()
+
+    eigvals = np.array([eps.getEigenvalue(jj) for jj in range(eps.getConverged())])
+    omegas = 1/(-1j*eigvals)
 
     breakpoint()
-    # {'status': 0, 'message': 'solver converged', 'abs_errs': array([9.35027414e+03, 5.28318832e+00, 3.18239235e-04, 1.17763230e-11]), 'rel_errs': array([1.00000000e+00, 5.65030313e-04, 3.40352839e-08, 1.25946286e-15])}
-
     
 
     
