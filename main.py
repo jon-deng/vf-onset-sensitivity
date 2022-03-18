@@ -9,11 +9,14 @@ import numpy as np
 
 from femvf.dynamicalmodels import solid as sldm, fluid as fldm
 from femvf.load import load_dynamical_fsi_model
+import nonlineq as nleq
 
 import blocklinalg.genericops as gops
 import blocklinalg.linalg as bla
 from blocklinalg import vec as bvec
 from blocklinalg import mat as bmat
+
+# pylint: disable=redefined-outer-name
 
 def hopf_state(res):
     """
@@ -66,6 +69,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         model.set_properties(props)
 
     def assign_state(x):
+        """handles assignment of some parts of x to the underlying models"""
         for model in (res, dres_u, dres_ut):
             model.set_state(x[state_labels])
 
@@ -75,6 +79,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
 
     IDX_DIRICHLET = np.array(list(res.solid.forms['bc.dirichlet'].get_boundary_values().keys()), dtype=np.int32)
     def apply_dirichlet_vec(vec):
+        """Zeros dirichlet associated indices"""
         for label in ['u', 'v', 'u_mode_real', 'v_mode_real', 'u_mode_imag', 'v_mode_imag']:
             # zero the rows associated with each dirichlet DOF
             subvec = vec[label]
@@ -89,6 +94,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
     EBVEC = x[state_labels].copy()
     EBVEC['u'][0] = 1.0
     def hopf_res(x):
+        """Return the Hopf system residual"""
         # Set the model state and subglottal pressure (bifurcation parameter)
         assign_state(x)
 
@@ -139,6 +145,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
     NULL_MAT_SCALAR_SCALAR = bmat.BlockMat(mats, (('1',), ('1',)))
 
     def hopf_jac(x):
+        """Return the Hopf system jacobian"""
         # Set the model state and subglottal pressure (bifurcation parameter)
         assign_state(x)
 
@@ -212,6 +219,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
 
 
 def test_hopf(x0, dx, hopf_res, hopf_jac):
+    """Test correctness of the Hopf jacobian/residual"""
     ## Test the Hopf system Jacobian
     x1 = x0 + dx
 
@@ -249,10 +257,15 @@ if __name__ == '__main__':
         FluidType = fldm.LinearStatetBernoulli1DDynamicalSystem,
         fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
 
-    # Set properties and control
+    ## Set model properties
     props = res.properties.copy()
+    # VF material props
     props['emod'].array[:] = 5e3 * 10
     props['rho'].array[:] = 1.0
+
+    # Fluid separation smoothing props
+    # props['zeta_min'].array[:] = 1e-3
+    # props['zeta_sep'].array[:] = 1e-3
 
     y_gap = 0.5 / 10 # Set y gap to 0.5 mm
     y_gap = 1.0
@@ -272,6 +285,7 @@ if __name__ == '__main__':
         model.set_control(control)
 
     x, hopf_res, hopf_jac, apply_dirichlet_vec, labels = make_hopf_system(res, dres_u, dres_ut, props)
+    state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels = labels
 
     ## Test the Hopf jacobian
     x0 = x.copy()
@@ -283,6 +297,50 @@ if __name__ == '__main__':
 
     apply_dirichlet_vec(dx)
     apply_dirichlet_vec(x0)
-    test_hopf(x0, dx, hopf_res, hopf_jac)
+    # test_hopf(x0, dx, hopf_res, hopf_jac)
+
+    ## A single iteration of a fixed-point solver
+    def linear_subproblem(x_n):
+        """Linear subproblem of a Newton solver"""
+        xhopf_n = x0.copy()
+        xhopf_n[state_labels] = x_n
+
+        res_n = hopf_res(xhopf_n)[state_labels]
+        jac_n = hopf_jac(xhopf_n)[state_labels, state_labels]
+
+        def assem_res():
+            """Return residual"""
+            return res_n
+
+        def solve(rhs_n):
+            """Return jac^-1 res"""
+            _rhs_n = rhs_n.to_petsc()
+            _jac_n = jac_n.to_petsc()
+            _dx_n = _jac_n.getVecRight()
+
+            ksp = PETSc.KSP().create()
+            ksp.setType(ksp.Type.PREONLY)
+
+            pc = ksp.getPC()
+            pc.setType(pc.Type.LU)
+
+            ksp.setOperators(_jac_n)
+            ksp.solve(_rhs_n, _dx_n)
+
+            dx_n = x_n.copy()
+            dx_n.set_vec(_dx_n)
+            return dx_n
+        return assem_res, solve
+
+    xhopf_n = x0.copy()
+    x_n = xhopf_n[state_labels]
+        
+    newton_params = {
+        'maximum_iterations': 20
+    }
+    x_n, info = nleq.newton_solve(x_n, linear_subproblem, norm=bvec.norm, params=newton_params)
+    breakpoint()
+
+    
 
     
