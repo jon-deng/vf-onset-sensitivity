@@ -154,7 +154,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         dres_dstate = res.assem_dres_dstate()
         dres_dstatet = res.assem_dres_dstatet()
         jac_1 = [
-            dres_dstate, 
+            dres_dstate.copy(), 
             NULL_MAT_STATE_STATE, 
             NULL_MAT_STATE_STATE, 
             res.assem_dres_dcontrol()[:, ['psub']], 
@@ -359,6 +359,7 @@ if __name__ == '__main__':
     # eps.setWhichEigenpairs(SLEPc.EPS.WHICH.LARGEST_REAL)
 
     breakpoint()
+    # {'status': 0, 'message': 'solver converged', 'abs_errs': array([9.35027414e+03, 5.28318832e+00, 3.18239235e-04, 1.17763230e-11]), 'rel_errs': array([1.00000000e+00, 5.65030313e-04, 3.40352839e-08, 1.25946286e-15])}
 
     
 
