@@ -210,7 +210,27 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
     
     return x, hopf_res, hopf_jac, apply_dirichlet_vec, labels
 
+
+def test_hopf(x0, dx, hopf_res, hopf_jac):
+    ## Test the Hopf system Jacobian
+    x1 = x0 + dx
+
+    g0 = hopf_res(x0)
+    g1 = hopf_res(x1)
+    dgdx = hopf_jac(x0)
+
+    dg_exact = g1 - g0
+    dg_linear = bla.mult_mat_vec(dgdx, dx)
+    print(f"||g0|| = {g0.norm():e}")
+    print(f"||g1|| = {g1.norm():e}")
+
+    print(f"||dg_exact|| = {dg_exact.norm():e}")
+    print(f"||dg_linear|| = {dg_linear.norm():e}")
+
+    print(f"||dg_exact-dg_linear|| = {(dg_exact-dg_linear).norm():e}")
+
 if __name__ == '__main__':
+    ## Set up the Hopf system
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
     mesh_path = path.join('./mesh', mesh_name+'.xml')
 
@@ -247,37 +267,22 @@ if __name__ == '__main__':
         model.ymid = y_mid
 
     control = res.control.copy()
-    # control['psub'].array[:] = 800 * 10
-    # control['psup'].array[:] = 0.0 * 10
 
     for model in (res, dres_u, dres_ut):
         model.set_control(control)
 
     x, hopf_res, hopf_jac, apply_dirichlet_vec, labels = make_hopf_system(res, dres_u, dres_ut, props)
 
+    ## Test the Hopf jacobian
     x0 = x.copy()
     x0['psub'].array[:] = 800.0*10
     dx = x.copy()
     for subvec in dx:
         subvec.set(0)
     dx['u'].array[:] = 1.0e-7
-    dx['u'].array[:] = 1.0e-7
-    dx['u'].array[:] = 1.0e-7
 
     apply_dirichlet_vec(dx)
     apply_dirichlet_vec(x0)
-    x1 = x0 + dx
+    test_hopf(x0, dx, hopf_res, hopf_jac)
 
-    g0 = hopf_res(x0)
-    g1 = hopf_res(x1)
-    dgdx = hopf_jac(x0)
-
-    dg_exact = g1 - g0
-    dg_linear = bla.mult_mat_vec(dgdx, dx)
-    print(f"||g0|| = {g0.norm():e}")
-    print(f"||g1|| = {g1.norm():e}")
-
-    print(f"||dg_exact|| = {dg_exact.norm():e}")
-    print(f"||dg_linear|| = {dg_linear.norm():e}")
-
-    print(f"||dg_exact-dg_linear|| = {(dg_exact-dg_linear).norm():e}")
+    
