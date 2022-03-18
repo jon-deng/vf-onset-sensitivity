@@ -5,6 +5,7 @@ from os import path
 import itertools
 from functools import reduce
 from petsc4py import PETSc
+# from slepc4py import SLEPc
 import numpy as np
 
 from femvf.dynamicalmodels import solid as sldm, fluid as fldm
@@ -100,16 +101,16 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
 
         res_state = res.assem_res()
 
-        # Set appropriate linearization directions
         omega = x['omega'][0]
-        dres_u.set_dstate(x[mode_real_labels])
-        dres_ut.set_dstate(x[mode_imag_labels])
-        res_mode_real = dres_u.assem_res() + omega*dres_ut.assem_res()
-
         # Set appropriate linearization directions
         dres_u.set_dstate(x[mode_imag_labels])
         dres_ut.set_dstate(x[mode_real_labels])
-        res_mode_imag = dres_u.assem_res() - omega*dres_ut.assem_res()
+        res_mode_real= dres_u.assem_res() - omega*dres_ut.assem_res()
+
+        # Set appropriate linearization directions
+        dres_u.set_dstate(x[mode_real_labels])
+        dres_ut.set_dstate(x[mode_imag_labels])
+        res_mode_imag = dres_u.assem_res() + omega*dres_ut.assem_res()
 
         res_psub = x[['psub']].copy()
         res_psub['psub'][0] = bla.dot(EBVEC, x[mode_real_labels])
@@ -163,7 +164,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         omega = x['omega'][0]
         dres_u.set_dstate(x[mode_real_labels])
         dres_ut.set_dstate(x[mode_imag_labels])
-        jac_2 = [
+        jac_3 = [
             dres_u.assem_dres_dstate() + omega*dres_ut.assem_dres_dstate(), 
             dres_dstate, 
             omega*dres_dstatet, 
@@ -173,7 +174,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         # Set appropriate linearization directions
         dres_u.set_dstate(x[mode_imag_labels])
         dres_ut.set_dstate(x[mode_real_labels])
-        jac_3 = [
+        jac_2 = [
             dres_u.assem_dres_dstate() - omega*dres_ut.assem_dres_dstate(), 
             -omega*dres_dstatet, 
             dres_dstate, 
@@ -290,6 +291,8 @@ if __name__ == '__main__':
     ## Test the Hopf jacobian
     x0 = x.copy()
     x0['psub'].array[:] = 800.0*10
+    # This value is set to ensure the correct df/dxt matrix when computing eigvals
+    # x0['omega'].array[:] = 1.0
     dx = x.copy()
     for subvec in dx:
         subvec.set(0)
@@ -299,7 +302,7 @@ if __name__ == '__main__':
     apply_dirichlet_vec(x0)
     # test_hopf(x0, dx, hopf_res, hopf_jac)
 
-    ## A single iteration of a fixed-point solver
+    ## Test solving for fixed-points
     def linear_subproblem(x_n):
         """Linear subproblem of a Newton solver"""
         xhopf_n = x0.copy()
@@ -339,6 +342,22 @@ if __name__ == '__main__':
         'maximum_iterations': 20
     }
     x_n, info = nleq.newton_solve(x_n, linear_subproblem, norm=bvec.norm, params=newton_params)
+
+    ## Test solving for stabilty (modal analysis of the jacobian)
+    # jac = hopf_jac(x_n)
+    # _jac = jac.to_petsc()
+    # _x_n = x_n.to_petsc()
+
+    # eps = SLEPc.EPS().create()
+    # eps.setOperators(_df_dxt, _df_dx)
+    # eps.setProblemType(SLEPc.EPS.ProblemType.NHEP)
+
+    # # number of eigenvalues to solve for and dimension of subspace to approximate problem
+    # num_eig = 5
+    # num_col = 5*num_eig
+    # eps.setDimensions(num_eig, num_col)
+    # eps.setWhichEigenpairs(SLEPc.EPS.WHICH.LARGEST_REAL)
+
     breakpoint()
 
     
