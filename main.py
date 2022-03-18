@@ -2,6 +2,7 @@
 Testing code for finding hopf bifurcations of coupled FE VF models
 """
 from os import path
+import itertools
 from functools import reduce
 from petsc4py import PETSc
 import numpy as np
@@ -64,8 +65,21 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
     for model in (res, dres_u, dres_ut):
         model.set_properties(props)
 
-    IDX_DIRICHLET = np.array(list(res.solid.forms['bc.dirichlet'].get_boundary_values().keys()), dtype=np.int32)
+    def assign_state(x):
+        for model in (res, dres_u, dres_ut):
+            model.set_state(x[state_labels])
 
+            _control = model.control.copy()
+            _control['psub'].array[0] = x['psub'].array[0]
+            model.set_control(_control)
+
+    IDX_DIRICHLET = np.array(list(res.solid.forms['bc.dirichlet'].get_boundary_values().keys()), dtype=np.int32)
+    def apply_dirichlet_vec(vec):
+        for label in ['u', 'v', 'u_mode_real', 'v_mode_real', 'u_mode_imag', 'v_mode_imag']:
+            # zero the rows associated with each dirichlet DOF
+            subvec = vec[label]
+            subvec.array[IDX_DIRICHLET] = 0
+            
     # Create the input vector for the system
     x, state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels = hopf_state(res)
     labels = (state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels)
@@ -76,12 +90,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
     EBVEC['u'][0] = 1.0
     def hopf_res(x):
         # Set the model state and subglottal pressure (bifurcation parameter)
-        for model in (res, dres_u, dres_ut):
-            model.set_state(x[state_labels])
-
-            _control = model.control.copy()
-            _control['psub'][0] = x['psub'][0]
-            model.set_control(_control)
+        assign_state(x)
 
         res_state = res.assem_res()
 
@@ -102,8 +111,10 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         res_omega = x[['omega']].copy()
         res_psub['psub'][0] = bla.dot(EBVEC, x[mode_imag_labels])
 
-        return bvec.concatenate_vec(
+        ret_bvec =  bvec.concatenate_vec(
             [res_state, res_mode_real, res_mode_imag, res_psub, res_omega], labels=HOPF_SYSTEM_LABELS)
+        apply_dirichlet_vec(ret_bvec)
+        return ret_bvec
 
 
     # Make null matrix constants
@@ -129,12 +140,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
 
     def hopf_jac(x):
         # Set the model state and subglottal pressure (bifurcation parameter)
-        for model in (res, dres_u, dres_ut):
-            model.set_state(x[state_labels])
-
-            _control = model.control.copy()
-            _control['psub'][0] = x['psub'][0]
-            model.set_control(_control)
+        assign_state(x)
 
         # build the Jacobian row by row
         dres_dstate = res.assem_dres_dstate()
@@ -190,7 +196,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         ret_bmat = bmat.concatenate_mat(ret_mats, ret_labels)
 
         # breakpoint()
-        # apply dirichlet BC to mats
+        # Apply dirichlet BC by zeroing appropriate matrix rows
         for label in ['u', 'v', 'u_mode_real', 'v_mode_real', 'u_mode_imag', 'v_mode_imag']:
             # zero the rows associated with each dirichlet DOF
             for mat in ret_bmat[label, :].array:
@@ -201,12 +207,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
 
         return ret_bmat
 
-    def apply_dirichlet_vec(vec):
-        for label in ['u', 'v', 'u_mode_real', 'v_mode_real', 'u_mode_imag', 'v_mode_imag']:
-            # zero the rows associated with each dirichlet DOF
-            subvec = vec[label]
-            subvec.array[IDX_DIRICHLET] = 0
-
+    
     return x, hopf_res, hopf_jac, apply_dirichlet_vec, labels
 
 if __name__ == '__main__':
@@ -228,41 +229,55 @@ if __name__ == '__main__':
         FluidType = fldm.LinearStatetBernoulli1DDynamicalSystem,
         fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
 
+    # Set properties and control
     props = res.properties.copy()
-    props['psub'].array[:] = 800 * 10
-    props['psup'].array[:] = 800 * 10
     props['emod'].array[:] = 5e3 * 10
+    props['rho'].array[:] = 1.0
 
     y_gap = 0.5 / 10 # Set y gap to 0.5 mm
+    y_gap = 1.0
     y_contact_offset = 0.1 / 10
     y_max = res.solid.forms['mesh.mesh'].coordinates()[:, 1].max()
     y_mid = y_max + y_gap
     y_contact = y_mid - y_contact_offset
     props['ycontact'].array[:] = y_contact
     props['kcontact'].array[:] = 1e16
+
     for model in (res, dres_u, dres_ut):
         model.ymid = y_mid
 
+    control = res.control.copy()
+    # control['psub'].array[:] = 800 * 10
+    # control['psup'].array[:] = 0.0 * 10
+
+    for model in (res, dres_u, dres_ut):
+        model.set_control(control)
 
     x, hopf_res, hopf_jac, apply_dirichlet_vec, labels = make_hopf_system(res, dres_u, dres_ut, props)
 
     x0 = x.copy()
+    x0['psub'].array[:] = 800.0*10
     dx = x.copy()
-    dx['u'].array[:] = 1.0
+    for subvec in dx:
+        subvec.set(0)
+    dx['u'].array[:] = 1.0e-7
+    dx['u'].array[:] = 1.0e-7
+    dx['u'].array[:] = 1.0e-7
+
     apply_dirichlet_vec(dx)
     apply_dirichlet_vec(x0)
     x1 = x0 + dx
 
     g0 = hopf_res(x0)
     g1 = hopf_res(x1)
-    dgdx = hopf_jac(x)
+    dgdx = hopf_jac(x0)
 
     dg_exact = g1 - g0
     dg_linear = bla.mult_mat_vec(dgdx, dx)
-    print(f"||g0|| = {g0.norm():.4e}")
-    print(f"||g1|| = {g1.norm():.4e}")
+    print(f"||g0|| = {g0.norm():e}")
+    print(f"||g1|| = {g1.norm():e}")
 
-    print(f"||dg_exact|| = {dg_exact.norm():.4e}")
-    print(f"||dg_linear|| = {dg_linear.norm():.4e}")
+    print(f"||dg_exact|| = {dg_exact.norm():e}")
+    print(f"||dg_linear|| = {dg_linear.norm():e}")
 
-    print(f"||dg_exact-dg_linear|| = {(dg_exact-dg_linear).norm():.4e}")
+    print(f"||dg_exact-dg_linear|| = {(dg_exact-dg_linear).norm():e}")
