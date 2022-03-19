@@ -20,8 +20,8 @@ from blocklinalg import mat as bmat
 
 # pylint: disable=redefined-outer-name
 TEST_HOPF = True
-TEST_FP = False
-TEST_MODAL = False
+TEST_FP = True
+TEST_MODAL = True
 
 def hopf_state(res):
     """
@@ -220,7 +220,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         return ret_bmat
 
     
-    return x, hopf_res, hopf_jac, apply_dirichlet_vec, labels
+    return x, hopf_res, hopf_jac, apply_dirichlet_vec, IDX_DIRICHLET, labels
 
 
 def test_hopf(x0, dx, hopf_res, hopf_jac):
@@ -305,7 +305,7 @@ if __name__ == '__main__':
         model.ymid = y_mid
 
     ## Initialize the Hopf system
-    xhopf, hopf_res, hopf_jac, apply_dirichlet_vec, labels = make_hopf_system(res, dres_u, dres_ut, props)
+    xhopf, hopf_res, hopf_jac, apply_dirichlet_vec, idx_dirichlet, labels = make_hopf_system(res, dres_u, dres_ut, props)
     state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels = labels
 
     # Set the starting point of any iterative solutions
@@ -373,6 +373,13 @@ if __name__ == '__main__':
         jac = hopf_jac(xhopf_n)
         df_dx = jac[state_labels, state_labels]
         df_dxt = jac[mode_imag_labels, mode_imag_labels]
+
+        # Set dirichlet conditions for the mass matrix
+        df_dxt[0, 0].zeroRows(idx_dirichlet, diag=1e-10)
+        df_dxt[0, 1].zeroRows(idx_dirichlet, diag=0)
+        df_dxt[1, 0].zeroRows(idx_dirichlet, diag=0)
+        df_dxt[1, 1].zeroRows(idx_dirichlet, diag=1e-10)
+
         _df_dx = df_dx.to_petsc()
         _df_dxt = df_dxt.to_petsc()
 
