@@ -10,6 +10,7 @@ import numpy as np
 
 from femvf.dynamicalmodels import solid as sldm, fluid as fldm
 from femvf.load import load_dynamical_fsi_model
+from femvf.meshutils import process_meshlabel_to_dofs
 import nonlineq as nleq
 
 import blocklinalg.genericops as gops
@@ -238,8 +239,35 @@ def test_hopf(x0, dx, hopf_res, hopf_jac):
 
     print(f"||dg_exact-dg_linear|| = {(dg_exact-dg_linear).norm():e}")
 
+def set_properties(props, region_to_dofs):
+    # VF material props
+    props['emod'].array[region_to_dofs['cover']] = 5e3 * 10
+    props['emod'].array[region_to_dofs['body']] = 15e3 * 10
+    props['eta'].array[:] = 5.0
+    props['rho'].array[:] = 1.0
+
+    # Fluid separation smoothing props
+    props['zeta_min'].array[:] = 1.0
+    props['zeta_sep'].array[:] = 1.0
+
+    # Contact and midline symmetry properties
+    y_gap = 0.5 / 10 # Set y gap to 0.5 mm
+    y_gap = 1.0
+    y_contact_offset = 0.1 / 10
+    y_max = res.solid.forms['mesh.mesh'].coordinates()[:, 1].max()
+    y_mid = y_max + y_gap
+    y_contact = y_mid - y_contact_offset
+    props['ycontact'].array[:] = y_contact
+    props['kcontact'].array[:] = 1e16
+    if 'ymid' in props:
+        props['ymid'].array[:] = y_mid
+    
+    return y_mid
+
 if __name__ == '__main__':
-    ## Set up the Hopf system
+    EBODY = 15e3*10
+    ECOV = 5e3*10
+    ## Load 3 residual functions needed to model the Hopf system
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
     mesh_path = path.join('./mesh', mesh_name+'.xml')
 
@@ -259,53 +287,41 @@ if __name__ == '__main__':
         fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
 
     ## Set model properties
+    # get the scalar DOFs associated with the cover/body layers
+    mesh = res.solid.forms['mesh.mesh']
+    cell_func = res.solid.forms['mesh.cell_function']
+    func_space = res.solid.forms['fspace.scalar']
+    cell_label_to_id = res.solid.forms['mesh.cell_label_to_id']
+    region_to_dofs = process_meshlabel_to_dofs(mesh, cell_func, func_space, cell_label_to_id)
+
     props = res.properties.copy()
-    # VF material props
-    props['emod'].array[:] = 5e3 * 10
-    props['rho'].array[:] = 1.0
-
-    # Fluid separation smoothing props
-    # props['zeta_min'].array[:] = 1e-3
-    # props['zeta_sep'].array[:] = 1e-3
-
-    y_gap = 0.5 / 10 # Set y gap to 0.5 mm
-    y_gap = 1.0
-    y_contact_offset = 0.1 / 10
-    y_max = res.solid.forms['mesh.mesh'].coordinates()[:, 1].max()
-    y_mid = y_max + y_gap
-    y_contact = y_mid - y_contact_offset
-    props['ycontact'].array[:] = y_contact
-    props['kcontact'].array[:] = 1e16
-
+    y_mid = set_properties(props, region_to_dofs)
+    
     for model in (res, dres_u, dres_ut):
         model.ymid = y_mid
 
-    control = res.control.copy()
-
-    for model in (res, dres_u, dres_ut):
-        model.set_control(control)
-
-    x, hopf_res, hopf_jac, apply_dirichlet_vec, labels = make_hopf_system(res, dres_u, dres_ut, props)
+    ## Initialize the Hopf system
+    xhopf, hopf_res, hopf_jac, apply_dirichlet_vec, labels = make_hopf_system(res, dres_u, dres_ut, props)
     state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels = labels
 
     ## Test the Hopf jacobian
-    x0 = x.copy()
-    x0['psub'].array[:] = 800.0*10
+    xhopf_0 = xhopf.copy()
+    xhopf_0['psub'].array[:] = 800.0*10
     # This value is set to ensure the correct df/dxt matrix when computing eigvals
-    x0['omega'].array[:] = 1.0
-    dx = x.copy()
-    for subvec in dx:
+    xhopf_0['omega'].array[:] = 1.0
+    dxhopf = xhopf.copy()
+    for subvec in dxhopf:
         subvec.set(0)
-    dx['u'].array[:] = 1.0e-7
+    dxhopf['u'].array[:] = 1.0e-7
 
-    apply_dirichlet_vec(dx)
-    apply_dirichlet_vec(x0)
-    # test_hopf(x0, dx, hopf_res, hopf_jac)
+    apply_dirichlet_vec(dxhopf)
+    apply_dirichlet_vec(xhopf_0)
+    test_hopf(xhopf_0, dxhopf, hopf_res, hopf_jac)
 
-    ## Test solving for fixed-points
+    ## Test solve for fixed-points
     def linear_subproblem(x_n):
         """Linear subproblem of a Newton solver"""
-        xhopf_n = x0.copy()
+        xhopf_n = xhopf_0.copy()
         xhopf_n[state_labels] = x_n
 
         res_n = hopf_res(xhopf_n)[state_labels]
@@ -335,7 +351,7 @@ if __name__ == '__main__':
             return dx_n
         return assem_res, solve
 
-    xhopf_n = x0.copy()
+    xhopf_n = xhopf_0.copy()
     x_n = xhopf_n[state_labels]
         
     newton_params = {
