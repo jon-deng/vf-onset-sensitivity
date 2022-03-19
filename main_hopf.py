@@ -231,7 +231,6 @@ def test_hopf(x0, dx, hopf_res, hopf_jac):
     g0 = hopf_res(x0)
     g1 = hopf_res(x1)
     dgdx = hopf_jac(x0)
-    breakpoint()
 
     dg_exact = g1 - g0
     dg_linear = bla.mult_mat_vec(dgdx, dx)
