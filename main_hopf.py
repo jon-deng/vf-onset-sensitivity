@@ -19,6 +19,9 @@ from blocklinalg import vec as bvec
 from blocklinalg import mat as bmat
 
 # pylint: disable=redefined-outer-name
+TEST_HOPF = True
+TEST_FP = False
+TEST_MODAL = False
 
 def hopf_state(res):
     """
@@ -228,6 +231,7 @@ def test_hopf(x0, dx, hopf_res, hopf_jac):
     g0 = hopf_res(x0)
     g1 = hopf_res(x1)
     dgdx = hopf_jac(x0)
+    breakpoint()
 
     dg_exact = g1 - g0
     dg_linear = bla.mult_mat_vec(dgdx, dx)
@@ -240,15 +244,18 @@ def test_hopf(x0, dx, hopf_res, hopf_jac):
     print(f"||dg_exact-dg_linear|| = {(dg_exact-dg_linear).norm():e}")
 
 def set_properties(props, region_to_dofs):
+    EBODY = 15e3*10
+    ECOV = 5e3*10
+
     # VF material props
-    props['emod'].array[region_to_dofs['cover']] = 5e3 * 10
-    props['emod'].array[region_to_dofs['body']] = 15e3 * 10
+    props['emod'].array[region_to_dofs['cover']] = ECOV
+    props['emod'].array[region_to_dofs['body']] = EBODY
     props['eta'].array[:] = 5.0
     props['rho'].array[:] = 1.0
 
     # Fluid separation smoothing props
-    props['zeta_min'].array[:] = 1.0
-    props['zeta_sep'].array[:] = 1.0
+    props['zeta_min'].array[:] = 1.0e-4
+    props['zeta_sep'].array[:] = 1.0e-4
 
     # Contact and midline symmetry properties
     y_gap = 0.5 / 10 # Set y gap to 0.5 mm
@@ -265,8 +272,6 @@ def set_properties(props, region_to_dofs):
     return y_mid
 
 if __name__ == '__main__':
-    EBODY = 15e3*10
-    ECOV = 5e3*10
     ## Load 3 residual functions needed to model the Hopf system
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
     mesh_path = path.join('./mesh', mesh_name+'.xml')
@@ -304,19 +309,22 @@ if __name__ == '__main__':
     xhopf, hopf_res, hopf_jac, apply_dirichlet_vec, labels = make_hopf_system(res, dres_u, dres_ut, props)
     state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels = labels
 
-    ## Test the Hopf jacobian
+    # Set the starting point of any iterative solutions
     xhopf_0 = xhopf.copy()
     xhopf_0['psub'].array[:] = 800.0*10
     # This value is set to ensure the correct df/dxt matrix when computing eigvals
     xhopf_0['omega'].array[:] = 1.0
-    dxhopf = xhopf.copy()
-    for subvec in dxhopf:
-        subvec.set(0)
-    dxhopf['u'].array[:] = 1.0e-7
 
-    apply_dirichlet_vec(dxhopf)
-    apply_dirichlet_vec(xhopf_0)
-    test_hopf(xhopf_0, dxhopf, hopf_res, hopf_jac)
+    ## Test the Hopf jacobian
+    if TEST_HOPF:
+        dxhopf = xhopf.copy()
+        for subvec in dxhopf:
+            subvec.set(0)
+        dxhopf['u'].array[:] = 1.0e-7
+
+        apply_dirichlet_vec(dxhopf)
+        apply_dirichlet_vec(xhopf_0)
+        test_hopf(xhopf_0, dxhopf, hopf_res, hopf_jac)
 
     ## Test solve for fixed-points
     def linear_subproblem(x_n):
@@ -351,35 +359,37 @@ if __name__ == '__main__':
             return dx_n
         return assem_res, solve
 
-    xhopf_n = xhopf_0.copy()
-    x_n = xhopf_n[state_labels]
-        
-    newton_params = {
-        'maximum_iterations': 20
-    }
-    x_n, info = nleq.newton_solve(x_n, linear_subproblem, norm=bvec.norm, params=newton_params)
+    if TEST_FP:
+        xhopf_n = xhopf_0.copy()
+        x_n = xhopf_n[state_labels]
+            
+        newton_params = {
+            'maximum_iterations': 20
+        }
+        x_n, info = nleq.newton_solve(x_n, linear_subproblem, norm=bvec.norm, params=newton_params)
 
     ## Test solving for stabilty (modal analysis of the jacobian)
-    xhopf_n[state_labels] = x_n
-    jac = hopf_jac(xhopf_n)
-    df_dx = jac[state_labels, state_labels]
-    df_dxt = jac[mode_imag_labels, mode_imag_labels]
-    _df_dx = df_dx.to_petsc()
-    _df_dxt = df_dxt.to_petsc()
+    if TEST_MODAL:
+        xhopf_n[state_labels] = x_n
+        jac = hopf_jac(xhopf_n)
+        df_dx = jac[state_labels, state_labels]
+        df_dxt = jac[mode_imag_labels, mode_imag_labels]
+        _df_dx = df_dx.to_petsc()
+        _df_dxt = df_dxt.to_petsc()
 
-    eps = SLEPc.EPS().create()
-    eps.setOperators(_df_dxt, _df_dx)
-    eps.setProblemType(SLEPc.EPS.ProblemType.GNHEP)
+        eps = SLEPc.EPS().create()
+        eps.setOperators(_df_dxt, _df_dx)
+        eps.setProblemType(SLEPc.EPS.ProblemType.GNHEP)
 
-    # # number of eigenvalues to solve for and dimension of subspace to approximate problem
-    num_eig = 5
-    num_col = 10*num_eig
-    eps.setDimensions(num_eig, num_col)
-    eps.setWhichEigenpairs(SLEPc.EPS.Which.LARGEST_MAGNITUDE)
-    eps.solve()
+        # # number of eigenvalues to solve for and dimension of subspace to approximate problem
+        num_eig = 5
+        num_col = 10*num_eig
+        eps.setDimensions(num_eig, num_col)
+        eps.setWhichEigenpairs(SLEPc.EPS.Which.LARGEST_MAGNITUDE)
+        eps.solve()
 
-    eigvals = np.array([eps.getEigenvalue(jj) for jj in range(eps.getConverged())])
-    omegas = 1/(-1j*eigvals)
+        eigvals = np.array([eps.getEigenvalue(jj) for jj in range(eps.getConverged())])
+        omegas = 1/(-1j*eigvals)
 
     breakpoint()
     
