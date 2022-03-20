@@ -13,10 +13,10 @@ from femvf.load import load_dynamical_fsi_model
 from femvf.meshutils import process_meshlabel_to_dofs
 import nonlineq as nleq
 
-import blocklinalg.genericops as gops
-import blocklinalg.linalg as bla
-from blocklinalg import vec as bvec
-from blocklinalg import mat as bmat
+import blocktensor.genericops as gops
+import blocktensor.linalg as bla
+from blocktensor import vec as bvec
+from blocktensor import mat as bmat
 
 # pylint: disable=redefined-outer-name
 TEST_HOPF = True

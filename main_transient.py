@@ -11,7 +11,7 @@ import numpy as np
 
 from femvf import forward, load, statefile as sf
 from femvf.models import solid as smd, fluid as fmd
-from blocklinalg import linalg
+from blocktensor import linalg
 
 from libmaintransient import case_config
 
