@@ -1,10 +1,12 @@
 """
 Testing code for finding hopf bifurcations of coupled FE VF models
 """
+import sys
 from os import path
 import itertools
 from functools import reduce
 from petsc4py import PETSc
+import slepc4py
 from slepc4py import SLEPc
 import numpy as np
 
@@ -18,10 +20,16 @@ import blocktensor.linalg as bla
 from blocktensor import vec as bvec
 from blocktensor import mat as bmat
 
+slepc4py.init(sys.argv)
+
 # pylint: disable=redefined-outer-name
 TEST_HOPF = True
 TEST_FP = True
 TEST_MODAL = True
+TEST_MODAL_2 = False 
+# Very weird bug where the second eigenvalue problem has error code 73 even 
+# though it uses the same matrices as the first case. Very uncertain what the cause of this
+# bug is
 
 def hopf_state(res):
     """
@@ -96,7 +104,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
 
     HOPF_SYSTEM_LABELS = tuple(reduce(lambda a, b: a+b, labels))
 
-    EBVEC = x[state_labels].copy()
+    EBVEC = x[state_labels]
     EBVEC['u'][0] = 1.0
     def hopf_res(x):
         """Return the Hopf system residual"""
@@ -109,17 +117,17 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         # Set appropriate linearization directions
         dres_u.set_dstate(x[mode_imag_labels])
         dres_ut.set_dstate(x[mode_real_labels])
-        res_mode_real= dres_u.assem_res() - omega*dres_ut.assem_res()
+        res_mode_real = dres_u.assem_res() - omega*dres_ut.assem_res()
 
         # Set appropriate linearization directions
         dres_u.set_dstate(x[mode_real_labels])
         dres_ut.set_dstate(x[mode_imag_labels])
         res_mode_imag = dres_u.assem_res() + omega*dres_ut.assem_res()
 
-        res_psub = x[['psub']].copy()
+        res_psub = x[['psub']]
         res_psub['psub'][0] = bla.dot(EBVEC, x[mode_real_labels])
 
-        res_omega = x[['omega']].copy()
+        res_omega = x[['omega']]
         res_psub['psub'][0] = bla.dot(EBVEC, x[mode_imag_labels])
 
         ret_bvec =  bvec.concatenate_vec(
@@ -158,7 +166,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         dres_dstate = res.assem_dres_dstate()
         dres_dstatet = res.assem_dres_dstatet()
         jac_1 = [
-            dres_dstate.copy(), 
+            dres_dstate.copy(), # Using a copy here seems to be very important for the KSP FP solver work. Without a copy, KSP return PETSc error code 73 (object in wrong state) for some reason
             NULL_MAT_STATE_STATE, 
             NULL_MAT_STATE_STATE, 
             res.assem_dres_dcontrol()[:, ['psub']], 
@@ -171,7 +179,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         jac_2 = [
             dres_u.assem_dres_dstate() - omega*dres_ut.assem_dres_dstate(), 
             -omega*dres_dstatet, 
-            dres_dstate, 
+            dres_dstate,  
             dres_u.assem_dres_dcontrol()[:, ['psub']] - omega*dres_ut.assem_dres_dcontrol()[:, ['psub']], 
             bvec.convert_bvec_to_petsc_colbmat(dres_ut.assem_res())]
 
@@ -180,8 +188,8 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         dres_ut.set_dstate(x[mode_imag_labels])
         jac_3 = [
             dres_u.assem_dres_dstate() + omega*dres_ut.assem_dres_dstate(), 
-            dres_dstate, 
-            omega*dres_dstatet, 
+            dres_dstate.copy(), 
+            omega*dres_dstatet.copy(), 
             dres_u.assem_dres_dcontrol()[:, ['psub']] + omega*dres_ut.assem_dres_dcontrol()[:, ['psub']], 
             bvec.convert_bvec_to_petsc_colbmat(dres_ut.assem_res())]
 
@@ -247,19 +255,22 @@ def set_properties(props, region_to_dofs):
     ECOV = 5e3*10
 
     # VF material props
+    # TODO: Should replace these with gops.set_vec to be more general
     props['emod'].array[region_to_dofs['cover']] = ECOV
     props['emod'].array[region_to_dofs['body']] = EBODY
     props['eta'].array[:] = 5.0
     props['rho'].array[:] = 1.0
+    props['nu'].array[:] = 0.45
 
     # Fluid separation smoothing props
     props['zeta_min'].array[:] = 1.0e-4
     props['zeta_sep'].array[:] = 1.0e-4
 
     # Contact and midline symmetry properties
-    y_gap = 0.5 / 10 # Set y gap to 0.5 mm
-    y_gap = 1.0
-    y_contact_offset = 0.1 / 10
+    # y_gap = 0.5 / 10 # Set y gap to 0.5 mm
+    # y_gap = 1.0
+    y_gap = 0.01
+    y_contact_offset = 1/10*y_gap
     y_max = res.solid.forms['mesh.mesh'].coordinates()[:, 1].max()
     y_mid = y_max + y_gap
     y_contact = y_mid - y_contact_offset
@@ -310,7 +321,8 @@ if __name__ == '__main__':
 
     # Set the starting point of any iterative solutions
     xhopf_0 = xhopf.copy()
-    xhopf_0['psub'].array[:] = 800.0*10
+    xhopf_0['psub'].array[:] = 2000.0*10
+    # xhopf_0['psub'].array[:] = 1e-10
     # This value is set to ensure the correct df/dxt matrix when computing eigvals
     xhopf_0['omega'].array[:] = 1.0
 
@@ -346,11 +358,13 @@ if __name__ == '__main__':
 
             ksp = PETSc.KSP().create()
             ksp.setType(ksp.Type.PREONLY)
+            
 
             pc = ksp.getPC()
             pc.setType(pc.Type.LU)
 
             ksp.setOperators(_jac_n)
+            ksp.setUp()
             ksp.solve(_rhs_n, _dx_n)
 
             dx_n = x_n.copy()
@@ -369,6 +383,12 @@ if __name__ == '__main__':
 
     ## Test solving for stabilty (modal analysis of the jacobian)
     if TEST_MODAL:
+        # Here we solve the eigenvalue problem
+        # omega df/dxt ex = df/dx ex
+        # in the transformed form
+        # df/dxt ex = lambda df/dx ex
+        # where lambda=1/omega, and ex is a generalized eigenvector
+
         xhopf_n[state_labels] = x_n
         jac = hopf_jac(xhopf_n)
         df_dx = jac[state_labels, state_labels]
@@ -387,7 +407,7 @@ if __name__ == '__main__':
         eps.setOperators(_df_dxt, _df_dx)
         eps.setProblemType(SLEPc.EPS.ProblemType.GNHEP)
 
-        # # number of eigenvalues to solve for and dimension of subspace to approximate problem
+        # number of eigenvalues to solve for and dimension of subspace to approximate problem
         num_eig = 5
         num_col = 10*num_eig
         eps.setDimensions(num_eig, num_col)
@@ -395,7 +415,40 @@ if __name__ == '__main__':
         eps.solve()
 
         eigvals = np.array([eps.getEigenvalue(jj) for jj in range(eps.getConverged())])
-        omegas = 1/(-1j*eigvals)
+        omegas = 1/eigvals
+        print(f"Omegas:", omegas)
+
+    if TEST_MODAL_2:
+        xhopf_n[state_labels] = x_n
+        jac = hopf_jac(xhopf_n)
+        df_dx = jac[state_labels, state_labels]
+        df_dxt = jac[mode_imag_labels, mode_imag_labels]
+
+        # Set dirichlet conditions for the mass matrix
+        df_dxt[0, 0].zeroRows(idx_dirichlet, diag=1e-10)
+        df_dxt[0, 1].zeroRows(idx_dirichlet, diag=0)
+        df_dxt[1, 0].zeroRows(idx_dirichlet, diag=0)
+        df_dxt[1, 1].zeroRows(idx_dirichlet, diag=1e-10)
+
+        _df_dx = df_dx.to_petsc()
+        _df_dxt = df_dxt.to_petsc()
+        _df_dxt.assemble()
+        _df_dx.assemble()
+
+        eps = SLEPc.EPS().create()
+        eps.setOperators(_df_dx, _df_dxt)
+        eps.setProblemType(SLEPc.EPS.ProblemType.GNHEP)
+
+        # # number of eigenvalues to solve for and dimension of subspace to approximate problem
+        num_eig = 5
+        num_col = 10*num_eig
+        eps.setDimensions(num_eig, num_col)
+        eps.setWhichEigenpairs(SLEPc.EPS.Which.SMALLEST_REAL)
+        eps.solve()
+
+        eigvals = np.array([eps.getEigenvalue(jj) for jj in range(eps.getConverged())])
+        omegas = eigvals
+        print(f"Omegas:", omegas)
 
     breakpoint()
     
