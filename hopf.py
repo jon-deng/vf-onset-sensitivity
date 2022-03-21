@@ -59,7 +59,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
     for model in (res, dres_u, dres_ut):
         model.set_properties(props)
 
-    def assign_state(x):
+    def assign_model_state(x):
         """handles assignment of some parts of x to the underlying models"""
         for model in (res, dres_u, dres_ut):
             model.set_state(x[state_labels])
@@ -87,7 +87,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
     def hopf_res(x):
         """Return the Hopf system residual"""
         # Set the model state and subglottal pressure (bifurcation parameter)
-        assign_state(x)
+        assign_model_state(x)
 
         res_state = res.assem_res()
 
@@ -138,7 +138,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
     def hopf_jac(x):
         """Return the Hopf system jacobian"""
         # Set the model state and subglottal pressure (bifurcation parameter)
-        assign_state(x)
+        assign_model_state(x)
 
         # build the Jacobian row by row
         dres_dstate = res.assem_dres_dstate()

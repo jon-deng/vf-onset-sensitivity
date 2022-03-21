@@ -26,14 +26,14 @@ args = parser.parse_args()
 # PSUB = 800 * 10
 
 # These parameters cover a broad range to try and gauge when onset happens
-PSUBS = np.arange(200, 1000, 100) * 10
+PSUBS = np.concatenate([np.arange(200, 300, 10), np.arange(300, 1000, 100)]) * 10
 
 ETA_VISC = 5
 ECOV = 5e3*10
 EBODY = 15e3*10
 
 DT = 5e-5
-T_TOTAL = 0.5
+T_TOTAL = 0.25
 
 mesh_name = 'BC-dcov5.00e-02-cl1.00'
 mesh_path = f'mesh/{mesh_name}.xml'
@@ -55,7 +55,7 @@ props['nu'][:] = 0.45
 props['eta'][:] = 5.0
 
 # geometric properties related to the symmetry/contact planes
-y_gap = 0.1
+y_gap = 0.01
 y_contact_offset = 1/10 * y_gap
 props['y_midline'][:] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap/2
 props['ycontact'][:] = props['y_midline'] - y_contact_offset 
@@ -72,7 +72,7 @@ props['zeta_sep'][:] = ZETA
 props['zeta_ainv'][:] = ZETA
 
 # Create the output directory
-out_dir = f'out/zeta{ZETA:.2e}_rsep{R_SEP:.1f}'
+out_dir = f'out/zeta{ZETA:.2e}_rsep{R_SEP:.1f}_ygap{y_gap:.2e}'
 if not isdir(out_dir):
     os.makedirs(out_dir)
 
