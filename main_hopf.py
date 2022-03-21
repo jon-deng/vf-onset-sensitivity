@@ -26,7 +26,7 @@ slepc4py.init(sys.argv)
 TEST_HOPF = True
 TEST_FP = True
 TEST_MODAL = True
-TEST_MODAL_2 = False 
+TEST_MODAL_2 = True 
 # Very weird bug where the second eigenvalue problem has error code 73 even 
 # though it uses the same matrices as the first case. Very uncertain what the cause of this
 # bug is
@@ -104,7 +104,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
 
     HOPF_SYSTEM_LABELS = tuple(reduce(lambda a, b: a+b, labels))
 
-    EBVEC = x[state_labels]
+    EBVEC = x[state_labels].copy()
     EBVEC['u'][0] = 1.0
     def hopf_res(x):
         """Return the Hopf system residual"""
@@ -124,10 +124,10 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         dres_ut.set_dstate(x[mode_imag_labels])
         res_mode_imag = dres_u.assem_res() + omega*dres_ut.assem_res()
 
-        res_psub = x[['psub']]
+        res_psub = x[['psub']].copy()
         res_psub['psub'][0] = bla.dot(EBVEC, x[mode_real_labels])
 
-        res_omega = x[['omega']]
+        res_omega = x[['omega']].copy()
         res_psub['psub'][0] = bla.dot(EBVEC, x[mode_imag_labels])
 
         ret_bvec =  bvec.concatenate_vec(
@@ -166,7 +166,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         dres_dstate = res.assem_dres_dstate()
         dres_dstatet = res.assem_dres_dstatet()
         jac_1 = [
-            dres_dstate.copy(), # Using a copy here seems to be very important for the KSP FP solver work. Without a copy, KSP return PETSc error code 73 (object in wrong state) for some reason
+            dres_dstate, # Using a copy here seems to be very important for the KSP FP solver work. Without a copy, KSP return PETSc error code 73 (object in wrong state) for some reason
             NULL_MAT_STATE_STATE, 
             NULL_MAT_STATE_STATE, 
             res.assem_dres_dcontrol()[:, ['psub']], 
@@ -188,8 +188,8 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         dres_ut.set_dstate(x[mode_imag_labels])
         jac_3 = [
             dres_u.assem_dres_dstate() + omega*dres_ut.assem_dres_dstate(), 
-            dres_dstate.copy(), 
-            omega*dres_dstatet.copy(), 
+            dres_dstate, 
+            omega*dres_dstatet, 
             dres_u.assem_dres_dcontrol()[:, ['psub']] + omega*dres_ut.assem_dres_dcontrol()[:, ['psub']], 
             bvec.convert_bvec_to_petsc_colbmat(dres_ut.assem_res())]
 
