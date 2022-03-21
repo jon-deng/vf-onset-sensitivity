@@ -52,7 +52,7 @@ def test_hopf(x0, dx, hopf_res, hopf_jac):
 
     print(f"||dg_exact-dg_linear|| = {(dg_exact-dg_linear).norm():e}")
 
-def set_properties(props, region_to_dofs):
+def set_properties(props, region_to_dofs, res):
     EBODY = 15e3*10
     ECOV = 5e3*10
 
@@ -112,7 +112,7 @@ if __name__ == '__main__':
     region_to_dofs = process_meshlabel_to_dofs(mesh, cell_func, func_space, cell_label_to_id)
 
     props = res.properties.copy()
-    y_mid = set_properties(props, region_to_dofs)
+    y_mid = set_properties(props, region_to_dofs, res)
     
     for model in (res, dres_u, dres_ut):
         model.ymid = y_mid
