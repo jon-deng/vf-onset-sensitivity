@@ -220,6 +220,7 @@ if __name__ == '__main__':
         omegas = 1/eigvals
         print(f"Omegas:", omegas)
 
+    # I think this one won't work because the "A" matrix is singular? Have to investigate
     if TEST_MODAL_2:
         xhopf_n[state_labels] = x_n
         jac = hopf_jac(xhopf_n)

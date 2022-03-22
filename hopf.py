@@ -144,7 +144,6 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         # build the Jacobian row by row
         dres_dstate = res.assem_dres_dstate()
         dres_dstatet = res.assem_dres_dstatet()
-        print(f"Inside hopf_jac: {dres_dstate[['v'], ['v']].norm()}")
 
         # Using copys of dres_dstate is important as different dres_dstate locations
         # will rquire different dirichlet settings on their rows
@@ -208,8 +207,6 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
 
             # Set 1 on the diagonal (zero's one block twice but it shouldn't matter much)
             # ret_bmat[label, label].zeroRows(IDX_DIRICHLET, diag=1)
-
-        print(f"Inside hopf_jac: {dres_dstate[['v'], ['v']].norm()}")
 
         return ret_bmat
 
