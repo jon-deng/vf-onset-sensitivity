@@ -1,8 +1,9 @@
 """
 Contains code to create the Hopf system
 """
-import numpy as np
+import itertools
 from functools import reduce
+import numpy as np
 
 import blocktensor.genericops as gops
 import blocktensor.linalg as bla
@@ -80,7 +81,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
     x, state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels = hopf_state(res)
     labels = (state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels)
 
-    HOPF_SYSTEM_LABELS = tuple(reduce(lambda a, b: a+b, labels))
+    HOPF_LABELS = tuple(reduce(lambda a, b: a+b, labels))
 
     EBVEC = x[state_labels].copy()
     EBVEC['u'][0] = 1.0
@@ -109,7 +110,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         res_psub['psub'][0] = bla.dot(EBVEC, x[mode_imag_labels])
 
         ret_bvec =  bvec.concatenate_vec(
-            [res_state, res_mode_real, res_mode_imag, res_psub, res_omega], labels=HOPF_SYSTEM_LABELS)
+            [res_state, res_mode_real, res_mode_imag, res_psub, res_omega], labels=HOPF_LABELS)
         apply_dirichlet_vec(ret_bvec)
         return ret_bvec
 
@@ -143,8 +144,12 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         # build the Jacobian row by row
         dres_dstate = res.assem_dres_dstate()
         dres_dstatet = res.assem_dres_dstatet()
+        print(f"Inside hopf_jac: {dres_dstate[['v'], ['v']].norm()}")
+
+        # Using copys of dres_dstate is important as different dres_dstate locations
+        # will rquire different dirichlet settings on their rows
         jac_1 = [
-            dres_dstate, # Using a copy here seems to be very important for the KSP FP solver work. Without a copy, KSP return PETSc error code 73 (object in wrong state) for some reason
+            dres_dstate.copy(),
             NULL_MAT_STATE_STATE, 
             NULL_MAT_STATE_STATE, 
             res.assem_dres_dcontrol()[:, ['psub']], 
@@ -156,8 +161,8 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         dres_ut.set_dstate(x[mode_real_labels])
         jac_2 = [
             dres_u.assem_dres_dstate() - omega*dres_ut.assem_dres_dstate(), 
-            -omega*dres_dstatet, 
-            dres_dstate,  
+            -omega*dres_dstatet.copy(), 
+            dres_dstate.copy(),  
             dres_u.assem_dres_dcontrol()[:, ['psub']] - omega*dres_ut.assem_dres_dcontrol()[:, ['psub']], 
             bvec.convert_bvec_to_petsc_colbmat(dres_ut.assem_res())]
 
@@ -166,8 +171,8 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         dres_ut.set_dstate(x[mode_imag_labels])
         jac_3 = [
             dres_u.assem_dres_dstate() + omega*dres_ut.assem_dres_dstate(), 
-            dres_dstate, 
-            omega*dres_dstatet, 
+            dres_dstate.copy(), 
+            omega*dres_dstatet.copy(), 
             dres_u.assem_dres_dcontrol()[:, ['psub']] + omega*dres_ut.assem_dres_dcontrol()[:, ['psub']], 
             bvec.convert_bvec_to_petsc_colbmat(dres_ut.assem_res())]
 
@@ -188,20 +193,23 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
             ]
 
         ret_mats = [jac_1, jac_2, jac_3, jac_4, jac_5]
-        ret_axis_labels = tuple(
-            state_labels + mode_real_labels + mode_imag_labels + psub_labels + omega_labels)
-        ret_labels = (ret_axis_labels, ret_axis_labels)
+        ret_labels = (HOPF_LABELS, HOPF_LABELS)
         ret_bmat = bmat.concatenate_mat(ret_mats, ret_labels)
 
-        # breakpoint()
         # Apply dirichlet BC by zeroing appropriate matrix rows
-        for label in ['u', 'v', 'u_mode_real', 'v_mode_real', 'u_mode_imag', 'v_mode_imag']:
-            # zero the rows associated with each dirichlet DOF
-            for mat in ret_bmat[label, :].array:
-                mat.zeroRows(IDX_DIRICHLET, diag=0)
+        row_labels = ['u', 'v', 'u_mode_real', 'v_mode_real', 'u_mode_imag', 'v_mode_imag']
+        col_labels = HOPF_LABELS
+        for row, col in itertools.product(row_labels, col_labels):
+            mat = ret_bmat[row, col]
+            if row == col:
+                mat.zeroRows(IDX_DIRICHLET, diag=1.0)
+            else:
+                mat.zeroRows(IDX_DIRICHLET, diag=0.0)
 
             # Set 1 on the diagonal (zero's one block twice but it shouldn't matter much)
-            ret_bmat[label, label].zeroRows(IDX_DIRICHLET, diag=1)
+            # ret_bmat[label, label].zeroRows(IDX_DIRICHLET, diag=1)
+
+        print(f"Inside hopf_jac: {dres_dstate[['v'], ['v']].norm()}")
 
         return ret_bmat
 
