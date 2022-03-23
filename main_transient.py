@@ -11,6 +11,7 @@ import numpy as np
 from femvf import forward, load, statefile as sf
 from femvf.models import solid as smd, fluid as fmd
 from femvf.meshutils import process_meshlabel_to_dofs
+from femvf.static import static_configuration_coupled_picard
 from blocktensor import linalg
 
 from lib_main_transient import case_config
@@ -25,6 +26,9 @@ args = parser.parse_args()
 
 # PSUB = 800 * 10
 
+INIT_STATE_TYPE = 'zero'
+INIT_STATE_TYPE = 'static'
+
 # These parameters cover a broad range to try and gauge when onset happens
 PSUBS = np.concatenate([np.arange(200, 300, 10), np.arange(300, 1000, 100)]) * 10
 
@@ -33,7 +37,7 @@ ECOV = 5e3*10
 EBODY = 15e3*10
 
 DT = 5e-5
-T_TOTAL = 0.25
+T_TOTAL = 0.1
 
 mesh_name = 'BC-dcov5.00e-02-cl1.00'
 mesh_path = f'mesh/{mesh_name}.xml'
@@ -72,9 +76,9 @@ props['zeta_sep'][:] = ZETA
 props['zeta_ainv'][:] = ZETA
 
 # Create the output directory
-out_dir = f'out/zeta{ZETA:.2e}_rsep{R_SEP:.1f}_ygap{y_gap:.2e}'
-if not isdir(out_dir):
-    os.makedirs(out_dir)
+OUT_DIR = f'out/zeta{ZETA:.2e}_rsep{R_SEP:.1f}_ygap{y_gap:.2e}_init{INIT_STATE_TYPE}'
+if not isdir(OUT_DIR):
+    os.makedirs(OUT_DIR)
 
 dofs_cover = region_to_dofs['cover']
 dofs_body = region_to_dofs['body']
@@ -84,6 +88,8 @@ props['emod'][dofs_cover] = ECOV
 props['emod'][dofs_body] = EBODY
 
 
+# import warnings
+# warnings.filterwarnings("error")
 def run(psub):
     # Set the initial state/properties/control needed to integrate in time
     ini_state = model.get_state_vec()
@@ -93,12 +99,28 @@ def run(psub):
     _control['psub'][:] = psub
     controls = [_control]
 
-    _times= DT*np.arange(int(round(T_TOTAL/DT))+1)
+    _times = DT*np.arange(int(round(T_TOTAL/DT))+1)
     times = linalg.BlockVec((_times,), ('times',))
+
+    # Compute the static configuration for the initial state if needed
+    if INIT_STATE_TYPE == 'static':
+        model.set_control(controls[0])
+        x_static, info = static_configuration_coupled_picard(model)
+        print(info)
+        ini_state['u'][:] = x_static['u']
+        ini_state['q'][:] = x_static['q']
+        ini_state['p'][:] = x_static['p']
+
+        _control1 = model.get_control_vec()
+        _control1['psub'][:] = psub + 50*10
+
+        _control2 = model.get_control_vec()
+        _control2['psub'][:] = psub
+        controls = [_control1, _control2]
 
     # Set the file and write the simulation results to it
     file_name = case_config(mesh_name, psub, ECOV, EBODY)
-    file_path = f'{out_dir}/{file_name}.h5'
+    file_path = f'{OUT_DIR}/{file_name}.h5'
 
     if not isfile(file_path):
         with sf.StateFile(model, file_path, mode='w') as f:  
