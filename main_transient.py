@@ -5,6 +5,7 @@ in main_hopf.py
 import os
 from os.path import isfile, isdir
 import argparse
+import warnings
 from multiprocessing import Pool
 import numpy as np
 
@@ -17,6 +18,7 @@ from blocktensor import linalg
 from lib_main_transient import case_config
 
 # from main_hopf import set_properties
+# warnings.filterwarnings('error')
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--zeta', type=float, default=0.0)
@@ -31,13 +33,15 @@ INIT_STATE_TYPE = 'static'
 
 # These parameters cover a broad range to try and gauge when onset happens
 PSUBS = np.concatenate([np.arange(200, 300, 10), np.arange(300, 1000, 100)]) * 10
+# PSUBS = np.arange(200, 300, 10)* 10
+# PSUBS = np.arange(300, 1000, 100) * 10
 
 ETA_VISC = 5
 ECOV = 5e3*10
 EBODY = 15e3*10
 
 DT = 5e-5
-T_TOTAL = 0.1
+T_TOTAL = 0.2
 
 mesh_name = 'BC-dcov5.00e-02-cl1.00'
 mesh_path = f'mesh/{mesh_name}.xml'
@@ -63,7 +67,7 @@ y_gap = 0.01
 y_contact_offset = 1/10 * y_gap
 props['y_midline'][:] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap/2
 props['ycontact'][:] = props['y_midline'] - y_contact_offset 
-props['kcontact'][:] = 1e16
+props['kcontact'][:] = 1e15
 
 # Fluid properties
 ZETA = 1e-4
@@ -105,6 +109,7 @@ def run(psub):
     # Compute the static configuration for the initial state if needed
     if INIT_STATE_TYPE == 'static':
         model.set_control(controls[0])
+        model.set_properties(props)
         x_static, info = static_configuration_coupled_picard(model)
         print(info)
         ini_state['u'][:] = x_static['u']
@@ -112,26 +117,31 @@ def run(psub):
         ini_state['p'][:] = x_static['p']
 
         _control1 = model.get_control_vec()
-        _control1['psub'][:] = psub + 50*10
+        _control1['psub'][:] = psub + 500*10
 
         _control2 = model.get_control_vec()
-        _control2['psub'][:] = psub
-        controls = [_control1, _control2]
+        _control2['psub'][:] = psub + 500*10
+
+        _control3 = model.get_control_vec()
+        _control3['psub'][:] = psub
+        controls = [_control1, _control2, _control3]
 
     # Set the file and write the simulation results to it
     file_name = case_config(mesh_name, psub, ECOV, EBODY)
     file_path = f'{OUT_DIR}/{file_name}.h5'
 
     if not isfile(file_path):
-        with sf.StateFile(model, file_path, mode='w') as f:  
+        # newton_prm = {
+
+        # }
+        with sf.StateFile(model, file_path, mode='w') as f:
             forward.integrate(model, f, ini_state, controls, props, times, use_tqdm=True)
 
 if __name__ == '__main__':
     print("Running Psub variations")
-    ecovs = [ECOV]
     with Pool(processes=args.num_processes) as pool:
         pool.map(run, PSUBS)
 
     # for loop version for easier debugging
-    # for psub, ecov in product(PSUBS, ecovs): 
-    #     run(psub, ecov)
+    for psub in PSUBS: 
+        run(psub)
