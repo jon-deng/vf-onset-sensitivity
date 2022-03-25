@@ -5,7 +5,7 @@ in main_hopf.py
 import os
 from os.path import isfile, isdir
 import argparse
-import warnings
+# import warnings
 from multiprocessing import Pool
 import numpy as np
 
@@ -38,7 +38,7 @@ PSUBS = np.concatenate([np.arange(200, 300, 10), np.arange(300, 1000, 100)]) * 1
 
 ETA_VISC = 5
 ECOV = 5e3*10
-EBODY = 15e3*10
+EBODY = 5e3*10
 
 DT = 5e-5
 T_TOTAL = 0.2
@@ -143,5 +143,5 @@ if __name__ == '__main__':
         pool.map(run, PSUBS)
 
     # for loop version for easier debugging
-    for psub in PSUBS: 
-        run(psub)
+    # for psub in PSUBS: 
+    #     run(psub)

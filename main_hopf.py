@@ -3,10 +3,7 @@ Testing code for finding hopf bifurcations of coupled FE VF models
 """
 import sys
 from os import path
-import itertools
-from functools import reduce
 from petsc4py import PETSc
-import slepc4py
 from slepc4py import SLEPc
 import numpy as np
 
@@ -18,17 +15,16 @@ import nonlineq as nleq
 import blocktensor.genericops as gops
 import blocktensor.linalg as bla
 from blocktensor import vec as bvec
-from blocktensor import mat as bmat
 
 from hopf import make_hopf_system
 
 # slepc4py.init(sys.argv)
 
 # pylint: disable=redefined-outer-name
-TEST_HOPF = True
+TEST_HOPF = False
 TEST_FP = True
 TEST_MODAL = True
-TEST_MODAL_2 = True 
+TEST_MODAL_2 = False 
 # Very weird bug where the second eigenvalue problem has error code 73 even 
 # though it uses the same matrices as the first case. Very uncertain what the cause of this
 # bug is
@@ -52,9 +48,12 @@ def test_hopf(x0, dx, hopf_res, hopf_jac):
 
     print(f"||dg_exact-dg_linear|| = {(dg_exact-dg_linear).norm():e}")
 
+
+EBODY = 5e3 * 10
+ECOV = 5e3 * 10
+PSUB = 800 * 10
+
 def set_properties(props, region_to_dofs, res):
-    EBODY = 15e3*10
-    ECOV = 5e3*10
 
     # VF material props
     # TODO: Should replace these with gops.set_vec to be more general
@@ -123,7 +122,7 @@ if __name__ == '__main__':
 
     # Set the starting point of any iterative solutions
     xhopf_0 = xhopf.copy()
-    xhopf_0['psub'].array[:] = 2000.0*10
+    xhopf_0['psub'].array[:] = PSUB
     # xhopf_0['psub'].array[:] = 1e-10
     # This value is set to ensure the correct df/dxt matrix when computing eigvals
     xhopf_0['omega'].array[:] = 1.0
@@ -217,7 +216,7 @@ if __name__ == '__main__':
         eps.solve()
 
         eigvals = np.array([eps.getEigenvalue(jj) for jj in range(eps.getConverged())])
-        omegas = 1/eigvals
+        omegas = -1/eigvals
         print(f"Omegas:", omegas)
 
     # I think this one won't work because the "A" matrix is singular? Have to investigate
