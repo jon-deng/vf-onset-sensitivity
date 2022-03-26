@@ -21,10 +21,10 @@ from hopf import make_hopf_system
 # slepc4py.init(sys.argv)
 
 # pylint: disable=redefined-outer-name
-TEST_HOPF = True
+TEST_HOPF = False
 TEST_FP = True
-TEST_MODAL = True
-TEST_HOPF_BIFURCATION = False 
+TEST_MODAL = False
+TEST_HOPF_BIFURCATION = True 
 # Very weird bug where the second eigenvalue problem has error code 73 even 
 # though it uses the same matrices as the first case. Very uncertain what the cause of this
 # bug is
@@ -139,7 +139,7 @@ if __name__ == '__main__':
         test_hopf(xhopf_0, dxhopf, hopf_res, hopf_jac)
 
     ## Test solve for fixed-points
-    def linear_subproblem(x_n):
+    def linear_subproblem_fp(x_n):
         """Linear subproblem of a Newton solver"""
         xhopf_n = xhopf_0.copy()
         xhopf_n[state_labels] = x_n
@@ -174,13 +174,15 @@ if __name__ == '__main__':
         return assem_res, solve
 
     if TEST_FP:
-        xhopf_n = xhopf_0.copy()
-        x_n = xhopf_n[state_labels]
+        x_n = xhopf_0.copy()
+        x_n = x_n[state_labels]
             
         newton_params = {
             'maximum_iterations': 20
         }
-        x_n, info = nleq.newton_solve(x_n, linear_subproblem, norm=bvec.norm, params=newton_params)
+        x_n, info = nleq.newton_solve(x_n, linear_subproblem_fp, norm=bvec.norm, params=newton_params)
+        print(x_n.norm())
+        print(info)
 
     ## Test solving for stabilty (modal analysis of the jacobian)
     if TEST_MODAL:
@@ -190,8 +192,8 @@ if __name__ == '__main__':
         # df/dxt ex = lambda df/dx ex
         # where lambda=1/omega, and ex is a generalized eigenvector
 
-        xhopf_n[state_labels] = x_n
-        jac = hopf_jac(xhopf_n)
+        x_n[state_labels] = x_n
+        jac = hopf_jac(x_n)
         df_dx = jac[state_labels, state_labels]
         df_dxt = jac[mode_imag_labels, mode_imag_labels]
 
@@ -220,8 +222,53 @@ if __name__ == '__main__':
         print(f"Omegas:", omegas)
 
     ## Test solving the Hopf system for the Hopf bifurcation
+    _IDX = [0, 1, 2, 3, 4]
+    _IDX = slice(None, None, None)
+    def linear_subproblem_hopf(x_n):
+        """Linear subproblem of a Newton solver"""
+        # xhopf_n = xhopf_0.copy()
+        # xhopf_n[state_labels] = x_n
+        
+        xhopf_n = xhopf_0.copy()
+        xhopf_n[_IDX] = x_n
+        
+        res_n = hopf_res(xhopf_n)[_IDX]
+        jac_n = hopf_jac(xhopf_n)[_IDX, _IDX]
+
+        def assem_res():
+            """Return residual"""
+            return res_n
+
+        def solve(rhs_n):
+            """Return jac^-1 res"""
+            _rhs_n = rhs_n.to_petsc()
+            _jac_n = jac_n.to_petsc()
+            _dx_n = _jac_n.getVecRight()
+
+            ksp = PETSc.KSP().create()
+            ksp.setType(ksp.Type.PREONLY)
+            
+            pc = ksp.getPC()
+            pc.setType(pc.Type.LU)
+
+            ksp.setOperators(_jac_n)
+            ksp.setUp()
+            ksp.solve(_rhs_n, _dx_n)
+
+            dx_n = x_n.copy()
+            dx_n.set_vec(_dx_n)
+            return dx_n
+        return assem_res, solve
+
     if TEST_HOPF_BIFURCATION:
-        pass
+        x_n = xhopf_0[_IDX].copy()
+            
+        newton_params = {
+            'maximum_iterations': 20
+        }
+        x_n, info = nleq.newton_solve(x_n, linear_subproblem_hopf, norm=bvec.norm, params=newton_params)
+        print(x_n.norm())
+        print(info)
     
 
     

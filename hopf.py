@@ -84,7 +84,8 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
     HOPF_LABELS = tuple(reduce(lambda a, b: a+b, labels))
 
     EBVEC = x[state_labels].copy()
-    EBVEC['u'][0] = 1.0
+    EBVEC['u'].array[0] = 1.0
+    EBVEC['u'].array[:] = 1.0
     def hopf_res(x):
         """Return the Hopf system residual"""
         # Set the model state and subglottal pressure (bifurcation parameter)
