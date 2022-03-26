@@ -24,7 +24,7 @@ from hopf import make_hopf_system
 TEST_HOPF = True
 TEST_FP = True
 TEST_MODAL = True
-TEST_MODAL_2 = False 
+TEST_HOPF_BIFURCATION = False 
 # Very weird bug where the second eigenvalue problem has error code 73 even 
 # though it uses the same matrices as the first case. Very uncertain what the cause of this
 # bug is
@@ -51,21 +51,21 @@ def test_hopf(x0, dx, hopf_res, hopf_jac):
 
 EBODY = 5e3 * 10
 ECOV = 5e3 * 10
-PSUB = 800 * 10
+PSUB = 800 * 10   
 
 def set_properties(props, region_to_dofs, res):
 
     # VF material props
     # TODO: Should replace these with gops.set_vec to be more general
-    props['emod'].array[region_to_dofs['cover']] = ECOV
-    props['emod'].array[region_to_dofs['body']] = EBODY
-    props['eta'].array[:] = 5.0
-    props['rho'].array[:] = 1.0
-    props['nu'].array[:] = 0.45
+    gops.set_vec(props['emod'], ECOV)
+    gops.set_vec(props['emod'], EBODY)
+    gops.set_vec(props['eta'], 5.0)
+    gops.set_vec(props['rho'], 1.0)
+    gops.set_vec(props['nu'], 0.45)
 
     # Fluid separation smoothing props
-    props['zeta_min'].array[:] = 1.0e-4
-    props['zeta_sep'].array[:] = 1.0e-4
+    gops.set_vec(props['zeta_min'], 1.0e-4)
+    gops.set_vec(props['zeta_sep'], 1.0e-4)
 
     # Contact and midline symmetry properties
     # y_gap = 0.5 / 10 # Set y gap to 0.5 mm
@@ -75,10 +75,10 @@ def set_properties(props, region_to_dofs, res):
     y_max = res.solid.forms['mesh.mesh'].coordinates()[:, 1].max()
     y_mid = y_max + y_gap
     y_contact = y_mid - y_contact_offset
-    props['ycontact'].array[:] = y_contact
-    props['kcontact'].array[:] = 1e16
+    gops.set_vec(props['ycontact'], y_contact)
+    gops.set_vec(props['kcontact'], 1e16)
     if 'ymid' in props:
-        props['ymid'].array[:] = y_mid
+        gops.set_vec(props['ymid'], y_mid)
     
     return y_mid
 
@@ -219,40 +219,9 @@ if __name__ == '__main__':
         omegas = -1/eigvals
         print(f"Omegas:", omegas)
 
-    # I think this one won't work because the "A" matrix is singular? Have to investigate
-    if TEST_MODAL_2:
-        xhopf_n[state_labels] = x_n
-        jac = hopf_jac(xhopf_n)
-        df_dx = jac[state_labels, state_labels]
-        df_dxt = jac[mode_imag_labels, mode_imag_labels]
-
-        # Set dirichlet conditions for the mass matrix
-        df_dxt[0, 0].zeroRows(idx_dirichlet, diag=1e-10)
-        df_dxt[0, 1].zeroRows(idx_dirichlet, diag=0)
-        df_dxt[1, 0].zeroRows(idx_dirichlet, diag=0)
-        df_dxt[1, 1].zeroRows(idx_dirichlet, diag=1e-10)
-
-        _df_dx = df_dx.to_petsc()
-        _df_dxt = df_dxt.to_petsc()
-        _df_dxt.assemble()
-        _df_dx.assemble()
-
-        eps = SLEPc.EPS().create()
-        eps.setOperators(_df_dx, _df_dxt)
-        eps.setProblemType(SLEPc.EPS.ProblemType.GNHEP)
-
-        # # number of eigenvalues to solve for and dimension of subspace to approximate problem
-        num_eig = 5
-        num_col = 10*num_eig
-        eps.setDimensions(num_eig, num_col)
-        eps.setWhichEigenpairs(SLEPc.EPS.Which.SMALLEST_REAL)
-        eps.solve()
-
-        eigvals = np.array([eps.getEigenvalue(jj) for jj in range(eps.getConverged())])
-        omegas = eigvals
-        print(f"Omegas:", omegas)
-
-    breakpoint()
+    ## Test solving the Hopf system for the Hopf bifurcation
+    if TEST_HOPF_BIFURCATION:
+        pass
     
 
     
