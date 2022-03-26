@@ -21,9 +21,9 @@ from hopf import make_hopf_system
 # slepc4py.init(sys.argv)
 
 # pylint: disable=redefined-outer-name
-TEST_HOPF = False
+TEST_HOPF = True
 TEST_FP = True
-TEST_MODAL = False
+TEST_MODAL = True
 TEST_HOPF_BIFURCATION = True 
 # Very weird bug where the second eigenvalue problem has error code 73 even 
 # though it uses the same matrices as the first case. Very uncertain what the cause of this
@@ -84,7 +84,7 @@ def set_properties(props, region_to_dofs, res):
 
 if __name__ == '__main__':
     ## Load 3 residual functions needed to model the Hopf system
-    mesh_name = 'BC-dcov5.00e-02-cl1.00'
+    mesh_name = 'BC-dcov5.00e-02-cl2.00'
     mesh_path = path.join('./mesh', mesh_name+'.xml')
 
     res = load_dynamical_fsi_model(
@@ -191,9 +191,9 @@ if __name__ == '__main__':
         # in the transformed form
         # df/dxt ex = lambda df/dx ex
         # where lambda=1/omega, and ex is a generalized eigenvector
-
-        x_n[state_labels] = x_n
-        jac = hopf_jac(x_n)
+        xhopf_n = xhopf_0.copy()
+        xhopf_n[state_labels] = x_n
+        jac = hopf_jac(xhopf_n)
         df_dx = jac[state_labels, state_labels]
         df_dxt = jac[mode_imag_labels, mode_imag_labels]
 
