@@ -104,7 +104,7 @@ def run(psub):
     controls = [_control]
 
     _times = DT*np.arange(int(round(T_TOTAL/DT))+1)
-    times = linalg.BlockVec((_times,), ('times',))
+    times = linalg.BlockVec((_times,), labels=[('times',)])
 
     # Compute the static configuration for the initial state if needed
     if INIT_STATE_TYPE == 'static':

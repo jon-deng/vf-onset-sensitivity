@@ -5,7 +5,7 @@ import itertools
 from functools import reduce
 import numpy as np
 
-import blocktensor.genericops as gops
+import blocktensor.subops as gops
 import blocktensor.linalg as bla
 from blocktensor import vec as bvec
 from blocktensor import mat as bmat
@@ -18,11 +18,11 @@ def hopf_state(res):
 
     _mode_real_vecs = res.state.copy().array
     _mode_real_labels = [label+'_mode_real' for label in X_state.labels[0]]
-    X_mode_real = bvec.BlockVec(_mode_real_vecs, _mode_real_labels)
+    X_mode_real = bvec.BlockVec(_mode_real_vecs, labels=[_mode_real_labels])
 
     _mode_imag_vecs = res.state.copy().array
     _mode_imag_labels = [label+'_mode_imag' for label in X_state.labels[0]]
-    X_mode_imag = bvec.BlockVec(_mode_imag_vecs, _mode_imag_labels)
+    X_mode_imag = bvec.BlockVec(_mode_imag_vecs, labels=[_mode_imag_labels])
 
     # breakpoint()
     X_psub = res.control[['psub']].copy()
@@ -30,7 +30,7 @@ def hopf_state(res):
     _omega = X_psub['psub'].copy()
     _omega_vecs = [_omega]
     _omega_labels = [['omega']]
-    X_omega = bvec.BlockVec(_omega_vecs, _omega_labels)
+    X_omega = bvec.BlockVec(_omega_vecs, labels=[_omega_labels])
 
     ret = bvec.concatenate_vec([X_state, X_mode_real, X_mode_imag, X_psub, X_omega])
     state_labels = list(X_state.labels[0])
@@ -119,22 +119,22 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
     mats = [
         [bmat.zero_mat(row_size, col_size) for col_size in x[state_labels].bshape[0]] 
         for row_size in x[state_labels].bshape[0]]
-    NULL_MAT_STATE_STATE = bmat.BlockMat(mats, (x[state_labels].labels[0], x[state_labels].labels[0]))
+    NULL_MAT_STATE_STATE = bmat.BlockMat(mats, labels=(x[state_labels].labels[0], x[state_labels].labels[0]))
 
     mats = [
         [bmat.zero_mat(row_size, col_size) for col_size in [1]] 
         for row_size in x[state_labels].bshape[0]]
-    NULL_MAT_STATE_SCALAR = bmat.BlockMat(mats, (x[state_labels].labels[0], ('1',)))
+    NULL_MAT_STATE_SCALAR = bmat.BlockMat(mats, labels=(x[state_labels].labels[0], ('1',)))
 
     mats = [
         [bmat.zero_mat(row_size, col_size) for col_size in x[state_labels].bshape[0]] 
         for row_size in [1]]
-    NULL_MAT_SCALAR_STATE = bmat.BlockMat(mats, (('1',), x[state_labels].labels[0]))
+    NULL_MAT_SCALAR_STATE = bmat.BlockMat(mats, labels=(('1',), x[state_labels].labels[0]))
 
     mats = [
         [bmat.zero_mat(row_size, col_size) for col_size in [1]] 
         for row_size in [1]]
-    NULL_MAT_SCALAR_SCALAR = bmat.BlockMat(mats, (('1',), ('1',)))
+    NULL_MAT_SCALAR_SCALAR = bmat.BlockMat(mats, labels=(('1',), ('1',)))
 
     def hopf_jac(x):
         """Return the Hopf system jacobian"""

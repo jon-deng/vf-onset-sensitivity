@@ -12,7 +12,7 @@ from femvf.load import load_dynamical_fsi_model
 from femvf.meshutils import process_meshlabel_to_dofs
 import nonlineq as nleq
 
-import blocktensor.genericops as gops
+import blocktensor.subops as gops
 import blocktensor.linalg as bla
 from blocktensor import vec as bvec
 
