@@ -30,7 +30,7 @@ def hopf_state(res):
     _omega = X_psub['psub'].copy()
     _omega_vecs = [_omega]
     _omega_labels = [['omega']]
-    X_omega = bvec.BlockVec(_omega_vecs, labels=[_omega_labels])
+    X_omega = bvec.BlockVec(_omega_vecs, labels=_omega_labels)
 
     ret = bvec.concatenate_vec([X_state, X_mode_real, X_mode_imag, X_psub, X_omega])
     state_labels = list(X_state.labels[0])
@@ -110,7 +110,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         res_psub['psub'][0] = bla.dot(EBVEC, x[mode_imag_labels])
 
         ret_bvec =  bvec.concatenate_vec(
-            [res_state, res_mode_real, res_mode_imag, res_psub, res_omega], labels=HOPF_LABELS)
+            [res_state, res_mode_real, res_mode_imag, res_psub, res_omega], labels=[HOPF_LABELS])
         apply_dirichlet_vec(ret_bvec)
         return ret_bvec
 

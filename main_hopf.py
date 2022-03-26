@@ -21,7 +21,7 @@ from hopf import make_hopf_system
 # slepc4py.init(sys.argv)
 
 # pylint: disable=redefined-outer-name
-TEST_HOPF = False
+TEST_HOPF = True
 TEST_FP = True
 TEST_MODAL = True
 TEST_MODAL_2 = False 
