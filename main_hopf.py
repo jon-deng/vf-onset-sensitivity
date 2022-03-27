@@ -116,17 +116,13 @@ if __name__ == '__main__':
     ## Initialize the Hopf system
     xhopf, hopf_res, hopf_jac, apply_dirichlet_vec, idx_dirichlet, labels = make_hopf_system(res, dres_u, dres_ut, props)
     state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels = labels
-
-    # Set the starting point of any iterative solutions
+    
+    ## Test the Hopf jacobian
     xhopf_0 = xhopf.copy()
     xhopf_0['psub'].array[:] = PSUB
-    # xhopf_0['psub'].array[:] = 1e-10
-    # This value is set to ensure the correct df/dxt matrix when computing eigvals
     xhopf_0['omega'].array[:] = 1.0
-
-    ## Test the Hopf jacobian
     if TEST_HOPF:
-        print("-- Test correctness of Hopf system residual and jacobian --")
+        print("\n-- Test correctness of Hopf system residual and jacobian --")
         dxhopf = xhopf.copy()
         for subvec in dxhopf:
             subvec.set(0)
@@ -137,6 +133,10 @@ if __name__ == '__main__':
         test_hopf(xhopf_0, dxhopf, hopf_res, hopf_jac)
 
     ## Test solve for fixed-points
+    xhopf_0 = xhopf.copy()
+    xhopf_0['psub'].array[:] = PSUB
+    xhopf_0['omega'].array[:] = 1.0
+
     def linear_subproblem_fp(x_n):
         """Linear subproblem of a Newton solver"""
         xhopf_n = xhopf_0.copy()
@@ -172,27 +172,31 @@ if __name__ == '__main__':
         return assem_res, solve
 
     if TEST_FP:
-        print("-- Test solution of fixed-points --")
-        x_n = xhopf_0.copy()
-        x_n = x_n[state_labels]
+        print("\n-- Test solution of fixed-points --")
+        xfp_n = xhopf_0.copy()
+        xfp_n = xfp_n[state_labels]
             
         newton_params = {
             'maximum_iterations': 20
         }
-        x_n, info = nleq.newton_solve(x_n, linear_subproblem_fp, norm=bvec.norm, params=newton_params)
-        print(x_n.norm())
+        xfp_n, info = nleq.newton_solve(xfp_n, linear_subproblem_fp, norm=bvec.norm, params=newton_params)
+        print(xfp_n.norm())
         print(info)
 
     ## Test solving for stabilty (modal analysis of the jacobian)
+    xhopf_0 = xhopf.copy()
+    xhopf_0['psub'].array[:] = PSUB
+    xhopf_0['omega'].array[:] = 1.0 # have to set omega=1 to get correct jacobian
+
     if TEST_MODAL:
-        print("-- Test modal analysis of system linearized dynamics --")
+        print("\n-- Test modal analysis of system linearized dynamics --")
         # Here we solve the eigenvalue problem
         # omega df/dxt ex = df/dx ex
         # in the transformed form
         # df/dxt ex = lambda df/dx ex
         # where lambda=1/omega, and ex is a generalized eigenvector
         xhopf_n = xhopf_0.copy()
-        xhopf_n[state_labels] = x_n
+        xhopf_n[state_labels] = xfp_n
         jac = hopf_jac(xhopf_n)
         df_dx = jac[state_labels, state_labels]
         df_dxt = jac[mode_imag_labels, mode_imag_labels]
@@ -221,8 +225,21 @@ if __name__ == '__main__':
         omegas = -1/eigvals
         print(f"Omegas:", omegas)
 
+    idx_hopf = 2
+    omega_hopf = abs(omegas[idx_hopf].imag)
+    mode_real_hopf = _df_dx.getVecRight()
+    mode_imag_hopf = _df_dx.getVecRight()
+    eps.getEigenvector(idx_hopf, mode_real_hopf, mode_imag_hopf)
+
     ## Test solving the Hopf system for the Hopf bifurcation
-    _IDX = [0, 1, 2, 3, 4]
+    # set the initial guess based on the stability analysis and fixed-point solution
+    xhopf_0 = xhopf.copy()
+    xhopf_0[state_labels] = xfp_n
+    xhopf_0[mode_real_labels].set_vec(mode_real_hopf)
+    xhopf_0[mode_imag_labels].set_vec(mode_imag_hopf)
+    xhopf_0['psub'].array[:] = PSUB
+    xhopf_0['omega'].array[:] = omega_hopf
+
     _IDX = slice(None, None, None)
     def linear_subproblem_hopf(x_n):
         """Linear subproblem of a Newton solver"""
@@ -234,6 +251,10 @@ if __name__ == '__main__':
         
         res_n = hopf_res(xhopf_n)[_IDX]
         jac_n = hopf_jac(xhopf_n)[_IDX, _IDX]
+
+        norms = np.array(
+            [[mat.norm() for mat in row] for row in jac_n])
+        # breakpoint()
 
         def assem_res():
             """Return residual"""
@@ -261,16 +282,14 @@ if __name__ == '__main__':
         return assem_res, solve
 
     if TEST_HOPF_BIFURCATION:
-        print("-- Test solution of Hopf system for Hopf bifurcation point --")
+        print("\n-- Test solution of Hopf system for Hopf bifurcation point --")
         xhopf_0['omega'].array[:] = 2.0
-        x_n = xhopf_0[_IDX].copy()
+        xfp_n = xhopf_0[_IDX].copy()
             
         newton_params = {
             'maximum_iterations': 20
         }
-        x_n, info = nleq.newton_solve(x_n, linear_subproblem_hopf, norm=bvec.norm, params=newton_params)
-        print(x_n.norm())
+        xfp_n, info = nleq.newton_solve(xfp_n, linear_subproblem_hopf, norm=bvec.norm, params=newton_params)
+        print(xfp_n.norm())
         print(info)
-    
 
-    
