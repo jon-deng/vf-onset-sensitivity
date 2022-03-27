@@ -261,6 +261,7 @@ if __name__ == '__main__':
         return assem_res, solve
 
     if TEST_HOPF_BIFURCATION:
+        xhopf_0['omega'].array[:] = 2.0
         x_n = xhopf_0[_IDX].copy()
             
         newton_params = {

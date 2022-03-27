@@ -108,7 +108,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         res_psub['psub'][0] = bla.dot(EBVEC, x[mode_real_labels])
 
         res_omega = x[['omega']].copy()
-        res_psub['psub'][0] = bla.dot(EBVEC, x[mode_imag_labels])
+        res_omega['omega'][0] = bla.dot(EBVEC, x[mode_imag_labels]) - 1.0
 
         ret_bvec =  bvec.concatenate_vec(
             [res_state, res_mode_real, res_mode_imag, res_psub, res_omega], labels=[HOPF_LABELS])
