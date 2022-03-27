@@ -24,10 +24,7 @@ from hopf import make_hopf_system
 TEST_HOPF = True
 TEST_FP = True
 TEST_MODAL = True
-TEST_HOPF_BIFURCATION = True 
-# Very weird bug where the second eigenvalue problem has error code 73 even 
-# though it uses the same matrices as the first case. Very uncertain what the cause of this
-# bug is
+TEST_HOPF_BIFURCATION = True
 
 def test_hopf(x0, dx, hopf_res, hopf_jac):
     """Test correctness of the Hopf jacobian/residual"""
@@ -129,6 +126,7 @@ if __name__ == '__main__':
 
     ## Test the Hopf jacobian
     if TEST_HOPF:
+        print("-- Test correctness of Hopf system residual and jacobian --")
         dxhopf = xhopf.copy()
         for subvec in dxhopf:
             subvec.set(0)
@@ -174,6 +172,7 @@ if __name__ == '__main__':
         return assem_res, solve
 
     if TEST_FP:
+        print("-- Test solution of fixed-points --")
         x_n = xhopf_0.copy()
         x_n = x_n[state_labels]
             
@@ -186,6 +185,7 @@ if __name__ == '__main__':
 
     ## Test solving for stabilty (modal analysis of the jacobian)
     if TEST_MODAL:
+        print("-- Test modal analysis of system linearized dynamics --")
         # Here we solve the eigenvalue problem
         # omega df/dxt ex = df/dx ex
         # in the transformed form
@@ -261,6 +261,7 @@ if __name__ == '__main__':
         return assem_res, solve
 
     if TEST_HOPF_BIFURCATION:
+        print("-- Test solution of Hopf system for Hopf bifurcation point --")
         xhopf_0['omega'].array[:] = 2.0
         x_n = xhopf_0[_IDX].copy()
             
