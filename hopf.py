@@ -148,7 +148,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
 
         # Using copys of dres_dstate is important as different dres_dstate locations
         # will rquire different dirichlet settings on their rows
-        jac_1 = [
+        jac_row0 = [
             dres_dstate.copy(),
             NULL_MAT_STATE_STATE, 
             NULL_MAT_STATE_STATE, 
@@ -159,7 +159,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         # Set appropriate linearization directions
         dres_u.set_dstate(x[mode_imag_labels])
         dres_ut.set_dstate(x[mode_real_labels])
-        jac_2 = [
+        jac_row1 = [
             dres_u.assem_dres_dstate() - omega*dres_ut.assem_dres_dstate(), 
             -omega*dres_dstatet.copy(), 
             dres_dstate.copy(),  
@@ -169,14 +169,14 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         # Set appropriate linearization directions
         dres_u.set_dstate(x[mode_real_labels])
         dres_ut.set_dstate(x[mode_imag_labels])
-        jac_3 = [
+        jac_row2 = [
             dres_u.assem_dres_dstate() + omega*dres_ut.assem_dres_dstate(), 
             dres_dstate.copy(), 
             omega*dres_dstatet.copy(), 
             dres_u.assem_dres_dcontrol()[:, ['psub']] + omega*dres_ut.assem_dres_dcontrol()[:, ['psub']], 
             bvec.convert_bvec_to_petsc_colbmat(dres_ut.assem_res())]
 
-        jac_4 = [
+        jac_row3 = [
             NULL_MAT_SCALAR_STATE,
             bvec.convert_bvec_to_petsc_rowbmat(EBVEC),
             NULL_MAT_SCALAR_STATE,
@@ -184,7 +184,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
             NULL_MAT_SCALAR_SCALAR
             ]
 
-        jac_5 = [
+        jac_row4 = [
             NULL_MAT_SCALAR_STATE,
             NULL_MAT_SCALAR_STATE,
             bvec.convert_bvec_to_petsc_rowbmat(EBVEC),
@@ -192,7 +192,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
             NULL_MAT_SCALAR_SCALAR
             ]
 
-        ret_mats = [jac_1, jac_2, jac_3, jac_4, jac_5]
+        ret_mats = [jac_row0, jac_row1, jac_row2, jac_row3, jac_row4]
         ret_labels = (HOPF_LABELS, HOPF_LABELS)
         ret_bmat = bmat.concatenate_mat(ret_mats, ret_labels)
 

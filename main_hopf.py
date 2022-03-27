@@ -6,6 +6,7 @@ from os import path
 from petsc4py import PETSc
 from slepc4py import SLEPc
 import numpy as np
+# import petsc4py
 
 from femvf.dynamicalmodels import solid as sldm, fluid as fldm
 from femvf.load import load_dynamical_fsi_model
@@ -81,7 +82,7 @@ def set_properties(props, region_to_dofs, res):
 
 if __name__ == '__main__':
     ## Load 3 residual functions needed to model the Hopf system
-    mesh_name = 'BC-dcov5.00e-02-cl2.00'
+    mesh_name = 'BC-dcov5.00e-02-cl10.00'
     mesh_path = path.join('./mesh', mesh_name+'.xml')
 
     res = load_dynamical_fsi_model(
@@ -254,7 +255,7 @@ if __name__ == '__main__':
 
         norms = np.array(
             [[mat.norm() for mat in row] for row in jac_n])
-        # breakpoint()
+        breakpoint()
 
         def assem_res():
             """Return residual"""
