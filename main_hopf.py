@@ -115,9 +115,11 @@ if __name__ == '__main__':
         model.ymid = y_mid
 
     ## Initialize the Hopf system
-    xhopf, hopf_res, hopf_jac, apply_dirichlet_vec, idx_dirichlet, labels = make_hopf_system(res, dres_u, dres_ut, props)
+    xhopf, hopf_res, hopf_jac, apply_dirichlet_vec, apply_dirichlet_mat, labels, info = make_hopf_system(res, dres_u, dres_ut, props)
     state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels = labels
     
+    IDX_DIRICHLET = info['dirichlet_dofs']
+
     ## Test the Hopf jacobian
     xhopf_0 = xhopf.copy()
     xhopf_0['psub'].array[:] = PSUB
@@ -133,7 +135,7 @@ if __name__ == '__main__':
         apply_dirichlet_vec(xhopf_0)
         test_hopf(xhopf_0, dxhopf, hopf_res, hopf_jac)
 
-    ## Test solve for fixed-points
+    ## Test solving for fixed-points
     xhopf_0 = xhopf.copy()
     xhopf_0['psub'].array[:] = PSUB
     xhopf_0['omega'].array[:] = 1.0
@@ -143,8 +145,13 @@ if __name__ == '__main__':
         xhopf_n = xhopf_0.copy()
         xhopf_n[state_labels] = x_n
 
-        res_n = hopf_res(xhopf_n)[state_labels]
-        jac_n = hopf_jac(xhopf_n)[state_labels, state_labels]
+        _res_n = hopf_res(xhopf_n)
+        _jac_n = hopf_jac(xhopf_n)
+        apply_dirichlet_vec(_res_n)
+        apply_dirichlet_mat(_jac_n)
+
+        res_n = _res_n[state_labels]
+        jac_n = _jac_n[state_labels, state_labels]
 
         def assem_res():
             """Return residual"""
@@ -203,10 +210,10 @@ if __name__ == '__main__':
         df_dxt = jac[mode_imag_labels, mode_imag_labels]
 
         # Set dirichlet conditions for the mass matrix
-        df_dxt[0, 0].zeroRows(idx_dirichlet, diag=1e-10)
-        df_dxt[0, 1].zeroRows(idx_dirichlet, diag=0)
-        df_dxt[1, 0].zeroRows(idx_dirichlet, diag=0)
-        df_dxt[1, 1].zeroRows(idx_dirichlet, diag=1e-10)
+        df_dxt[0, 0].zeroRows(IDX_DIRICHLET, diag=1e-10)
+        df_dxt[0, 1].zeroRows(IDX_DIRICHLET, diag=0)
+        df_dxt[1, 0].zeroRows(IDX_DIRICHLET, diag=0)
+        df_dxt[1, 1].zeroRows(IDX_DIRICHLET, diag=1e-10)
 
         _df_dx = df_dx.to_petsc()
         _df_dxt = df_dxt.to_petsc()
@@ -250,10 +257,12 @@ if __name__ == '__main__':
         # xhopf_n[state_labels] = x_n
         
         xhopf_n = xhopf_0.copy()
-        xhopf_n[_IDX] = x_n
+        xhopf_n[:] = x_n
         
-        res_n = hopf_res(xhopf_n)[_IDX]
-        jac_n = hopf_jac(xhopf_n)[_IDX, _IDX]
+        res_n = hopf_res(xhopf_n)
+        jac_n = hopf_jac(xhopf_n)
+        apply_dirichlet_vec(res_n)
+        apply_dirichlet_mat(jac_n)
 
         norms = np.array(
             [[mat.norm() for mat in row] for row in jac_n])

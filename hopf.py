@@ -79,12 +79,17 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
             subvec = vec[label]
             subvec.array[IDX_DIRICHLET] = 0
 
-    # def apply_dirichlet_mat(mat):
-    #     """Zeros dirichlet associated indices"""
-    #     for label in ['u', 'v', 'u_mode_real', 'v_mode_real', 'u_mode_imag', 'v_mode_imag']:
-    #         # zero the rows associated with each dirichlet DOF
-    #         for mat in mat[label, :]:
-    #             subvec.array[IDX_DIRICHLET] = 0
+    def apply_dirichlet_mat(mat):
+        """Zeros dirichlet associated indices"""
+        # Apply dirichlet BC by zeroing appropriate matrix rows
+        row_labels = ['u', 'v', 'u_mode_real', 'v_mode_real', 'u_mode_imag', 'v_mode_imag']
+        col_labels = HOPF_LABELS
+        for row, col in itertools.product(row_labels, col_labels):
+            submat = mat[row, col]
+            if row == col:
+                submat.zeroRows(IDX_DIRICHLET, diag=1.0)
+            else:
+                submat.zeroRows(IDX_DIRICHLET, diag=0.0)
             
     # Create the input vector for the system
     x, labels = hopf_state(res)
@@ -204,21 +209,9 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         ret_mats = [jac_row0, jac_row1, jac_row2, jac_row3, jac_row4]
         ret_labels = (HOPF_LABELS, HOPF_LABELS)
         ret_bmat = bmat.concatenate_mat(ret_mats, ret_labels)
-
-        # Apply dirichlet BC by zeroing appropriate matrix rows
-        row_labels = ['u', 'v', 'u_mode_real', 'v_mode_real', 'u_mode_imag', 'v_mode_imag']
-        col_labels = HOPF_LABELS
-        for row, col in itertools.product(row_labels, col_labels):
-            mat = ret_bmat[row, col]
-            if row == col:
-                mat.zeroRows(IDX_DIRICHLET, diag=1.0)
-            else:
-                mat.zeroRows(IDX_DIRICHLET, diag=0.0)
-
-            # Set 1 on the diagonal (zero's one block twice but it shouldn't matter much)
-            # ret_bmat[label, label].zeroRows(IDX_DIRICHLET, diag=1)
-
         return ret_bmat
 
-    
-    return x, hopf_res, hopf_jac, apply_dirichlet_vec, IDX_DIRICHLET, labels
+    info = {
+        'dirichlet_dofs': IDX_DIRICHLET
+    }
+    return x, hopf_res, hopf_jac, apply_dirichlet_vec, apply_dirichlet_mat, labels, info
