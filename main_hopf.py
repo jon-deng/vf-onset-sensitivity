@@ -82,7 +82,7 @@ def set_properties(props, region_to_dofs, res):
 
 if __name__ == '__main__':
     ## Load 3 residual functions needed to model the Hopf system
-    mesh_name = 'BC-dcov5.00e-02-cl2.00'
+    mesh_name = 'BC-dcov5.00e-02-cl4.00'
     mesh_path = path.join('./mesh', mesh_name+'.xml')
 
     res = load_dynamical_fsi_model(
@@ -257,7 +257,11 @@ if __name__ == '__main__':
 
         norms = np.array(
             [[mat.norm() for mat in row] for row in jac_n])
-        _mat = jac_n.to_petsc()[:, :]
+        dbg_mat = jac_n.to_petsc()[:, :]
+        iszero_row = np.all(dbg_mat == 0, axis=1)
+        iszero_col = np.all(dbg_mat == 0, axis=0)
+        num_zero_rows = np.sum(iszero_row) 
+        num_zero_cols = np.sum(iszero_col) 
         breakpoint()
 
         def assem_res():
