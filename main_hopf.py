@@ -82,7 +82,7 @@ def set_properties(props, region_to_dofs, res):
 
 if __name__ == '__main__':
     ## Load 3 residual functions needed to model the Hopf system
-    mesh_name = 'BC-dcov5.00e-02-cl10.00'
+    mesh_name = 'BC-dcov5.00e-02-cl2.00'
     mesh_path = path.join('./mesh', mesh_name+'.xml')
 
     res = load_dynamical_fsi_model(
@@ -238,6 +238,8 @@ if __name__ == '__main__':
     xhopf_0[state_labels] = xfp_n
     xhopf_0[mode_real_labels].set_vec(mode_real_hopf)
     xhopf_0[mode_imag_labels].set_vec(mode_imag_hopf)
+    xhopf_0[mode_real_labels] = 1.0
+    xhopf_0[mode_imag_labels] = 1.0
     xhopf_0['psub'].array[:] = PSUB
     xhopf_0['omega'].array[:] = omega_hopf
 
@@ -255,6 +257,7 @@ if __name__ == '__main__':
 
         norms = np.array(
             [[mat.norm() for mat in row] for row in jac_n])
+        _mat = jac_n.to_petsc()[:, :]
         breakpoint()
 
         def assem_res():
@@ -269,11 +272,12 @@ if __name__ == '__main__':
 
             ksp = PETSc.KSP().create()
             ksp.setType(ksp.Type.PREONLY)
+            ksp.setOperators(_jac_n)
             
             pc = ksp.getPC()
             pc.setType(pc.Type.LU)
 
-            ksp.setOperators(_jac_n)
+            pc.setUp()
             ksp.setUp()
             ksp.solve(_rhs_n, _dx_n)
 

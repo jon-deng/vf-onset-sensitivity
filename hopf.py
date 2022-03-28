@@ -38,7 +38,9 @@ def hopf_state(res):
     mode_imag_labels = list(X_mode_imag.labels[0])
     psub_labels = list(X_psub.labels[0])
     omega_labels = list(X_omega.labels[0])
-    return ret, state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels
+
+    labels = [state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels]
+    return ret, labels
 
 def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
     """
@@ -60,13 +62,13 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
     for model in (res, dres_u, dres_ut):
         model.set_properties(props)
 
-    def assign_model_state(x):
-        """handles assignment of some parts of x to the underlying models"""
+    def assign_hopf_system_state(xhopf):
+        """Handles assignment of some parts of x to the underlying models"""
         for model in (res, dres_u, dres_ut):
-            model.set_state(x[state_labels])
+            model.set_state(xhopf[state_labels])
 
             _control = model.control.copy()
-            _control['psub'].array[0] = x['psub'].array[0]
+            _control['psub'].array[0] = xhopf['psub'].array[0]
             model.set_control(_control)
 
     IDX_DIRICHLET = np.array(list(res.solid.forms['bc.dirichlet'].get_boundary_values().keys()), dtype=np.int32)
@@ -76,32 +78,39 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
             # zero the rows associated with each dirichlet DOF
             subvec = vec[label]
             subvec.array[IDX_DIRICHLET] = 0
+
+    # def apply_dirichlet_mat(mat):
+    #     """Zeros dirichlet associated indices"""
+    #     for label in ['u', 'v', 'u_mode_real', 'v_mode_real', 'u_mode_imag', 'v_mode_imag']:
+    #         # zero the rows associated with each dirichlet DOF
+    #         for mat in mat[label, :]:
+    #             subvec.array[IDX_DIRICHLET] = 0
             
     # Create the input vector for the system
-    x, state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels = hopf_state(res)
-    labels = (state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels)
+    x, labels = hopf_state(res)
+    state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels = labels
 
     HOPF_LABELS = tuple(reduce(lambda a, b: a+b, labels))
 
     EBVEC = x[state_labels].copy()
-    EBVEC['u'].array[0] = 1.0
+    # EBVEC['u'].array[0] = 1.0
     EBVEC['u'].array[:] = 1.0
     def hopf_res(x):
         """Return the Hopf system residual"""
         # Set the model state and subglottal pressure (bifurcation parameter)
-        assign_model_state(x)
+        assign_hopf_system_state(x)
 
         res_state = res.assem_res()
 
         omega = x['omega'][0]
         # Set appropriate linearization directions
         dres_u.set_dstate(x[mode_imag_labels])
-        dres_ut.set_dstate(x[mode_real_labels])
+        dres_ut.set_dstatet(x[mode_real_labels])
         res_mode_real = dres_u.assem_res() - omega*dres_ut.assem_res()
 
         # Set appropriate linearization directions
         dres_u.set_dstate(x[mode_real_labels])
-        dres_ut.set_dstate(x[mode_imag_labels])
+        dres_ut.set_dstatet(x[mode_imag_labels])
         res_mode_imag = dres_u.assem_res() + omega*dres_ut.assem_res()
 
         res_psub = x[['psub']].copy()
@@ -140,7 +149,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
     def hopf_jac(x):
         """Return the Hopf system jacobian"""
         # Set the model state and subglottal pressure (bifurcation parameter)
-        assign_model_state(x)
+        assign_hopf_system_state(x)
 
         # build the Jacobian row by row
         dres_dstate = res.assem_dres_dstate()
@@ -158,7 +167,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         omega = x['omega'][0]
         # Set appropriate linearization directions
         dres_u.set_dstate(x[mode_imag_labels])
-        dres_ut.set_dstate(x[mode_real_labels])
+        dres_ut.set_dstatet(x[mode_real_labels])
         jac_row1 = [
             dres_u.assem_dres_dstate() - omega*dres_ut.assem_dres_dstate(), 
             -omega*dres_dstatet.copy(), 
@@ -168,7 +177,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
 
         # Set appropriate linearization directions
         dres_u.set_dstate(x[mode_real_labels])
-        dres_ut.set_dstate(x[mode_imag_labels])
+        dres_ut.set_dstatet(x[mode_imag_labels])
         jac_row2 = [
             dres_u.assem_dres_dstate() + omega*dres_ut.assem_dres_dstate(), 
             dres_dstate.copy(), 
