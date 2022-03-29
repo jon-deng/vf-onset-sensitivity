@@ -209,6 +209,8 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         ret_mats = [jac_row0, jac_row1, jac_row2, jac_row3, jac_row4]
         ret_labels = (HOPF_LABELS, HOPF_LABELS)
         ret_bmat = bmat.concatenate_mat(ret_mats, ret_labels)
+
+        apply_dirichlet_mat(ret_bmat)
         return ret_bmat
 
     info = {
