@@ -74,6 +74,7 @@ def _test_taylor(x0, dx, res, jac, norm=None):
             in zip(errs[:-1], errs[1:], alphas[:-1], alphas[1:])]
 
     print(f"||dres_linear||, ||dres_exact|| = {_norm(dres_linear)}, {_norm(dres_exacts[-1])}")
+    print(f"||dres_linear - dres_exact|| = {_norm(dres_linear-dres_exacts[-1])}")
     print("Errors: ", errs)
     print("Convergence rates: ", conv_rates)
 
@@ -120,17 +121,19 @@ IDX_DIRICHLET = info['dirichlet_dofs']
 def test_hopf():
     """Test correctness of the Hopf jacobian/residual"""
     xhopf_0 = xhopf.copy()
+    # xhopf_0.set(1e-5)
+    xhopf_0[mode_real_labels].set(1.0)
+    xhopf_0[mode_imag_labels].set(1.0)
     xhopf_0['psub'].array[:] = PSUB
     xhopf_0['omega'].array[:] = 1.0
+    apply_dirichlet_vec(xhopf_0)
 
     for label in HOPF_LABELS:
         print(f"\n -- Checking Hopf jacobian along {label} --")
         dxhopf = xhopf.copy()
         dxhopf.set(0)
-        dxhopf[label] = 1e-7
-
+        dxhopf[label] = 1e-5
         apply_dirichlet_vec(dxhopf)
-        apply_dirichlet_vec(xhopf_0)
 
         _test_taylor(xhopf_0, dxhopf, hopf_res, hopf_jac)
 

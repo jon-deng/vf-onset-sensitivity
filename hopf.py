@@ -63,7 +63,13 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         model.set_properties(props)
 
     def assign_hopf_system_state(xhopf):
-        """Handles assignment of some parts of x to the underlying models"""
+        """
+        Sets the fixed-point and bifurcation parameter components of the Hopf state
+        
+        The Hopf state consists of 5 blocks representing:
+        [fixed-point state, real mode, imaginary mode, bifurcation parameter, onset frequency]
+        
+        """
         for model in (res, dres_u, dres_ut):
             model.set_state(xhopf[state_labels])
 
