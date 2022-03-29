@@ -3,6 +3,7 @@ Testing code for finding hopf bifurcations of coupled FE VF models
 """
 from os import path
 import numpy as np
+import functools
 
 from femvf.dynamicalmodels import solid as sldm, fluid as fldm
 from femvf.load import load_dynamical_fsi_model
@@ -72,7 +73,6 @@ def _test_taylor(x0, dx, res, jac, norm=None):
             for err_0, err_1, alpha_0, alpha_1
             in zip(errs[:-1], errs[1:], alphas[:-1], alphas[1:])]
 
-    print("")
     print(f"||dres_linear||, ||dres_exact|| = {_norm(dres_linear)}, {_norm(dres_exacts[-1])}")
     print("Errors: ", errs)
     print("Convergence rates: ", conv_rates)
@@ -114,6 +114,7 @@ for model in (res, dres_u, dres_ut):
 xhopf, hopf_res, hopf_jac, apply_dirichlet_vec, apply_dirichlet_mat, labels, info = make_hopf_system(res, dres_u, dres_ut, props)
 state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels = labels
 
+HOPF_LABELS = functools.reduce(lambda a, b: a+b, labels)
 IDX_DIRICHLET = info['dirichlet_dofs']
 
 def test_hopf():
@@ -122,15 +123,16 @@ def test_hopf():
     xhopf_0['psub'].array[:] = PSUB
     xhopf_0['omega'].array[:] = 1.0
 
-    dxhopf = xhopf.copy()
-    for subvec in dxhopf:
-        subvec.set(0)
-    dxhopf['u'].array[:] = 1.0e-7
+    for label in HOPF_LABELS:
+        print(f"\n -- Checking Hopf jacobian along {label} --")
+        dxhopf = xhopf.copy()
+        dxhopf.set(0)
+        dxhopf[label] = 1e-7
 
-    apply_dirichlet_vec(dxhopf)
-    apply_dirichlet_vec(xhopf_0)
+        apply_dirichlet_vec(dxhopf)
+        apply_dirichlet_vec(xhopf_0)
 
-    _test_taylor(xhopf_0, dxhopf, hopf_res, hopf_jac)
+        _test_taylor(xhopf_0, dxhopf, hopf_res, hopf_jac)
 
 if __name__ == '__main__':
     ## Test the Hopf jacobian
