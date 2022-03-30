@@ -6,7 +6,6 @@ from os import path
 from petsc4py import PETSc
 from slepc4py import SLEPc
 import numpy as np
-# import petsc4py
 
 from femvf.dynamicalmodels import solid as sldm, fluid as fldm
 from femvf.load import load_dynamical_fsi_model
@@ -18,6 +17,9 @@ from blocktensor import vec as bvec
 
 from hopf import make_hopf_system
 
+import sys
+import petsc4py
+petsc4py.init(sys.argv)
 # slepc4py.init(sys.argv)
 
 # pylint: disable=redefined-outer-name
@@ -31,6 +33,9 @@ ECOV = 5e3 * 10
 PSUB = 800 * 10
 
 def set_properties(props, region_to_dofs, res):
+    """
+    Set the model properties
+    """
 
     # VF material props
     # TODO: Should replace these with gops.set_vec to be more general
@@ -59,9 +64,12 @@ def set_properties(props, region_to_dofs, res):
 
     return y_mid
 
-if __name__ == '__main__':
-    ## Load 3 residual functions needed to model the Hopf system
-    mesh_name = 'BC-dcov5.00e-02-cl4.00'
+def setup_models():
+    """
+    Return residual + linear residual needed to model the Hopf system
+    """
+    mesh_name = 'BC-dcov5.00e-02-coarse'
+    # mesh_name = 'BC-dcov5.00e-02-cl2.00'
     mesh_path = path.join('./mesh', mesh_name+'.xml')
 
     res = load_dynamical_fsi_model(
@@ -74,14 +82,26 @@ if __name__ == '__main__':
         FluidType = fldm.LinearizedBernoulli1DDynamicalSystem,
         fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
 
-    ## Set model properties
-    # get the scalar DOFs associated with the cover/body layers
+    return res, dres
+
+def region_to_dofs_from_forms(forms, func_space):
+    """
+    Return a map from cell regions to associated dofs
+    """
     mesh = res.solid.forms['mesh.mesh']
     cell_func = res.solid.forms['mesh.cell_function']
-    func_space = res.solid.forms['fspace.scalar']
     cell_label_to_id = res.solid.forms['mesh.cell_label_to_id']
-    region_to_dofs = process_meshlabel_to_dofs(
+    return process_meshlabel_to_dofs(
         mesh, cell_func, func_space, cell_label_to_id)
+
+
+if __name__ == '__main__':
+    res, dres = setup_models()
+
+    ## Set model properties
+    # get the scalar DOFs associated with the cover/body layers
+    region_to_dofs = region_to_dofs_from_forms(
+        res.solid.forms, res.solid.forms['fspace.scalar'])
 
     props = res.properties.copy()
     y_mid = set_properties(props, region_to_dofs, res)
@@ -130,7 +150,6 @@ if __name__ == '__main__':
 
             ksp = PETSc.KSP().create()
             ksp.setType(ksp.Type.PREONLY)
-
 
             pc = ksp.getPC()
             pc.setType(pc.Type.LU)
@@ -210,8 +229,8 @@ if __name__ == '__main__':
     xhopf_0[state_labels] = xfp_n
     xhopf_0[mode_real_labels].set_vec(mode_real_hopf)
     xhopf_0[mode_imag_labels].set_vec(mode_imag_hopf)
-    xhopf_0[mode_real_labels] = 1.0
-    xhopf_0[mode_imag_labels] = 1.0
+    # xhopf_0[mode_real_labels] = 1.0
+    # xhopf_0[mode_imag_labels] = 1.0
     xhopf_0['psub'].array[:] = PSUB
     xhopf_0['omega'].array[:] = omega_hopf
 
