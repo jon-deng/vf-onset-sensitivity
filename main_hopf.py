@@ -1,7 +1,7 @@
 """
 Testing code for finding hopf bifurcations of coupled FE VF models
 """
-import sys
+# import sys
 from os import path
 from petsc4py import PETSc
 from slepc4py import SLEPc
@@ -14,7 +14,6 @@ from femvf.meshutils import process_meshlabel_to_dofs
 import nonlineq as nleq
 
 import blocktensor.subops as gops
-import blocktensor.linalg as bla
 from blocktensor import vec as bvec
 
 from hopf import make_hopf_system
@@ -70,14 +69,9 @@ if __name__ == '__main__':
         FluidType = fldm.Bernoulli1DDynamicalSystem,
         fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
 
-    dres_u = load_dynamical_fsi_model(
-        mesh_path, None, SolidType = sldm.LinearStateKelvinVoigt,
-        FluidType = fldm.LinearStateBernoulli1DDynamicalSystem,
-        fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
-
-    dres_ut = load_dynamical_fsi_model(
-        mesh_path, None, SolidType = sldm.LinearStatetKelvinVoigt,
-        FluidType = fldm.LinearStatetBernoulli1DDynamicalSystem,
+    dres = load_dynamical_fsi_model(
+        mesh_path, None, SolidType = sldm.LinearizedKelvinVoigt,
+        FluidType = fldm.LinearizedBernoulli1DDynamicalSystem,
         fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
 
     ## Set model properties
@@ -86,17 +80,23 @@ if __name__ == '__main__':
     cell_func = res.solid.forms['mesh.cell_function']
     func_space = res.solid.forms['fspace.scalar']
     cell_label_to_id = res.solid.forms['mesh.cell_label_to_id']
-    region_to_dofs = process_meshlabel_to_dofs(mesh, cell_func, func_space, cell_label_to_id)
+    region_to_dofs = process_meshlabel_to_dofs(
+        mesh, cell_func, func_space, cell_label_to_id)
 
     props = res.properties.copy()
     y_mid = set_properties(props, region_to_dofs, res)
 
-    for model in (res, dres_u, dres_ut):
+    for model in (res, dres):
         model.ymid = y_mid
 
     ## Initialize the Hopf system
-    xhopf, hopf_res, hopf_jac, apply_dirichlet_vec, apply_dirichlet_mat, labels, info = make_hopf_system(res, dres_u, dres_ut, props)
-    state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels = labels
+    (
+        xhopf, hopf_res, hopf_jac,
+        apply_dirichlet_vec, apply_dirichlet_mat,
+        labels, info) = make_hopf_system(res, dres, props)
+    (
+        state_labels, mode_real_labels, mode_imag_labels,
+        psub_labels, omega_labels) = labels
 
     IDX_DIRICHLET = info['dirichlet_dofs']
 
