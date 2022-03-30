@@ -22,34 +22,14 @@ from hopf import make_hopf_system
 # slepc4py.init(sys.argv)
 
 # pylint: disable=redefined-outer-name
-TEST_HOPF = True
+
 TEST_FP = True
 TEST_MODAL = True
 TEST_HOPF_BIFURCATION = True
 
-def test_hopf(x0, dx, hopf_res, hopf_jac):
-    """Test correctness of the Hopf jacobian/residual"""
-    ## Test the Hopf system Jacobian
-    x1 = x0 + dx
-
-    g0 = hopf_res(x0)
-    g1 = hopf_res(x1)
-    dgdx = hopf_jac(x0)
-
-    dg_exact = g1 - g0
-    dg_linear = bla.mult_mat_vec(dgdx, dx)
-    print(f"||g0|| = {g0.norm():e}")
-    print(f"||g1|| = {g1.norm():e}")
-
-    print(f"||dg_exact|| = {dg_exact.norm():e}")
-    print(f"||dg_linear|| = {dg_linear.norm():e}")
-
-    print(f"||dg_exact-dg_linear|| = {(dg_exact-dg_linear).norm():e}")
-
-
 EBODY = 5e3 * 10
 ECOV = 5e3 * 10
-PSUB = 800 * 10   
+PSUB = 800 * 10
 
 def set_properties(props, region_to_dofs, res):
 
@@ -77,7 +57,7 @@ def set_properties(props, region_to_dofs, res):
     gops.set_vec(props['kcontact'], 1e16)
     if 'ymid' in props:
         gops.set_vec(props['ymid'], y_mid)
-    
+
     return y_mid
 
 if __name__ == '__main__':
@@ -110,30 +90,15 @@ if __name__ == '__main__':
 
     props = res.properties.copy()
     y_mid = set_properties(props, region_to_dofs, res)
-    
+
     for model in (res, dres_u, dres_ut):
         model.ymid = y_mid
 
     ## Initialize the Hopf system
     xhopf, hopf_res, hopf_jac, apply_dirichlet_vec, apply_dirichlet_mat, labels, info = make_hopf_system(res, dres_u, dres_ut, props)
     state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels = labels
-    
+
     IDX_DIRICHLET = info['dirichlet_dofs']
-
-    ## Test the Hopf jacobian
-    xhopf_0 = xhopf.copy()
-    xhopf_0['psub'].array[:] = PSUB
-    xhopf_0['omega'].array[:] = 1.0
-    if TEST_HOPF:
-        print("\n-- Test correctness of Hopf system residual and jacobian --")
-        dxhopf = xhopf.copy()
-        for subvec in dxhopf:
-            subvec.set(0)
-        dxhopf['u'].array[:] = 1.0e-7
-
-        apply_dirichlet_vec(dxhopf)
-        apply_dirichlet_vec(xhopf_0)
-        test_hopf(xhopf_0, dxhopf, hopf_res, hopf_jac)
 
     ## Test solving for fixed-points
     xhopf_0 = xhopf.copy()
@@ -165,7 +130,7 @@ if __name__ == '__main__':
 
             ksp = PETSc.KSP().create()
             ksp.setType(ksp.Type.PREONLY)
-            
+
 
             pc = ksp.getPC()
             pc.setType(pc.Type.LU)
@@ -183,7 +148,7 @@ if __name__ == '__main__':
         print("\n-- Test solution of fixed-points --")
         xfp_n = xhopf_0.copy()
         xfp_n = xfp_n[state_labels]
-            
+
         newton_params = {
             'maximum_iterations': 20
         }
@@ -255,10 +220,10 @@ if __name__ == '__main__':
         """Linear subproblem of a Newton solver"""
         # xhopf_n = xhopf_0.copy()
         # xhopf_n[state_labels] = x_n
-        
+
         xhopf_n = xhopf_0.copy()
         xhopf_n[:] = x_n
-        
+
         res_n = hopf_res(xhopf_n)
         jac_n = hopf_jac(xhopf_n)
         apply_dirichlet_vec(res_n)
@@ -269,8 +234,8 @@ if __name__ == '__main__':
         dbg_mat = jac_n.to_petsc()[:, :]
         iszero_row = np.all(dbg_mat == 0, axis=1)
         iszero_col = np.all(dbg_mat == 0, axis=0)
-        num_zero_rows = np.sum(iszero_row) 
-        num_zero_cols = np.sum(iszero_col) 
+        num_zero_rows = np.sum(iszero_row)
+        num_zero_cols = np.sum(iszero_col)
         breakpoint()
 
         def assem_res():
@@ -286,7 +251,7 @@ if __name__ == '__main__':
             ksp = PETSc.KSP().create()
             ksp.setType(ksp.Type.PREONLY)
             ksp.setOperators(_jac_n)
-            
+
             pc = ksp.getPC()
             pc.setType(pc.Type.LU)
 
@@ -303,7 +268,7 @@ if __name__ == '__main__':
         print("\n-- Test solution of Hopf system for Hopf bifurcation point --")
         xhopf_0['omega'].array[:] = 2.0
         xfp_n = xhopf_0[_IDX].copy()
-            
+
         newton_params = {
             'maximum_iterations': 20
         }
