@@ -5,10 +5,12 @@ import itertools
 from functools import reduce
 import numpy as np
 
-import blocktensor.subops as gops
+# import blocktensor.subops as gops
 import blocktensor.linalg as bla
 from blocktensor import vec as bvec
 from blocktensor import mat as bmat
+
+# pylint: disable=invalid-name
 
 def hopf_state(res):
     """
@@ -42,7 +44,7 @@ def hopf_state(res):
     labels = [state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels]
     return ret, labels
 
-def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
+def make_hopf_system(res, dres, props, ee=None):
     """
     Return the residual and jacobian of a Hopf bifurcation system
 
@@ -52,25 +54,22 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
     ----------
     res:
         The fixed-point system residual, F
-    dres_u:
-        The linearized fixed-point system residual w.r.t u. This represents
-        dF/du du
-    dres_u:
-        The linearized fixed-point system residual w.r.t ut. This represents
-        dF/dut dut
+    dres:
+        The linearized fixed-point system residual. This represents
+        dF/du * delta u + dF/dut * delta ut + dF/dg * delta g
     """
-    for model in (res, dres_u, dres_ut):
+    for model in (res, dres):
         model.set_properties(props)
 
     def assign_hopf_system_state(xhopf):
         """
         Sets the fixed-point and bifurcation parameter components of the Hopf state
-        
+
         The Hopf state consists of 5 blocks representing:
         [fixed-point state, real mode, imaginary mode, bifurcation parameter, onset frequency]
-        
+
         """
-        for model in (res, dres_u, dres_ut):
+        for model in (res, dres):
             model.set_state(xhopf[state_labels])
 
             _control = model.control.copy()
@@ -96,7 +95,7 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
                 submat.zeroRows(IDX_DIRICHLET, diag=1.0)
             else:
                 submat.zeroRows(IDX_DIRICHLET, diag=0.0)
-            
+
     # Create the input vector for the system
     x, labels = hopf_state(res)
     state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels = labels
@@ -106,23 +105,30 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
     EBVEC = x[state_labels].copy()
     # EBVEC['u'].array[0] = 1.0
     EBVEC['u'].array[:] = 1.0
+
+    # null linearization directions are potentially needed since `dres` is used to compute
+    # residuals in multiple directions
+    # DSTATE_NULL, DSTATET_NULL = dres.dstate.copy(), dres.dstatet.copy()
+    # DSTATE_NULL.set(0.0)
+    # DSTATET_NULL.set(0.0)
+
     def hopf_res(x):
         """Return the Hopf system residual"""
         # Set the model state and subglottal pressure (bifurcation parameter)
         assign_hopf_system_state(x)
+        omega = x['omega'][0]
 
         res_state = res.assem_res()
 
-        omega = x['omega'][0]
         # Set appropriate linearization directions
-        dres_u.set_dstate(x[mode_imag_labels])
-        dres_ut.set_dstatet(x[mode_real_labels])
-        res_mode_real = dres_u.assem_res() - omega*dres_ut.assem_res()
+        dres.set_dstate(x[mode_imag_labels])
+        dres.set_dstatet(-omega*x[mode_real_labels])
+        res_mode_real = dres.assem_res()
 
         # Set appropriate linearization directions
-        dres_u.set_dstate(x[mode_real_labels])
-        dres_ut.set_dstatet(x[mode_imag_labels])
-        res_mode_imag = dres_u.assem_res() + omega*dres_ut.assem_res()
+        dres.set_dstate(x[mode_real_labels])
+        dres.set_dstatet(omega*x[mode_imag_labels])
+        res_mode_imag = dres.assem_res()
 
         res_psub = x[['psub']].copy()
         res_psub['psub'][0] = bla.dot(EBVEC, x[mode_real_labels])
@@ -138,22 +144,22 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
 
     # Make null matrix constants
     mats = [
-        [bmat.zero_mat(row_size, col_size) for col_size in x[state_labels].bshape[0]] 
+        [bmat.zero_mat(row_size, col_size) for col_size in x[state_labels].bshape[0]]
         for row_size in x[state_labels].bshape[0]]
     NULL_MAT_STATE_STATE = bmat.BlockMat(mats, labels=(x[state_labels].labels[0], x[state_labels].labels[0]))
 
     mats = [
-        [bmat.zero_mat(row_size, col_size) for col_size in [1]] 
+        [bmat.zero_mat(row_size, col_size) for col_size in [1]]
         for row_size in x[state_labels].bshape[0]]
     NULL_MAT_STATE_SCALAR = bmat.BlockMat(mats, labels=(x[state_labels].labels[0], ('1',)))
 
     mats = [
-        [bmat.zero_mat(row_size, col_size) for col_size in x[state_labels].bshape[0]] 
+        [bmat.zero_mat(row_size, col_size) for col_size in x[state_labels].bshape[0]]
         for row_size in [1]]
     NULL_MAT_SCALAR_STATE = bmat.BlockMat(mats, labels=(('1',), x[state_labels].labels[0]))
 
     mats = [
-        [bmat.zero_mat(row_size, col_size) for col_size in [1]] 
+        [bmat.zero_mat(row_size, col_size) for col_size in [1]]
         for row_size in [1]]
     NULL_MAT_SCALAR_SCALAR = bmat.BlockMat(mats, labels=(('1',), ('1',)))
 
@@ -167,34 +173,36 @@ def make_hopf_system(res, dres_u, dres_ut, props, ee=None):
         dres_dstatet = res.assem_dres_dstatet()
 
         # Using copys of dres_dstate is important as different dres_dstate locations
-        # will rquire different dirichlet settings on their rows
+        # will require different dirichlet settings on their rows
         jac_row0 = [
             dres_dstate.copy(),
-            NULL_MAT_STATE_STATE, 
-            NULL_MAT_STATE_STATE, 
-            res.assem_dres_dcontrol()[:, ['psub']], 
+            NULL_MAT_STATE_STATE,
+            NULL_MAT_STATE_STATE,
+            res.assem_dres_dcontrol()[:, ['psub']],
             NULL_MAT_STATE_SCALAR]
 
         omega = x['omega'][0]
         # Set appropriate linearization directions
-        dres_u.set_dstate(x[mode_imag_labels])
-        dres_ut.set_dstatet(x[mode_real_labels])
+        dres.set_dstate(x[mode_imag_labels])
+        dres.set_dstatet(-omega*x[mode_real_labels])
         jac_row1 = [
-            dres_u.assem_dres_dstate() - omega*dres_ut.assem_dres_dstate(), 
-            -omega*dres_dstatet.copy(), 
-            dres_dstate.copy(),  
-            dres_u.assem_dres_dcontrol()[:, ['psub']] - omega*dres_ut.assem_dres_dcontrol()[:, ['psub']], 
-            bvec.convert_bvec_to_petsc_colbmat(dres_ut.assem_res())]
+            dres.assem_dres_dstate(),
+            -omega*dres_dstatet.copy(),
+            dres_dstate.copy(),
+            dres.assem_dres_dcontrol()[:, ['psub']],
+            bvec.convert_bvec_to_petsc_colbmat(
+                bla.mult_mat_vec(-dres_dstatet, x[mode_real_labels]))]
 
         # Set appropriate linearization directions
-        dres_u.set_dstate(x[mode_real_labels])
-        dres_ut.set_dstatet(x[mode_imag_labels])
+        dres.set_dstate(x[mode_real_labels])
+        dres.set_dstatet(omega*x[mode_imag_labels])
         jac_row2 = [
-            dres_u.assem_dres_dstate() + omega*dres_ut.assem_dres_dstate(), 
-            dres_dstate.copy(), 
-            omega*dres_dstatet.copy(), 
-            dres_u.assem_dres_dcontrol()[:, ['psub']] + omega*dres_ut.assem_dres_dcontrol()[:, ['psub']], 
-            bvec.convert_bvec_to_petsc_colbmat(dres_ut.assem_res())]
+            dres.assem_dres_dstate(),
+            dres_dstate.copy(),
+            omega*dres_dstatet.copy(),
+            dres.assem_dres_dcontrol()[:, ['psub']],
+            bvec.convert_bvec_to_petsc_colbmat(
+                bla.mult_mat_vec(dres_dstatet, x[mode_imag_labels]))]
 
         jac_row3 = [
             NULL_MAT_SCALAR_STATE,

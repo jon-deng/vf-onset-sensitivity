@@ -87,14 +87,9 @@ res = load_dynamical_fsi_model(
     FluidType = fldm.Bernoulli1DDynamicalSystem,
     fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
 
-dres_u = load_dynamical_fsi_model(
-    mesh_path, None, SolidType = sldm.LinearStateKelvinVoigt,
-    FluidType = fldm.LinearStateBernoulli1DDynamicalSystem,
-    fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
-
-dres_ut = load_dynamical_fsi_model(
-    mesh_path, None, SolidType = sldm.LinearStatetKelvinVoigt,
-    FluidType = fldm.LinearStatetBernoulli1DDynamicalSystem,
+dres = load_dynamical_fsi_model(
+    mesh_path, None, SolidType = sldm.LinearizedKelvinVoigt,
+    FluidType = fldm.LinearizedBernoulli1DDynamicalSystem,
     fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
 
 ## Set model properties
@@ -108,11 +103,11 @@ region_to_dofs = process_meshlabel_to_dofs(mesh, cell_func, func_space, cell_lab
 props = res.properties.copy()
 y_mid = set_properties(props, region_to_dofs, res)
 
-for model in (res, dres_u, dres_ut):
+for model in (res, dres):
     model.ymid = y_mid
 
 ## Initialize the Hopf system
-xhopf, hopf_res, hopf_jac, apply_dirichlet_vec, apply_dirichlet_mat, labels, info = make_hopf_system(res, dres_u, dres_ut, props)
+xhopf, hopf_res, hopf_jac, apply_dirichlet_vec, apply_dirichlet_mat, labels, info = make_hopf_system(res, dres, props)
 state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels = labels
 
 HOPF_LABELS = functools.reduce(lambda a, b: a+b, labels)
