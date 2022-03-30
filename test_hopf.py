@@ -58,25 +58,32 @@ def _test_taylor(x0, dx, res, jac, norm=None):
     """
     Test that the Taylor convergence order is 2
     """
-    _norm = lambda xx: xx.norm() if norm is None else norm
-
-    res0 = res(x0)
     alphas = 2**np.arange(4)[::-1] # start with the largest step and move to original
-    dres_exacts = [res(x0+alpha*dx)-res0 for alpha in alphas]
+    res_ns = [res(x0+alpha*dx) for alpha in alphas]
+    res_0 = res(x0)
+
+    dres_exacts = [res_n-res_0 for res_n in res_ns]
     dres_linear = bla.mult_mat_vec(jac(x0), dx)
+
     errs = [
-        _norm(dres_exact-alpha*dres_linear)
-        for dres_exact, alpha in zip(dres_exacts, alphas)]
+        (dres_exact-alpha*dres_linear).norm()
+        for dres_exact, alpha in zip(dres_exacts, alphas)
+    ]
+    magnitudes = [
+        1/2*(dres_exact+alpha*dres_linear).norm()
+        for dres_exact, alpha in zip(dres_exacts, alphas)
+    ]
     with np.errstate(invalid='ignore'):
         conv_rates = [
             np.log(err_0/err_1)/np.log(alpha_0/alpha_1)
             for err_0, err_1, alpha_0, alpha_1
             in zip(errs[:-1], errs[1:], alphas[:-1], alphas[1:])]
+        rel_errs = np.array(errs)/np.array(magnitudes)*100
 
-    print(f"||dres_linear||, ||dres_exact|| = {_norm(dres_linear)}, {_norm(dres_exacts[-1])}")
-    print(f"||dres_linear - dres_exact|| = {_norm(dres_linear-dres_exacts[-1])}")
-    print("Errors: ", errs)
-    print("Convergence rates: ", conv_rates)
+    print("")
+    print(f"||dres_linear||, ||dres_exact|| = {dres_linear.norm()}, {dres_exacts[-1].norm()}")
+    print("Relative errors: ", rel_errs)
+    print("Convergence rates: ", np.array(conv_rates))
 
 ## Load 3 residual functions needed to model the Hopf system
 mesh_name = 'BC-dcov5.00e-02-cl4.00'
