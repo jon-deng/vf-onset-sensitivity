@@ -194,7 +194,7 @@ if __name__ == '__main__':
         xhopf_n[state_labels] = xfp_n
         jac = hopf_jac(xhopf_n)
         df_dx = jac[state_labels, state_labels]
-        df_dxt = jac[mode_imag_labels, mode_imag_labels]
+        df_dxt = jac[mode_real_labels, mode_imag_labels]
 
         # Set dirichlet conditions for the mass matrix
         df_dxt[0, 0].zeroRows(IDX_DIRICHLET, diag=1e-10)
