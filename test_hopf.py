@@ -28,7 +28,6 @@ def set_properties(props, region_to_dofs, res):
     Sets model properties
     """
     # VF material props
-    # TODO: Should replace these with gops.set_vec to be more general
     gops.set_vec(props['emod'], ECOV)
     gops.set_vec(props['emod'], EBODY)
     gops.set_vec(props['eta'], 5.0)
@@ -54,7 +53,7 @@ def set_properties(props, region_to_dofs, res):
 
     return y_mid
 
-def _test_taylor(x0, dx, res, jac, norm=None):
+def _test_taylor(x0, dx, res, jac):
     """
     Test that the Taylor convergence order is 2
     """
@@ -86,8 +85,8 @@ def _test_taylor(x0, dx, res, jac, norm=None):
     print("Convergence rates: ", np.array(conv_rates))
 
 ## Load 3 residual functions needed to model the Hopf system
-mesh_name = 'BC-dcov5.00e-02-cl4.00'
-mesh_name = 'vf-square'
+mesh_name = 'BC-dcov5.00e-02-cl2.00'
+# mesh_name = 'vf-square'
 mesh_path = path.join('./mesh', mesh_name+'.xml')
 
 res = load_dynamical_fsi_model(

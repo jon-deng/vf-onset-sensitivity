@@ -98,14 +98,15 @@ def make_hopf_system(res, dres, props, ee=None):
 
     # Create the input vector for the system
     x, labels = hopf_state(res)
-    state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels = labels
+    state_labels, mode_real_labels, mode_imag_labels, *_ = labels
 
     HOPF_LABELS = tuple(reduce(lambda a, b: a+b, labels))
 
-    EBVEC = x[state_labels].copy()
-    # EBVEC['u'].array[0] = 1.0
-    # EBVEC['u'].array[:] = 1.0
-    EBVEC.set(1.0)
+    if ee is None:
+        ee = x[state_labels].copy()
+        # EBVEC['u'].array[0] = 1.0
+        # EBVEC['u'].array[:] = 1.0
+        ee.set(1.0)
 
     # null linearization directions are potentially needed since `dres` is used to compute
     # residuals in multiple directions
@@ -132,10 +133,10 @@ def make_hopf_system(res, dres, props, ee=None):
         res_mode_real = dres.assem_res()
 
         res_psub = x[['psub']].copy()
-        res_psub['psub'][0] = bla.dot(EBVEC, x[mode_real_labels])
+        res_psub['psub'][0] = bla.dot(ee, x[mode_real_labels])
 
         res_omega = x[['omega']].copy()
-        res_omega['omega'][0] = bla.dot(EBVEC, x[mode_imag_labels]) - 1.0
+        res_omega['omega'][0] = bla.dot(ee, x[mode_imag_labels]) - 1.0
 
         ret_bvec =  bvec.concatenate_vec(
             [res_state, res_mode_real, res_mode_imag, res_psub, res_omega], labels=[HOPF_LABELS])
@@ -205,7 +206,7 @@ def make_hopf_system(res, dres, props, ee=None):
 
         jac_row3 = [
             NULL_MAT_SCALAR_STATE,
-            bvec.convert_bvec_to_petsc_rowbmat(EBVEC),
+            bvec.convert_bvec_to_petsc_rowbmat(ee),
             NULL_MAT_SCALAR_STATE,
             NULL_MAT_SCALAR_SCALAR,
             NULL_MAT_SCALAR_SCALAR
@@ -214,7 +215,7 @@ def make_hopf_system(res, dres, props, ee=None):
         jac_row4 = [
             NULL_MAT_SCALAR_STATE,
             NULL_MAT_SCALAR_STATE,
-            bvec.convert_bvec_to_petsc_rowbmat(EBVEC),
+            bvec.convert_bvec_to_petsc_rowbmat(ee),
             NULL_MAT_SCALAR_SCALAR,
             NULL_MAT_SCALAR_SCALAR
             ]
