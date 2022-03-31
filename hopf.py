@@ -124,12 +124,12 @@ def make_hopf_system(res, dres, props, ee=None):
         # Set appropriate linearization directions
         dres.set_dstate(x[mode_imag_labels])
         dres.set_dstatet(-omega*x[mode_real_labels])
-        res_mode_real = dres.assem_res()
+        res_mode_imag = dres.assem_res()
 
         # Set appropriate linearization directions
         dres.set_dstate(x[mode_real_labels])
         dres.set_dstatet(omega*x[mode_imag_labels])
-        res_mode_imag = dres.assem_res()
+        res_mode_real = dres.assem_res()
 
         res_psub = x[['psub']].copy()
         res_psub['psub'][0] = bla.dot(EBVEC, x[mode_real_labels])
@@ -159,9 +159,7 @@ def make_hopf_system(res, dres, props, ee=None):
         for row_size in [1]]
     NULL_MAT_SCALAR_STATE = bmat.BlockMat(mats, labels=(('1',), x[state_labels].labels[0]))
 
-    mats = [
-        [bmat.zero_mat(row_size, col_size) for col_size in [1]]
-        for row_size in [1]]
+    mats = [[bmat.diag_mat(1, 0.0)]]
     NULL_MAT_SCALAR_SCALAR = bmat.BlockMat(mats, labels=(('1',), ('1',)))
 
     def hopf_jac(x):
@@ -186,7 +184,7 @@ def make_hopf_system(res, dres, props, ee=None):
         # Set appropriate linearization directions
         dres.set_dstate(x[mode_imag_labels])
         dres.set_dstatet(-omega*x[mode_real_labels])
-        jac_row1 = [
+        jac_row2 = [
             dres.assem_dres_dstate(),
             -omega*dres_dstatet.copy(),
             dres_dstate.copy(),
@@ -197,7 +195,7 @@ def make_hopf_system(res, dres, props, ee=None):
         # Set appropriate linearization directions
         dres.set_dstate(x[mode_real_labels])
         dres.set_dstatet(omega*x[mode_imag_labels])
-        jac_row2 = [
+        jac_row1 = [
             dres.assem_dres_dstate(),
             dres_dstate.copy(),
             omega*dres_dstatet.copy(),
