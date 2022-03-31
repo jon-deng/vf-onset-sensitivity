@@ -32,6 +32,8 @@ EBODY = 5e3 * 10
 ECOV = 5e3 * 10
 PSUB = 800 * 10
 
+PSUB = 1 * 10
+
 def set_properties(props, region_to_dofs, res):
     """
     Set the model properties
@@ -68,8 +70,9 @@ def setup_models():
     """
     Return residual + linear residual needed to model the Hopf system
     """
-    mesh_name = 'BC-dcov5.00e-02-coarse'
+    # mesh_name = 'BC-dcov5.00e-02-coarse'
     # mesh_name = 'BC-dcov5.00e-02-cl2.00'
+    mesh_name = 'vf-square'
     mesh_path = path.join('./mesh', mesh_name+'.xml')
 
     res = load_dynamical_fsi_model(

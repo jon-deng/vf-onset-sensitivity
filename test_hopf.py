@@ -87,6 +87,7 @@ def _test_taylor(x0, dx, res, jac, norm=None):
 
 ## Load 3 residual functions needed to model the Hopf system
 mesh_name = 'BC-dcov5.00e-02-cl4.00'
+mesh_name = 'vf-square'
 mesh_path = path.join('./mesh', mesh_name+'.xml')
 
 res = load_dynamical_fsi_model(

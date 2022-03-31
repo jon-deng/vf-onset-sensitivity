@@ -104,7 +104,8 @@ def make_hopf_system(res, dres, props, ee=None):
 
     EBVEC = x[state_labels].copy()
     # EBVEC['u'].array[0] = 1.0
-    EBVEC['u'].array[:] = 1.0
+    # EBVEC['u'].array[:] = 1.0
+    EBVEC.set(1.0)
 
     # null linearization directions are potentially needed since `dres` is used to compute
     # residuals in multiple directions
