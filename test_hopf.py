@@ -7,7 +7,7 @@ import functools
 
 from femvf.dynamicalmodels import solid as sldm, fluid as fldm
 from femvf.load import load_dynamical_fsi_model
-from femvf.meshutils import process_meshlabel_to_dofs
+from femvf.meshutils import process_celllabel_to_dofs_from_forms
 
 import blocktensor.subops as gops
 import blocktensor.linalg as bla
@@ -101,11 +101,8 @@ dres = load_dynamical_fsi_model(
 
 ## Set model properties
 # get the scalar DOFs associated with the cover/body layers
-mesh = res.solid.forms['mesh.mesh']
-cell_func = res.solid.forms['mesh.cell_function']
-func_space = res.solid.forms['fspace.scalar']
-cell_label_to_id = res.solid.forms['mesh.cell_label_to_id']
-region_to_dofs = process_meshlabel_to_dofs(mesh, cell_func, func_space, cell_label_to_id)
+region_to_dofs = process_celllabel_to_dofs_from_forms(
+    res.solid.forms, res.solid.forms['fspace.scalar'])
 
 props = res.properties.copy()
 props = set_properties(props, region_to_dofs, res)

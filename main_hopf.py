@@ -9,7 +9,8 @@ import numpy as np
 
 from femvf.dynamicalmodels import solid as sldm, fluid as fldm
 from femvf.load import load_dynamical_fsi_model
-from femvf.meshutils import process_meshlabel_to_dofs
+from femvf.meshutils import process_celllabel_to_dofs_from_forms
+
 import nonlineq as nleq
 
 import blocktensor.subops as gops
@@ -53,16 +54,6 @@ def setup_models():
 
     return res, dres
 
-def region_to_dofs_from_forms(forms, func_space):
-    """
-    Return a map from cell regions to associated dofs
-    """
-    mesh = forms['mesh.mesh']
-    cell_func = forms['mesh.cell_function']
-    cell_label_to_id = forms['mesh.cell_label_to_id']
-    return process_meshlabel_to_dofs(
-        mesh, cell_func, func_space, cell_label_to_id)
-
 def set_properties(props, region_to_dofs, res):
     """
     Set the model properties
@@ -98,7 +89,7 @@ if __name__ == '__main__':
 
     ## Set model properties
     # get the scalar DOFs associated with the cover/body layers
-    region_to_dofs = region_to_dofs_from_forms(
+    region_to_dofs = process_celllabel_to_dofs_from_forms(
         res.solid.forms, res.solid.forms['fspace.scalar'])
 
     props = res.properties.copy()
