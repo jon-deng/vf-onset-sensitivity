@@ -196,14 +196,15 @@ if __name__ == '__main__':
 
     ## Plot the obtained mode shape's glottal width waveform
     proc_glottal_width = libsignal.make_glottal_width(res, dres, 100)
+    unit_xmode_real, unit_xmode_imag = libhopf.normalize_eigenvector_amplitude(xmode_real, xmode_imag)
 
     fig, ax = plt.subplots(1, 1)
 
-    for ampl in np.linspace(0, 10.0, 5):
+    for ampl in np.linspace(0, 10000.0, 5):
         gw = proc_glottal_width(
             xfp_n.to_ndarray(),
-            xmode_real.to_ndarray(),
-            xmode_imag.to_ndarray(),
+            unit_xmode_real.to_ndarray(),
+            unit_xmode_imag.to_ndarray(),
             PSUB, ampl)
         ax.plot(gw, label=f"Amplitude {ampl:.2e}")
     ax.set_xlabel(f"Time [period]")
@@ -212,4 +213,4 @@ if __name__ == '__main__':
 
     fig.tight_layout()
     fig.savefig("fig/glottal_width_vs_amplitude.png", dpi=250)
-    breakpoint()
+    # breakpoint()

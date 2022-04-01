@@ -257,6 +257,13 @@ def normalize_eigenvector_by_hopf_condition(evec_real, evec_imag, evec_ref):
     ret_evec_imag = amp*(evec_real*np.sin(theta) + evec_imag*np.cos(theta))
     return ret_evec_real, ret_evec_imag
 
+def normalize_eigenvector_amplitude(evec_real, evec_imag):
+    """
+    Scales real and imaginary components of an eigenvector so it has unit norm
+    """
+    ampl = 1/(evec_real.norm()**2 + evec_imag.norm()**2)**0.5
+    return ampl*evec_real, ampl*evec_imag
+
 def solve_fixed_point(res, xfp_0, newton_params=None):
     """
     Solve for a fixed-point
