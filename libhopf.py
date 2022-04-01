@@ -5,6 +5,7 @@ import itertools
 from functools import reduce
 import numpy as np
 from petsc4py import PETSc
+from slepc4py import SLEPc
 
 # import blocktensor.subops as gops
 import blocktensor.linalg as bla
@@ -285,13 +286,13 @@ def solve_fixed_point(res, xfp_0, newton_params=None):
             if label in ['u', 'v']:
                 subvec.setValues(IDX_DIRICHLET, np.zeros(IDX_DIRICHLET.size))
 
-    def apply_dirichlet_bmat(mat):
+    def apply_dirichlet_bmat(mat, diag=1.0):
         """Applies the dirichlet BC to a matrix"""
         for row_label in ['u', 'v']:
             for col_label in mat.labels[1]:
                 submat = mat[row_label, col_label]
                 if row_label == col_label:
-                    submat.zeroRows(IDX_DIRICHLET, diag=1.0)
+                    submat.zeroRows(IDX_DIRICHLET, diag=diag)
                 else:
                     submat.zeroRows(IDX_DIRICHLET, diag=0.0)
 
@@ -335,3 +336,74 @@ def solve_fixed_point(res, xfp_0, newton_params=None):
         }
     xfp_n, info = nleq.newton_solve(xfp_0, linear_subproblem_fp, norm=bvec.norm, params=newton_params)
     return xfp_n, info
+
+def solve_ls(res, xfp):
+    """
+    Return a set of modes for the linear stability problem (ls)
+
+    Parameters
+    ----------
+    res :
+        Object representing the fixed-point residual
+    xfp :
+        The fixed point to solve the LS problem at
+    """
+    res.set_state(xfp)
+
+    ZERO_STATET = res.statet.copy()
+    ZERO_STATET.set(0.0)
+    res.set_statet(ZERO_STATET)
+
+    IDX_DIRICHLET = np.array(
+        list(res.solid.forms['bc.dirichlet'].get_boundary_values().keys()),
+        dtype=np.int32)
+
+    def apply_dirichlet_bmat(mat, diag=1.0):
+        """Applies the dirichlet BC to a matrix"""
+        for row_label in ['u', 'v']:
+            for col_label in mat.labels[1]:
+                submat = mat[row_label, col_label]
+                if row_label == col_label:
+                    submat.zeroRows(IDX_DIRICHLET, diag=diag)
+                else:
+                    submat.zeroRows(IDX_DIRICHLET, diag=0.0)
+
+    df_dx = res.assem_dres_dstate()
+    df_dxt = res.assem_dres_dstatet()
+
+    # Set dirichlet conditions for the mass matrix
+    # Setting a small value for df_dxt on the diagonal ensures eigenvalues
+    # associated with dirichlet DOFs will have a very small value of 1e-10
+    apply_dirichlet_bmat(df_dx, diag=1.0)
+    apply_dirichlet_bmat(df_dxt, diag=1.0e-10)
+
+    _df_dx = df_dx.to_petsc()
+    _df_dxt = df_dxt.to_petsc()
+
+    eps = SLEPc.EPS().create()
+    eps.setOperators(_df_dxt, _df_dx)
+    eps.setProblemType(SLEPc.EPS.ProblemType.GNHEP)
+
+    # number of eigenvalues to solve for and dimension of subspace to approximate problem
+    num_eig = 5
+    num_col = 10*num_eig
+    eps.setDimensions(num_eig, num_col)
+    eps.setWhichEigenpairs(SLEPc.EPS.Which.LARGEST_MAGNITUDE)
+    eps.solve()
+
+    eigvals = np.array([eps.getEigenvalue(jj) for jj in range(eps.getConverged())])
+    omegas = -1/eigvals
+    # print("Omegas:", omegas)
+
+    eigvecs_real = [res.state.copy() for jj in range(eps.getConverged())]
+    eigvecs_imag = [res.state.copy() for jj in range(eps.getConverged())]
+
+    for jj in range(eps.getConverged()):
+        eigvec_real = _df_dx.getVecRight()
+        eigvec_imag = _df_dx.getVecRight()
+        eps.getEigenvector(jj, eigvec_real, eigvec_imag)
+
+        eigvecs_real[jj].set_vec(eigvec_real)
+        eigvecs_imag[jj].set_vec(eigvec_imag)
+
+    return omegas, eigvecs_real, eigvecs_imag

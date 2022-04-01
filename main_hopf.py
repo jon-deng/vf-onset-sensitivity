@@ -108,13 +108,6 @@ if __name__ == '__main__':
     IDX_DIRICHLET = info['dirichlet_dofs']
 
     ## Test solving for fixed-points
-    # `XHOPF` holds constant hopf system parameters; this is needed because
-    # solving the FP system only changes the 'state' blocks of the Hopf system
-    _XHOPF = xhopf.copy()
-    _XHOPF['psub'].array[:] = PSUB
-    _XHOPF['omega'].array[:] = 1.0
-
-
     _control = res.control.copy()
     _control['psub'] = PSUB
     res.set_control(_control)
@@ -124,7 +117,7 @@ if __name__ == '__main__':
         newton_params = {
             'maximum_iterations': 20
         }
-        xfp_0 = _XHOPF[state_labels]
+        xfp_0 = res.state.copy()
         xfp_n, info = libhopf.solve_fixed_point(res, xfp_0, newton_params=newton_params)
         print(info)
 
@@ -141,56 +134,22 @@ if __name__ == '__main__':
         # in the transformed form
         # df/dxt ex = lambda df/dx ex
         # where lambda=1/omega, and ex is a generalized eigenvector
-        jac = hopf_jac(_XHOPF)
-        df_dx = jac[state_labels, state_labels]
-        df_dxt = jac[mode_real_labels, mode_imag_labels]
-
-        # Set dirichlet conditions for the mass matrix
-        df_dxt[0, 0].zeroRows(IDX_DIRICHLET, diag=1e-10)
-        df_dxt[0, 1].zeroRows(IDX_DIRICHLET, diag=0)
-        df_dxt[1, 0].zeroRows(IDX_DIRICHLET, diag=0)
-        df_dxt[1, 1].zeroRows(IDX_DIRICHLET, diag=1e-10)
-
-        _df_dx = df_dx.to_petsc()
-        _df_dxt = df_dxt.to_petsc()
-
-        eps = SLEPc.EPS().create()
-        eps.setOperators(_df_dxt, _df_dx)
-        eps.setProblemType(SLEPc.EPS.ProblemType.GNHEP)
-
-        # number of eigenvalues to solve for and dimension of subspace to approximate problem
-        num_eig = 5
-        num_col = 10*num_eig
-        eps.setDimensions(num_eig, num_col)
-        eps.setWhichEigenpairs(SLEPc.EPS.Which.LARGEST_MAGNITUDE)
-        eps.solve()
-
-        eigvals = np.array([eps.getEigenvalue(jj) for jj in range(eps.getConverged())])
-        omegas = -1/eigvals
-        print("Omegas:", omegas)
+        omegas, eigvecs_real, eigvecs_imag = libhopf.solve_ls(res, xfp_n)
+        print(omegas)
 
     idx_hopf = 3
     omega_hopf = abs(omegas[idx_hopf].imag)
-    mode_real_hopf = _df_dx.getVecRight()
-    mode_imag_hopf = _df_dx.getVecRight()
-    eps.getEigenvector(idx_hopf, mode_real_hopf, mode_imag_hopf)
-
-    # scale_eigenvector_by_hopf_condition(mode_real_hopf, mode_imag_hopf, EREF)
+    mode_real_hopf = eigvecs_real[idx_hopf]
+    mode_imag_hopf = eigvecs_imag[idx_hopf]
 
     ## Test solving the Hopf system for the Hopf bifurcation
     # set the initial guess based on the stability analysis and fixed-point solution
-    # breakpoint()
     xhopf_0 = xhopf.copy()
     xhopf_0[state_labels] = xfp_n
     xhopf_0['psub'].array[:] = PSUB
     xhopf_0['omega'].array[:] = -omega_hopf
 
-    xmode_real = xhopf_0[mode_real_labels].copy()
-    xmode_imag = xhopf_0[mode_imag_labels].copy()
-    xmode_real.set_vec(mode_real_hopf)
-    xmode_imag.set_vec(mode_imag_hopf)
-    xmode_real, xmode_imag = normalize_eigenvector_by_hopf_condition(xmode_real, xmode_imag, EREF)
-
+    xmode_real, xmode_imag = normalize_eigenvector_by_hopf_condition(mode_real_hopf, mode_imag_hopf, EREF)
     xhopf_0[mode_real_labels] = xmode_real
     xhopf_0[mode_imag_labels] = xmode_imag
 
