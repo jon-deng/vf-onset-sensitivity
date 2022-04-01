@@ -84,38 +84,32 @@ def _test_taylor(x0, dx, res, jac):
     print("Relative errors: ", rel_errs)
     print("Convergence rates: ", np.array(conv_rates))
 
-## Load 3 residual functions needed to model the Hopf system
-mesh_name = 'BC-dcov5.00e-02-cl2.00'
-# mesh_name = 'vf-square'
-mesh_path = path.join('./mesh', mesh_name+'.xml')
+def setup_models():
+    """Load the residual and linearized residual"""
+    ## Load residual functions needed to model the Hopf system
+    mesh_name = 'BC-dcov5.00e-02-cl2.00'
+    # mesh_name = 'vf-square'
+    mesh_path = path.join('./mesh', mesh_name+'.xml')
 
-res = load_dynamical_fsi_model(
-    mesh_path, None, SolidType = sldm.KelvinVoigt,
-    FluidType = fldm.Bernoulli1DDynamicalSystem,
-    fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
+    res = load_dynamical_fsi_model(
+        mesh_path, None, SolidType = sldm.KelvinVoigt,
+        FluidType = fldm.Bernoulli1DDynamicalSystem,
+        fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
+    dres = load_dynamical_fsi_model(
+        mesh_path, None, SolidType = sldm.LinearizedKelvinVoigt,
+        FluidType = fldm.LinearizedBernoulli1DDynamicalSystem,
+        fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
+    return res, dres
 
-dres = load_dynamical_fsi_model(
-    mesh_path, None, SolidType = sldm.LinearizedKelvinVoigt,
-    FluidType = fldm.LinearizedBernoulli1DDynamicalSystem,
-    fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
-
-## Set model properties
-# get the scalar DOFs associated with the cover/body layers
-region_to_dofs = process_celllabel_to_dofs_from_forms(
-    res.solid.forms, res.solid.forms['fspace.scalar'])
-
-props = res.properties.copy()
-props = set_properties(props, region_to_dofs, res)
-
-## Initialize the Hopf system
-xhopf, hopf_res, hopf_jac, apply_dirichlet_vec, apply_dirichlet_mat, labels, info = make_hopf_system(res, dres, props)
-state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels = labels
-
-HOPF_LABELS = functools.reduce(lambda a, b: a+b, labels)
-IDX_DIRICHLET = info['dirichlet_dofs']
-
-def test_hopf():
+def test_hopf(res, dres, props):
     """Test correctness of the Hopf jacobian/residual"""
+    ## Initialize the Hopf system
+    xhopf, hopf_res, hopf_jac, apply_dirichlet_vec, apply_dirichlet_mat, labels, info = make_hopf_system(res, dres, props)
+    state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels = labels
+
+    HOPF_LABELS = functools.reduce(lambda a, b: a+b, labels)
+    IDX_DIRICHLET = info['dirichlet_dofs']
+
     xhopf_0 = xhopf.copy()
     # xhopf_0.set(1e-5)
     xhopf_0[mode_real_labels].set(1.0)
@@ -134,5 +128,13 @@ def test_hopf():
         _test_taylor(xhopf_0, dxhopf, hopf_res, hopf_jac)
 
 if __name__ == '__main__':
-    ## Test the Hopf jacobian
-    test_hopf()
+    res, dres = setup_models()
+    ## Set model properties
+    # get the scalar DOFs associated with the cover/body layers
+    region_to_dofs = process_celllabel_to_dofs_from_forms(
+        res.solid.forms, res.solid.forms['fspace.scalar'])
+
+    props = res.properties.copy()
+    props = set_properties(props, region_to_dofs, res)
+
+    test_hopf(res, dres, props)
