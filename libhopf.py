@@ -341,6 +341,12 @@ def solve_ls(res, xfp):
     """
     Return a set of modes for the linear stability problem (ls)
 
+    This solves the eigenvalue problem:
+    -omega df/dxt ex = df/dx ex,
+    in the transformed form
+    df/dxt ex = lambda df/dx ex,
+    where lambda=-1/omega, and ex is a generalized eigenvector
+
     Parameters
     ----------
     res :

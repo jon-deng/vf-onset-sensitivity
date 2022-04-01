@@ -129,11 +129,6 @@ if __name__ == '__main__':
 
     if TEST_MODAL:
         print("\n-- Test modal analysis of system linearized dynamics --")
-        # Here we solve the eigenvalue problem
-        # omega df/dxt ex = df/dx ex
-        # in the transformed form
-        # df/dxt ex = lambda df/dx ex
-        # where lambda=1/omega, and ex is a generalized eigenvector
         omegas, eigvecs_real, eigvecs_imag = libhopf.solve_ls(res, xfp_n)
         print(omegas)
 
