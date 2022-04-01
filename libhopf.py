@@ -4,11 +4,14 @@ Contains code to create the Hopf system
 import itertools
 from functools import reduce
 import numpy as np
+from petsc4py import PETSc
 
 # import blocktensor.subops as gops
 import blocktensor.linalg as bla
 from blocktensor import vec as bvec
 from blocktensor import mat as bmat
+
+import nonlineq as nleq
 
 # pylint: disable=invalid-name
 
@@ -77,14 +80,14 @@ def make_hopf_system(res, dres, props, ee=None):
             model.set_control(_control)
 
     IDX_DIRICHLET = np.array(list(res.solid.forms['bc.dirichlet'].get_boundary_values().keys()), dtype=np.int32)
-    def apply_dirichlet_vec(vec):
+    def apply_dirichlet_bvec(vec):
         """Zeros dirichlet associated indices"""
         for label in ['u', 'v', 'u_mode_real', 'v_mode_real', 'u_mode_imag', 'v_mode_imag']:
             # zero the rows associated with each dirichlet DOF
             subvec = vec[label]
             subvec.array[IDX_DIRICHLET] = 0
 
-    def apply_dirichlet_mat(mat):
+    def apply_dirichlet_bmat(mat):
         """Zeros dirichlet associated indices"""
         # Apply dirichlet BC by zeroing appropriate matrix rows
         row_labels = ['u', 'v', 'u_mode_real', 'v_mode_real', 'u_mode_imag', 'v_mode_imag']
@@ -140,7 +143,7 @@ def make_hopf_system(res, dres, props, ee=None):
 
         ret_bvec =  bvec.concatenate_vec(
             [res_state, res_mode_real, res_mode_imag, res_psub, res_omega], labels=[HOPF_LABELS])
-        apply_dirichlet_vec(ret_bvec)
+        apply_dirichlet_bvec(ret_bvec)
         return ret_bvec
 
 
@@ -224,13 +227,13 @@ def make_hopf_system(res, dres, props, ee=None):
         ret_labels = (HOPF_LABELS, HOPF_LABELS)
         ret_bmat = bmat.concatenate_mat(ret_mats, ret_labels)
 
-        apply_dirichlet_mat(ret_bmat)
+        apply_dirichlet_bmat(ret_bmat)
         return ret_bmat
 
     info = {
         'dirichlet_dofs': IDX_DIRICHLET
     }
-    return x, hopf_res, hopf_jac, apply_dirichlet_vec, apply_dirichlet_mat, labels, info
+    return x, hopf_res, hopf_jac, apply_dirichlet_bvec, apply_dirichlet_bmat, labels, info
 
 def normalize_eigenvector_by_hopf_condition(evec_real, evec_imag, evec_ref):
     """
@@ -252,3 +255,83 @@ def normalize_eigenvector_by_hopf_condition(evec_real, evec_imag, evec_ref):
     ret_evec_real = amp*(evec_real*np.cos(theta) - evec_imag*np.sin(theta))
     ret_evec_imag = amp*(evec_real*np.sin(theta) + evec_imag*np.cos(theta))
     return ret_evec_real, ret_evec_imag
+
+def solve_fixed_point(res, xfp_0, newton_params=None):
+    """
+    Solve for a fixed-point
+
+    Parameters
+    ----------
+    res :
+        Object representing the fixed-point residual
+    xfp_0 :
+        initial guess for the fixed-point state
+    psub :
+        the value of the bifurcation parameter (subglottal pressure)
+    newton_params :
+        parameters for the newton solver
+    """
+
+    ZERO_STATET = res.statet.copy()
+    ZERO_STATET.set(0.0)
+    res.set_statet(ZERO_STATET)
+
+    IDX_DIRICHLET = np.array(
+        list(res.solid.forms['bc.dirichlet'].get_boundary_values().keys()),
+        dtype=np.int32)
+    def apply_dirichlet_bvec(vec):
+        """Applies the dirichlet BC to a vector"""
+        for label, subvec in vec.items():
+            if label in ['u', 'v']:
+                subvec.setValues(IDX_DIRICHLET, np.zeros(IDX_DIRICHLET.size))
+
+    def apply_dirichlet_bmat(mat):
+        """Applies the dirichlet BC to a matrix"""
+        for row_label in ['u', 'v']:
+            for col_label in mat.labels[1]:
+                submat = mat[row_label, col_label]
+                if row_label == col_label:
+                    submat.zeroRows(IDX_DIRICHLET, diag=1.0)
+                else:
+                    submat.zeroRows(IDX_DIRICHLET, diag=0.0)
+
+    def linear_subproblem_fp(xfp_n):
+        """Linear subproblem of a Newton solver"""
+        res.set_state(xfp_n)
+
+        res_n = res.assem_res()
+        jac_n = res.assem_dres_dstate()
+        apply_dirichlet_bvec(res_n)
+        apply_dirichlet_bmat(jac_n)
+
+        def assem_res():
+            """Return residual"""
+            return res_n
+
+        def solve(rhs_n):
+            """Return jac^-1 res"""
+            _rhs_n = rhs_n.to_petsc()
+            _jac_n = jac_n.to_petsc()
+            _dx_n = _jac_n.getVecRight()
+
+            ksp = PETSc.KSP().create()
+            ksp.setType(ksp.Type.PREONLY)
+
+            pc = ksp.getPC()
+            pc.setType(pc.Type.LU)
+
+            ksp.setOperators(_jac_n)
+            ksp.setUp()
+            ksp.solve(_rhs_n, _dx_n)
+
+            dx_n = xfp_n.copy()
+            dx_n.set_vec(_dx_n)
+            return dx_n
+        return assem_res, solve
+
+    if newton_params is None:
+        newton_params = {
+            'maximum_iterations': 20
+        }
+    xfp_n, info = nleq.newton_solve(xfp_0, linear_subproblem_fp, norm=bvec.norm, params=newton_params)
+    return xfp_n, info

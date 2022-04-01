@@ -16,7 +16,8 @@ import nonlineq as nleq
 import blocktensor.subops as gops
 from blocktensor import vec as bvec
 
-from hopf import make_hopf_system, normalize_eigenvector_by_hopf_condition
+from libhopf import make_hopf_system, normalize_eigenvector_by_hopf_condition
+import libhopf
 
 # pylint: disable=redefined-outer-name
 # pylint: disable=no-member
@@ -81,10 +82,10 @@ def set_properties(props, region_to_dofs, res):
 
 
 if __name__ == '__main__':
+    ## Load the models
     res, dres = setup_models()
 
     ## Set model properties
-    # get the scalar DOFs associated with the cover/body layers
     region_to_dofs = process_celllabel_to_dofs_from_forms(
         res.solid.forms, res.solid.forms['fspace.scalar'])
 
@@ -92,6 +93,7 @@ if __name__ == '__main__':
     props = set_properties(props, region_to_dofs, res)
 
     ## Initialize the Hopf system
+    # This vector normalizes the real/imag components of the unstable eigenvector
     EREF = res.state.copy()
     EREF['q'].set(1.0)
     EREF.set(1.0)
@@ -112,53 +114,18 @@ if __name__ == '__main__':
     _XHOPF['psub'].array[:] = PSUB
     _XHOPF['omega'].array[:] = 1.0
 
-    def linear_subproblem_fp(xfp_n):
-        """Linear subproblem of a Newton solver"""
-        _xhopf_n = _XHOPF.copy()
-        _xhopf_n[state_labels] = xfp_n
 
-        _res_n = hopf_res(_xhopf_n)
-        _jac_n = hopf_jac(_xhopf_n)
-        apply_dirichlet_vec(_res_n)
-        apply_dirichlet_mat(_jac_n)
-
-        res_n = _res_n[state_labels]
-        jac_n = _jac_n[state_labels, state_labels]
-
-        def assem_res():
-            """Return residual"""
-            return res_n
-
-        def solve(rhs_n):
-            """Return jac^-1 res"""
-            _rhs_n = rhs_n.to_petsc()
-            _jac_n = jac_n.to_petsc()
-            _dx_n = _jac_n.getVecRight()
-
-            ksp = PETSc.KSP().create()
-            ksp.setType(ksp.Type.PREONLY)
-
-            pc = ksp.getPC()
-            pc.setType(pc.Type.LU)
-
-            ksp.setOperators(_jac_n)
-            ksp.setUp()
-            ksp.solve(_rhs_n, _dx_n)
-
-            dx_n = xfp_n.copy()
-            dx_n.set_vec(_dx_n)
-            return dx_n
-        return assem_res, solve
+    _control = res.control.copy()
+    _control['psub'] = PSUB
+    res.set_control(_control)
 
     if TEST_FP:
         print("\n-- Test solution of fixed-points --")
-        xfp_0 = _XHOPF[state_labels]
-
         newton_params = {
             'maximum_iterations': 20
         }
-        xfp_n, info = nleq.newton_solve(xfp_0, linear_subproblem_fp, norm=bvec.norm, params=newton_params)
-        print(xfp_n.norm())
+        xfp_0 = _XHOPF[state_labels]
+        xfp_n, info = libhopf.solve_fixed_point(res, xfp_0, newton_params=newton_params)
         print(info)
 
     ## Test solving for stabilty (modal analysis of the jacobian)
@@ -202,7 +169,7 @@ if __name__ == '__main__':
         omegas = -1/eigvals
         print("Omegas:", omegas)
 
-    idx_hopf = 2
+    idx_hopf = 3
     omega_hopf = abs(omegas[idx_hopf].imag)
     mode_real_hopf = _df_dx.getVecRight()
     mode_imag_hopf = _df_dx.getVecRight()

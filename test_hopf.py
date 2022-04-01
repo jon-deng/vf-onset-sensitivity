@@ -12,7 +12,7 @@ from femvf.meshutils import process_celllabel_to_dofs_from_forms
 import blocktensor.subops as gops
 import blocktensor.linalg as bla
 
-from hopf import make_hopf_system
+from libhopf import make_hopf_system
 
 # slepc4py.init(sys.argv)
 
