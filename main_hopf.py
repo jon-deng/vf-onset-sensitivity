@@ -18,12 +18,8 @@ from blocktensor import vec as bvec
 
 from hopf import make_hopf_system, normalize_eigenvector_by_hopf_condition
 
-# import sys
-# import petsc4py
-# petsc4py.init(sys.argv)
-# slepc4py.init(sys.argv)
-
 # pylint: disable=redefined-outer-name
+# pylint: disable=no-member
 
 TEST_FP = True
 TEST_MODAL = True
