@@ -6,6 +6,7 @@ from os import path
 from petsc4py import PETSc
 from slepc4py import SLEPc
 import numpy as np
+import matplotlib.pyplot as plt
 
 from femvf.dynamicalmodels import solid as sldm, fluid as fldm
 from femvf.load import load_dynamical_fsi_model
@@ -18,6 +19,7 @@ from blocktensor import vec as bvec
 
 from libhopf import make_hopf_system, normalize_eigenvector_by_hopf_condition
 import libhopf
+import libsignal
 
 # pylint: disable=redefined-outer-name
 # pylint: disable=no-member
@@ -191,3 +193,23 @@ if __name__ == '__main__':
         print(xhopf_n.norm())
         print(info)
         # breakpoint()
+
+    ## Plot the obtained mode shape's glottal width waveform
+    proc_glottal_width = libsignal.make_glottal_width(res, dres, 100)
+
+    fig, ax = plt.subplots(1, 1)
+
+    for ampl in np.linspace(0, 10.0, 5):
+        gw = proc_glottal_width(
+            xfp_n.to_ndarray(),
+            xmode_real.to_ndarray(),
+            xmode_imag.to_ndarray(),
+            PSUB, ampl)
+        ax.plot(gw, label=f"Amplitude {ampl:.2e}")
+    ax.set_xlabel(f"Time [period]")
+    ax.set_ylabel("Glottal width [cm]")
+    ax.legend()
+
+    fig.tight_layout()
+    fig.savefig("fig/glottal_width_vs_amplitude.png", dpi=250)
+    breakpoint()
