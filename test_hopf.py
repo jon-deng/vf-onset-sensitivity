@@ -25,8 +25,9 @@ PSUB = 800 * 10
 
 def set_properties(props, region_to_dofs, res):
     """
-    Sets model properties
+    Set the model properties
     """
+
     # VF material props
     gops.set_vec(props['emod'], ECOV)
     gops.set_vec(props['emod'], EBODY)
@@ -48,10 +49,9 @@ def set_properties(props, region_to_dofs, res):
     y_contact = y_mid - y_contact_offset
     gops.set_vec(props['ycontact'], y_contact)
     gops.set_vec(props['kcontact'], 1e16)
-    if 'ymid' in props:
-        gops.set_vec(props['ymid'], y_mid)
+    gops.set_vec(props['ymid'], y_mid)
 
-    return y_mid
+    return props
 
 def _test_taylor(x0, dx, res, jac):
     """
@@ -108,10 +108,7 @@ cell_label_to_id = res.solid.forms['mesh.cell_label_to_id']
 region_to_dofs = process_meshlabel_to_dofs(mesh, cell_func, func_space, cell_label_to_id)
 
 props = res.properties.copy()
-y_mid = set_properties(props, region_to_dofs, res)
-
-for model in (res, dres):
-    model.ymid = y_mid
+props = set_properties(props, region_to_dofs, res)
 
 ## Initialize the Hopf system
 xhopf, hopf_res, hopf_jac, apply_dirichlet_vec, apply_dirichlet_mat, labels, info = make_hopf_system(res, dres, props)

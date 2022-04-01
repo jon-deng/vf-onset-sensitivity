@@ -231,3 +231,24 @@ def make_hopf_system(res, dres, props, ee=None):
         'dirichlet_dofs': IDX_DIRICHLET
     }
     return x, hopf_res, hopf_jac, apply_dirichlet_vec, apply_dirichlet_mat, labels, info
+
+def normalize_eigenvector_by_hopf_condition(evec_real, evec_imag, evec_ref):
+    """
+    Scales real and imaginary components of an eigenvector by a complex constant
+
+    Let the complex eigenvector be `evec == evec_real +1j*evec_imag`. Then the
+    function computes a constant `A * exp(1j * theta)` such that:
+    inner(evec_ref, real(A * exp(1j * theta) * evec)) == 0
+    inner(evec_ref, im(A * exp(1j * theta) * evec)) == 1
+
+    This is the Hopf normalization.
+    """
+    a = bla.dot(evec_ref, evec_real)
+    b = bla.dot(evec_ref, evec_imag)
+
+    theta = np.arctan(a/b)
+    amp = (a*np.sin(theta) + b*np.cos(theta))**-1
+
+    ret_evec_real = amp*(evec_real*np.cos(theta) - evec_imag*np.sin(theta))
+    ret_evec_imag = amp*(evec_real*np.sin(theta) + evec_imag*np.cos(theta))
+    return ret_evec_real, ret_evec_imag

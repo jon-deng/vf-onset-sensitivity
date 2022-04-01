@@ -13,13 +13,13 @@ from femvf.meshutils import process_meshlabel_to_dofs
 import nonlineq as nleq
 
 import blocktensor.subops as gops
-from blocktensor import vec as bvec, linalg as bla
+from blocktensor import vec as bvec
 
-from hopf import make_hopf_system
+from hopf import make_hopf_system, normalize_eigenvector_by_hopf_condition
 
-import sys
-import petsc4py
-petsc4py.init(sys.argv)
+# import sys
+# import petsc4py
+# petsc4py.init(sys.argv)
 # slepc4py.init(sys.argv)
 
 # pylint: disable=redefined-outer-name
@@ -31,39 +31,6 @@ TEST_HOPF_BIFURCATION = True
 EBODY = 5e3 * 10
 ECOV = 5e3 * 10
 PSUB = 450 * 10
-
-# PSUB = 1 * 10
-
-def set_properties(props, region_to_dofs, res):
-    """
-    Set the model properties
-    """
-
-    # VF material props
-    gops.set_vec(props['emod'], ECOV)
-    gops.set_vec(props['emod'], EBODY)
-    gops.set_vec(props['eta'], 5.0)
-    gops.set_vec(props['rho'], 1.0)
-    gops.set_vec(props['nu'], 0.45)
-
-    # Fluid separation smoothing props
-    gops.set_vec(props['zeta_min'], 1.0e-4)
-    gops.set_vec(props['zeta_sep'], 1.0e-4)
-
-    # Contact and midline symmetry properties
-    # y_gap = 0.5 / 10 # Set y gap to 0.5 mm
-    # y_gap = 1.0
-    y_gap = 0.01
-    y_contact_offset = 1/10*y_gap
-    y_max = res.solid.forms['mesh.mesh'].coordinates()[:, 1].max()
-    y_mid = y_max + y_gap
-    y_contact = y_mid - y_contact_offset
-    gops.set_vec(props['ycontact'], y_contact)
-    gops.set_vec(props['kcontact'], 1e16)
-    if 'ymid' in props:
-        gops.set_vec(props['ymid'], y_mid)
-
-    return y_mid
 
 def setup_models():
     """
@@ -96,26 +63,34 @@ def region_to_dofs_from_forms(forms, func_space):
     return process_meshlabel_to_dofs(
         mesh, cell_func, func_space, cell_label_to_id)
 
-def normalize_eigenvector_by_hopf_condition(evec_real, evec_imag, evec_ref):
+def set_properties(props, region_to_dofs, res):
     """
-    Scales real and imaginary components of an eigenvector by a complex constant
-
-    Let the complex eigenvector be `evec == evec_real +1j*evec_imag`. Then the
-    function computes a constant `A * exp(1j * theta)` such that:
-    inner(evec_ref, real(A * exp(1j * theta) * evec)) == 0
-    inner(evec_ref, im(A * exp(1j * theta) * evec)) == 1
-
-    This is the Hopf normalization.
+    Set the model properties
     """
-    a = bla.dot(evec_ref, evec_real)
-    b = bla.dot(evec_ref, evec_imag)
+    # VF material props
+    gops.set_vec(props['emod'], ECOV)
+    gops.set_vec(props['emod'], EBODY)
+    gops.set_vec(props['eta'], 5.0)
+    gops.set_vec(props['rho'], 1.0)
+    gops.set_vec(props['nu'], 0.45)
 
-    theta = np.arctan(a/b)
-    amp = (a*np.sin(theta) + b*np.cos(theta))**-1
+    # Fluid separation smoothing props
+    gops.set_vec(props['zeta_min'], 1.0e-4)
+    gops.set_vec(props['zeta_sep'], 1.0e-4)
 
-    ret_evec_real = amp*(evec_real*np.cos(theta) - evec_imag*np.sin(theta))
-    ret_evec_imag = amp*(evec_real*np.sin(theta) + evec_imag*np.cos(theta))
-    return ret_evec_real, ret_evec_imag
+    # Contact and midline symmetry properties
+    # y_gap = 0.5 / 10 # Set y gap to 0.5 mm
+    # y_gap = 1.0
+    y_gap = 0.01
+    y_contact_offset = 1/10*y_gap
+    y_max = res.solid.forms['mesh.mesh'].coordinates()[:, 1].max()
+    y_mid = y_max + y_gap
+    y_contact = y_mid - y_contact_offset
+    gops.set_vec(props['ycontact'], y_contact)
+    gops.set_vec(props['kcontact'], 1e16)
+    gops.set_vec(props['ymid'], y_mid)
+
+    return props
 
 
 if __name__ == '__main__':
@@ -127,10 +102,7 @@ if __name__ == '__main__':
         res.solid.forms, res.solid.forms['fspace.scalar'])
 
     props = res.properties.copy()
-    y_mid = set_properties(props, region_to_dofs, res)
-
-    for model in (res, dres):
-        model.ymid = y_mid
+    props = set_properties(props, region_to_dofs, res)
 
     ## Initialize the Hopf system
     EREF = res.state.copy()
