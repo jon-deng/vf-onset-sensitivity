@@ -29,9 +29,9 @@ def make_glottal_width(res, dres, num_points=100):
             ymedial_ref
             + ampl * ymedial_mode
             * jnp.exp(
-                2j * jnp.pi
+                1j* 2 * jnp.pi
                 * jnp.arange(num_points)[:, None]/(num_points+1)
-                + phase
+                + 1j * phase
             )
             )
         ys = jnp.min(YMID-ysignal, axis=-1)
