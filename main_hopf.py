@@ -210,7 +210,7 @@ if __name__ == '__main__':
             xfp_n.to_ndarray(),
             unit_xmode_real.to_ndarray(),
             unit_xmode_imag.to_ndarray(),
-            PSUB, ampl)
+            PSUB, ampl, 0.0)
         ax.plot(gw, label=f"Amplitude {ampl:.2e}")
     ax.set_xlabel(f"Time [period]")
     ax.set_ylabel("Glottal width [cm]")
