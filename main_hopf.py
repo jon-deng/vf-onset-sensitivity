@@ -6,6 +6,7 @@ from os import path
 from petsc4py import PETSc
 from slepc4py import SLEPc
 import numpy as np
+import h5py
 import matplotlib.pyplot as plt
 
 from femvf.dynamicalmodels import solid as sldm, fluid as fldm
@@ -16,8 +17,8 @@ import nonlineq as nleq
 
 import blocktensor.subops as gops
 from blocktensor import vec as bvec
+from blocktensor import h5utils
 
-from libhopf import make_hopf_system, normalize_eigenvector_by_hopf_condition
 import libhopf
 import libsignal
 
@@ -37,7 +38,7 @@ def setup_models():
     Return residual + linear residual needed to model the Hopf system
     """
     # mesh_name = 'BC-dcov5.00e-02-coarse'
-    mesh_name = 'BC-dcov5.00e-02-cl2.00'
+    mesh_name = 'BC-dcov5.00e-02-cl1.00'
     # mesh_name = 'vf-square'
     mesh_path = path.join('./mesh', mesh_name+'.xml')
 
@@ -102,7 +103,7 @@ if __name__ == '__main__':
     (
         xhopf, hopf_res, hopf_jac,
         apply_dirichlet_vec, apply_dirichlet_mat,
-        labels, info) = make_hopf_system(res, dres, props, EREF)
+        labels, info) = libhopf.make_hopf_system(res, dres, props, EREF)
     (
         state_labels, mode_real_labels, mode_imag_labels,
         psub_labels, omega_labels) = labels
@@ -146,7 +147,7 @@ if __name__ == '__main__':
     xhopf_0['psub'].array[:] = PSUB
     xhopf_0['omega'].array[:] = -omega_hopf
 
-    xmode_real, xmode_imag = normalize_eigenvector_by_hopf_condition(mode_real_hopf, mode_imag_hopf, EREF)
+    xmode_real, xmode_imag = libhopf.normalize_eigenvector_by_hopf_condition(mode_real_hopf, mode_imag_hopf, EREF)
     xhopf_0[mode_real_labels] = xmode_real
     xhopf_0[mode_imag_labels] = xmode_imag
 
@@ -192,7 +193,11 @@ if __name__ == '__main__':
         xhopf_n, info = nleq.newton_solve(xhopf_0, linear_subproblem_hopf, norm=bvec.norm, params=newton_params)
         print(xhopf_n.norm())
         print(info)
-        # breakpoint()
+
+    with h5py.File("hopf_state.h5", mode='w') as f:
+        h5utils.create_resizable_block_vector_group(
+            f, xhopf_n.labels, xhopf_n.bshape)
+        h5utils.append_block_vector_to_group(f, xhopf_n)
 
     ## Plot the obtained mode shape's glottal width waveform
     proc_glottal_width = libsignal.make_glottal_width(res, dres, 100)
