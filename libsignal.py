@@ -15,7 +15,7 @@ def make_glottal_width(res, dres, num_points=100):
 
     YMID = res.properties['ymid'][0]
 
-    def glottal_width(xfp, mode_real, mode_imag, psub, ampl):
+    def glottal_width(xfp, mode_real, mode_imag, psub, ampl, phase):
         # get the reference position of the surface
         u_ref = (xfp[IDX_U] + XREF)
         ymedial_ref = u_ref[1::2][IDX_MEDIAL]
@@ -29,8 +29,10 @@ def make_glottal_width(res, dres, num_points=100):
             ymedial_ref
             + ampl * ymedial_mode
             * jnp.exp(
-                2j*jnp.pi*jnp.arange(num_points)/(num_points+1)
-                )[:, None]
+                2j * jnp.pi
+                * jnp.arange(num_points)/(num_points+1)[:, None]
+                + phase
+            )
             )
         ys = jnp.min(YMID-ysignal, axis=-1)
 
