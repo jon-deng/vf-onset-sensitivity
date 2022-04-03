@@ -93,6 +93,8 @@ if __name__ == '__main__':
 
     props = res.properties.copy()
     props = set_properties(props, region_to_dofs, res)
+    res.set_properties(props)
+    dres.set_properties(props)
 
     ## Initialize the Hopf system
     # This vector normalizes the real/imag components of the unstable eigenvector
@@ -193,7 +195,7 @@ if __name__ == '__main__':
         print(xhopf_n.norm())
         print(info)
 
-    with h5py.File("hopf_state.h5", mode='w') as f:
+    with h5py.File("out/hopf_state.h5", mode='w') as f:
         h5utils.create_resizable_block_vector_group(
             f, xhopf_n.labels, xhopf_n.bshape)
         h5utils.append_block_vector_to_group(f, xhopf_n)
