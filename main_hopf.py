@@ -201,14 +201,21 @@ if __name__ == '__main__':
         h5utils.append_block_vector_to_group(f, xhopf_n)
 
     ## Plot the obtained mode shape's glottal width waveform
+    xfp = xhopf_n[state_labels]
+    xmode_real = xhopf_n[mode_real_labels]
+    xmode_imag = xhopf_n[mode_imag_labels]
+
     proc_glottal_width = libsignal.make_glottal_width(res, dres, 100)
     unit_xmode_real, unit_xmode_imag = libhopf.normalize_eigenvector_amplitude(xmode_real, xmode_imag)
 
     fig, ax = plt.subplots(1, 1)
 
+    print(xfp.norm())
+    print(unit_xmode_real.norm())
+    print(unit_xmode_imag.norm())
     for ampl in np.linspace(0, 10000.0, 5):
         gw = proc_glottal_width(
-            xfp_n.to_ndarray(),
+            xfp.to_ndarray(),
             unit_xmode_real.to_ndarray(),
             unit_xmode_imag.to_ndarray(),
             PSUB, ampl, 0.0)
@@ -218,5 +225,5 @@ if __name__ == '__main__':
     ax.legend()
 
     fig.tight_layout()
-    fig.savefig("fig/glottal_width_vs_amplitude.png", dpi=250)
+    fig.savefig("fig/glottal_width_vs_amplitude_main_hopf.png", dpi=250)
     # breakpoint()

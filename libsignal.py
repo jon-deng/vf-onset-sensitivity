@@ -2,6 +2,7 @@
 Contains functions that return time-varying signals from a Hopf system
 """
 
+import numpy as np
 from jax import numpy as jnp
 
 from femvf.dynamicalmodels.fluid import smooth_min_weight, wavg
@@ -15,9 +16,10 @@ def make_glottal_width(res, dres, num_points=100):
     IDX_U = slice(0, res.state['u'].size)
     IDX_MEDIAL = res.fsimap.dofs_solid
 
-    YMID = res.properties['ymid'][0]
-    ZETA = res.properties['zeta_min'][0]
-    S = res.fluid.s
+    YMID = float(res.properties['ymid'][0])
+    ZETA = float(res.properties['zeta_min'][0])
+
+    S = np.array(dres.fluid.s) # can also be res
 
     def glottal_width(xfp, mode_real, mode_imag, psub, ampl, phase):
         # get the reference position of the surface
@@ -42,7 +44,9 @@ def make_glottal_width(res, dres, num_points=100):
         area = 2*(YMID-ysignal)
         wmin = smooth_min_weight(area, ZETA, axis=-1)
         min_area = wavg(S, area, wmin, axis=-1)
-        # min_area = jnp.min(YMID-ysignal, axis=-1)
+
+        # the above is a smooth approximation of:
+        # min_area = jnp.min(area, axis=-1)
 
         return min_area
 
