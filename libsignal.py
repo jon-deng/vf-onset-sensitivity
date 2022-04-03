@@ -39,9 +39,10 @@ def make_glottal_width(res, dres, num_points=100):
             )
             )
 
+        breakpoint()
         area = 2*(YMID-ysignal)
         wmin = smooth_min_weight(area, ZETA, axis=-1)
-        min_area = wavg(S, area, wmin)
+        min_area = wavg(S, area, wmin, axis=-1)
         # min_area = jnp.min(YMID-ysignal, axis=-1)
 
         return min_area
