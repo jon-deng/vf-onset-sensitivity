@@ -66,7 +66,7 @@ props['eta'][:] = 5.0
 y_gap = 0.01
 y_contact_offset = 1/10 * y_gap
 props['y_midline'][:] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap/2
-props['ycontact'][:] = props['y_midline'] - y_contact_offset 
+props['ycontact'][:] = props['y_midline'] - y_contact_offset
 props['kcontact'][:] = 1e15
 
 # Fluid properties
@@ -104,7 +104,7 @@ def run(psub):
     controls = [_control]
 
     _times = DT*np.arange(int(round(T_TOTAL/DT))+1)
-    times = linalg.BlockVec((_times,), labels=[('times',)])
+    times = linalg.BlockVector((_times,), labels=[('times',)])
 
     # Compute the static configuration for the initial state if needed
     if INIT_STATE_TYPE == 'static':
@@ -143,5 +143,5 @@ if __name__ == '__main__':
         pool.map(run, PSUBS)
 
     # for loop version for easier debugging
-    # for psub in PSUBS: 
+    # for psub in PSUBS:
     #     run(psub)
