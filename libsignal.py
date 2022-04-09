@@ -5,7 +5,9 @@ Contains functions that return time-varying signals from a Hopf system
 import numpy as np
 from jax import numpy as jnp
 
-from femvf.dynamicalmodels.fluid import smooth_min_weight, wavg
+# from femvf.models.dynamical.fluid import smooth_min_weight, wavg
+from femvf.models.equations.fluid.bernoulli_sep_at_min import (
+    smooth_min_weight, wavg)
 
 def make_glottal_width(res, dres, num_points=100):
     """
