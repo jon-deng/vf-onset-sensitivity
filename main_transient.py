@@ -10,7 +10,7 @@ from multiprocessing import Pool
 import numpy as np
 
 from femvf import forward, load, statefile as sf
-from femvf.models import solid as smd, fluid as fmd
+from femvf.models.transient import solid as smd, fluid as fmd
 from femvf.meshutils import process_meshlabel_to_dofs
 from femvf.static import static_configuration_coupled_picard
 from blocktensor import linalg
@@ -45,7 +45,11 @@ T_TOTAL = 0.2
 
 mesh_name = 'BC-dcov5.00e-02-cl1.00'
 mesh_path = f'mesh/{mesh_name}.xml'
-model = load.load_fsi_model(mesh_path, None, SolidType=smd.KelvinVoigt, FluidType=fmd.Bernoulli, coupling='explicit')
+model = load.load_transient_fsi_model(
+    mesh_path, None,
+    SolidType=smd.KelvinVoigt, FluidType=fmd.BernoulliMinimumSeparation,
+    coupling='explicit'
+    )
 
 # Get DOFs associated with layer regions
 mesh = model.solid.forms['mesh.mesh']
@@ -73,11 +77,12 @@ props['kcontact'][:] = 1e15
 ZETA = 1e-4
 R_SEP = 1.0
 props['r_sep'][:] = R_SEP
-props['ygap_lb'][:] = y_contact_offset
+props['area_lb'][:] = 2*y_contact_offset
 props['zeta_lb'][:] = 1e-6
-props['zeta_amin'][:] = ZETA
-props['zeta_sep'][:] = ZETA
-props['zeta_ainv'][:] = ZETA
+
+for key in ['zeta_min', 'zeta_sep', 'zeta_in']:
+    if key in props:
+        props[key][:] = ZETA
 
 # Create the output directory
 OUT_DIR = f'out/zeta{ZETA:.2e}_rsep{R_SEP:.1f}_ygap{y_gap:.2e}_init{INIT_STATE_TYPE}'
@@ -111,7 +116,7 @@ def run(psub):
         model.set_control(controls[0])
         model.set_properties(props)
         x_static, info = static_configuration_coupled_picard(model)
-        print(info)
+        print(f"Solved for equilibrium state: {info}")
         ini_state['u'][:] = x_static['u']
         ini_state['q'][:] = x_static['q']
         ini_state['p'][:] = x_static['p']
@@ -131,11 +136,10 @@ def run(psub):
     file_path = f'{OUT_DIR}/{file_name}.h5'
 
     if not isfile(file_path):
-        # newton_prm = {
-
-        # }
         with sf.StateFile(model, file_path, mode='w') as f:
             forward.integrate(model, f, ini_state, controls, props, times, use_tqdm=True)
+    else:
+        print(f"Skipped existing simulation file {file_path}")
 
 if __name__ == '__main__':
     print("Running Psub variations")

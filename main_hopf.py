@@ -4,12 +4,11 @@ Testing code for finding hopf bifurcations of coupled FE VF models
 # import sys
 from os import path
 from petsc4py import PETSc
-from slepc4py import SLEPc
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
 
-from femvf.dynamicalmodels import solid as sldm, fluid as fldm
+from femvf.models.dynamical import solid as sldm, fluid as fldm
 from femvf.load import load_dynamical_fsi_model
 from femvf.meshutils import process_celllabel_to_dofs_from_forms
 
