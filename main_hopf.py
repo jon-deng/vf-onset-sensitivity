@@ -145,7 +145,7 @@ if __name__ == '__main__':
     xhopf_0 = xhopf.copy()
     xhopf_0[state_labels] = xfp_n
     xhopf_0['psub'].array[:] = PSUB
-    xhopf_0['omega'].array[:] = -omega_hopf
+    xhopf_0['omega'].array[:] = omega_hopf
 
     xmode_real, xmode_imag = libhopf.normalize_eigenvector_by_hopf_condition(mode_real_hopf, mode_imag_hopf, EREF)
     xhopf_0[mode_real_labels] = xmode_real
@@ -203,6 +203,8 @@ if __name__ == '__main__':
     xfp = xhopf_n[state_labels]
     xmode_real = xhopf_n[mode_real_labels]
     xmode_imag = xhopf_n[mode_imag_labels]
+    psub = xhopf_n['psub'][0]
+    omega = xhopf_n['omega'][0]
 
     proc_glottal_width = libsignal.make_glottal_width(res, dres, 100)
     unit_xmode_real, unit_xmode_imag = libhopf.normalize_eigenvector_amplitude(xmode_real, xmode_imag)
@@ -217,7 +219,7 @@ if __name__ == '__main__':
             xfp.to_ndarray(),
             unit_xmode_real.to_ndarray(),
             unit_xmode_imag.to_ndarray(),
-            PSUB, ampl, 0.0)
+            psub, omega, ampl, 0.0)
         ax.plot(gw, label=f"Amplitude {ampl:.2e}")
     ax.set_xlabel(f"Time [period]")
     ax.set_ylabel("Glottal width [cm]")
