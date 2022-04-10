@@ -23,32 +23,32 @@ def make_glottal_width(res, dres, num_points=100):
 
     S = np.array(dres.fluid.s) # can also be res
 
-    def glottal_width(xfp, mode_real, mode_imag, psub, ampl, phase):
+    def glottal_width(xfp, mode_real, mode_imag, psub, omega, ampl, phase):
         # get the reference position of the surface
-        u_ref = (xfp[IDX_U] + XREF)
-        ymedial_ref = u_ref[1::2][IDX_MEDIAL]
+        ucur = (xfp[IDX_U] + XREF)
+        ymedial_ref = ucur[1::2][IDX_MEDIAL]
 
         u_mode_real = mode_real[IDX_U]
         u_mode_imag = mode_imag[IDX_U]
         u_mode = u_mode_real + 1j*u_mode_imag
         ymedial_mode = u_mode[1::2][IDX_MEDIAL]
 
-        ysignal = jnp.real(
+        ymedial_signal = jnp.real(
             ymedial_ref
             + ampl * ymedial_mode
             * jnp.exp(
-                1j* 2 * jnp.pi
+                1j* 2 * jnp.pi * jnp.sign(omega)
                 * jnp.arange(num_points)[:, None]/(num_points+1)
                 + 1j * phase
             )
             )
 
-        area = 2*(YMID-ysignal)
+        area = 2*(YMID-ymedial_signal)
         wmin = smooth_min_weight(area, ZETA, axis=-1)
-        min_area = wavg(S, area, wmin, axis=-1)
 
-        # the above is a smooth approximation of:
+        # Compute the minimum area as a smooth approximation of the min
         # min_area = jnp.min(area, axis=-1)
+        min_area = wavg(S, area, wmin, axis=-1)
 
         return min_area
 
