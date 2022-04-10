@@ -22,11 +22,11 @@ def hopf_state(res):
     """
     X_state = res.state.copy()
 
-    _mode_real_vecs = res.state.copy().array
+    _mode_real_vecs = res.state.copy().subtensors_flat
     _mode_real_labels = [label+'_mode_real' for label in X_state.labels[0]]
     X_mode_real = bvec.BlockVector(_mode_real_vecs, labels=[_mode_real_labels])
 
-    _mode_imag_vecs = res.state.copy().array
+    _mode_imag_vecs = res.state.copy().subtensors_flat
     _mode_imag_labels = [label+'_mode_imag' for label in X_state.labels[0]]
     X_mode_imag = bvec.BlockVector(_mode_imag_vecs, labels=[_mode_imag_labels])
 
