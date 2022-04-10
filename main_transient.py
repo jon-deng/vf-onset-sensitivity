@@ -11,13 +11,12 @@ import numpy as np
 
 from femvf import forward, load, statefile as sf
 from femvf.models.transient import solid as smd, fluid as fmd
-from femvf.meshutils import process_meshlabel_to_dofs
+from femvf.meshutils import process_celllabel_to_dofs_from_forms
 from femvf.static import static_configuration_coupled_picard
 from blocktensor import linalg
 
 from lib_main_transient import case_config
-
-# from main_hopf import set_properties
+from main_hopf import set_properties
 # warnings.filterwarnings('error')
 
 parser = argparse.ArgumentParser()
@@ -40,61 +39,69 @@ ETA_VISC = 5
 ECOV = 5e3*10
 EBODY = 5e3*10
 
+R_SEP = 1.0
+ZETA = 1e-4
+
 DT = 5e-5
 T_TOTAL = 0.2
 
+def setup_models(mesh_path):
+    model = load.load_transient_fsi_model(
+        mesh_path, None,
+        SolidType=smd.KelvinVoigt, FluidType=fmd.BernoulliMinimumSeparation,
+        coupling='explicit'
+        )
+    return model
+
 mesh_name = 'BC-dcov5.00e-02-cl1.00'
 mesh_path = f'mesh/{mesh_name}.xml'
-model = load.load_transient_fsi_model(
-    mesh_path, None,
-    SolidType=smd.KelvinVoigt, FluidType=fmd.BernoulliMinimumSeparation,
-    coupling='explicit'
-    )
+model = setup_models(mesh_path)
 
 # Get DOFs associated with layer regions
-mesh = model.solid.forms['mesh.mesh']
-cell_func = model.solid.forms['mesh.cell_function']
-func_space = model.solid.forms['fspace.scalar']
-cell_label_to_id = model.solid.forms['mesh.cell_label_to_id']
-region_to_dofs = process_meshlabel_to_dofs(mesh, cell_func, func_space, cell_label_to_id)
+
+region_to_dofs = process_celllabel_to_dofs_from_forms(
+    model.solid.forms, model.solid.forms['fspace.scalar']
+    )
 
 ## Set model properties to nominal values
 props = model.get_properties_vec()
+props = set_properties(props, region_to_dofs, model)
+model.set_properties(props)
 
-# constant ones
-props['rho'][:] = 1.0
-props['nu'][:] = 0.45
-props['eta'][:] = 5.0
+# # constant ones
+# props['rho'][:] = 1.0
+# props['nu'][:] = 0.45
+# props['eta'][:] = 5.0
 
-# geometric properties related to the symmetry/contact planes
+# # geometric properties related to the symmetry/contact planes
 y_gap = 0.01
-y_contact_offset = 1/10 * y_gap
-props['y_midline'][:] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap/2
-props['ycontact'][:] = props['y_midline'] - y_contact_offset
-props['kcontact'][:] = 1e15
+# y_contact_offset = 1/10 * y_gap
+# props['y_midline'][:] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
+# props['ycontact'][:] = props['y_midline'] - y_contact_offset
+# props['kcontact'][:] = 1e15
 
-# Fluid properties
-ZETA = 1e-4
-R_SEP = 1.0
-props['r_sep'][:] = R_SEP
-props['area_lb'][:] = 2*y_contact_offset
-props['zeta_lb'][:] = 1e-6
+# # Fluid properties
+# ZETA = 1e-4
+# R_SEP = 1.0
+# props['r_sep'][:] = R_SEP
+# props['area_lb'][:] = 2*y_contact_offset
+# props['zeta_lb'][:] = 1e-6
 
-for key in ['zeta_min', 'zeta_sep', 'zeta_in']:
-    if key in props:
-        props[key][:] = ZETA
+# for key in ['zeta_min', 'zeta_sep', 'zeta_in']:
+#     if key in props:
+#         props[key][:] = ZETA
 
 # Create the output directory
-OUT_DIR = f'out/zeta{ZETA:.2e}_rsep{R_SEP:.1f}_ygap{y_gap:.2e}_init{INIT_STATE_TYPE}'
+OUT_DIR = f'out/zeta{ZETA:.2e}_rsep{R_SEP:.1f}_ygap{y_gap:.2e}_init{INIT_STATE_TYPE}_fixed_rsep'
 if not isdir(OUT_DIR):
     os.makedirs(OUT_DIR)
 
-dofs_cover = region_to_dofs['cover']
-dofs_body = region_to_dofs['body']
+# dofs_cover = region_to_dofs['cover']
+# dofs_body = region_to_dofs['body']
 
-# Set the constant body layer modulus
-props['emod'][dofs_cover] = ECOV
-props['emod'][dofs_body] = EBODY
+# # Set the constant body layer modulus
+# props['emod'][dofs_cover] = ECOV
+# props['emod'][dofs_body] = EBODY
 
 
 # import warnings
