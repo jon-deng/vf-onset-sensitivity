@@ -31,7 +31,8 @@ INIT_STATE_TYPE = 'zero'
 INIT_STATE_TYPE = 'static'
 
 # These parameters cover a broad range to try and gauge when onset happens
-PSUBS = np.concatenate([np.arange(200, 300, 10), np.arange(300, 1000, 100)]) * 10
+# PSUBS = np.concatenate([np.arange(200, 300, 10), np.arange(300, 1000, 100)]) * 10
+PSUBS = np.arange(550, 650, 10) * 10
 # PSUBS = np.arange(200, 300, 10)* 10
 # PSUBS = np.arange(300, 1000, 100) * 10
 
@@ -68,44 +69,14 @@ props = model.get_properties_vec()
 props = set_properties(props, region_to_dofs, model)
 model.set_properties(props)
 
-# # constant ones
-# props['rho'][:] = 1.0
-# props['nu'][:] = 0.45
-# props['eta'][:] = 5.0
-
 # # geometric properties related to the symmetry/contact planes
 y_gap = 0.01
-# y_contact_offset = 1/10 * y_gap
-# props['y_midline'][:] = np.max(model.solid.mesh.coordinates()[..., 1]) + y_gap
-# props['ycontact'][:] = props['y_midline'] - y_contact_offset
-# props['kcontact'][:] = 1e15
-
-# # Fluid properties
-# ZETA = 1e-4
-# R_SEP = 1.0
-# props['r_sep'][:] = R_SEP
-# props['area_lb'][:] = 2*y_contact_offset
-# props['zeta_lb'][:] = 1e-6
-
-# for key in ['zeta_min', 'zeta_sep', 'zeta_in']:
-#     if key in props:
-#         props[key][:] = ZETA
 
 # Create the output directory
 OUT_DIR = f'out/zeta{ZETA:.2e}_rsep{R_SEP:.1f}_ygap{y_gap:.2e}_init{INIT_STATE_TYPE}_fixed_rsep'
 if not isdir(OUT_DIR):
     os.makedirs(OUT_DIR)
 
-# dofs_cover = region_to_dofs['cover']
-# dofs_body = region_to_dofs['body']
-
-# # Set the constant body layer modulus
-# props['emod'][dofs_cover] = ECOV
-# props['emod'][dofs_body] = EBODY
-
-
-# import warnings
-# warnings.filterwarnings("error")
 def run(psub):
     # Set the initial state/properties/control needed to integrate in time
     ini_state = model.get_state_vec()

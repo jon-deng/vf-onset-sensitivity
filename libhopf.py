@@ -1,5 +1,24 @@
 """
 Contains code to create the Hopf system
+
+The hopf system represents the conditions satisified at a Hopf bifurcation. Consider a nonlinear
+dynamical system (the `res` model) defined by
+F(x_t, x; ...) ,
+where x_t is the state time derivative and x is the state. 
+
+The first condition is a fixed point:
+F(x_t, x; ...) = 0
+
+The second condition is the linearized dynamics are periodic and neutrally stable. The linearized 
+dynamics are given by
+d_x_t F delta x_t + d_x delta x = 0.
+Assuming an ansatz of 
+delta x_t = exp(omega_r + 1j*omega_i) * zeta 
+and substituting in the above
+will get the mode shape conditions. Note that this is a different sign convention from that 
+adopted by Griewank and Reddien where they assume
+delta x_t = exp(omega_r - 1j*omega_i) * zeta 
+so the Hopf equations below are slightly different.
 """
 import itertools
 from functools import reduce
@@ -127,14 +146,14 @@ def make_hopf_system(res, dres, props, ee=None):
         res_state = res.assem_res()
 
         # Set appropriate linearization directions
-        dres.set_dstate(x[mode_imag_labels])
-        dres.set_dstatet(-omega*x[mode_real_labels])
-        res_mode_imag = dres.assem_res()
+        dres.set_dstate(x[mode_real_labels])
+        dres.set_dstatet(-omega*x[mode_imag_labels])
+        res_mode_real = dres.assem_res()
 
         # Set appropriate linearization directions
-        dres.set_dstate(x[mode_real_labels])
-        dres.set_dstatet(omega*x[mode_imag_labels])
-        res_mode_real = dres.assem_res()
+        dres.set_dstate(x[mode_imag_labels])
+        dres.set_dstatet(omega*x[mode_real_labels])
+        res_mode_imag = dres.assem_res()
 
         res_psub = x[['psub']].copy()
         res_psub['psub'][0] = bla.dot(ee, x[mode_real_labels])
@@ -187,26 +206,26 @@ def make_hopf_system(res, dres, props, ee=None):
 
         omega = x['omega'][0]
         # Set appropriate linearization directions
-        dres.set_dstate(x[mode_imag_labels])
-        dres.set_dstatet(-omega*x[mode_real_labels])
-        jac_row2 = [
-            dres.assem_dres_dstate(),
-            -omega*dres_dstatet.copy(),
-            dres_dstate.copy(),
-            dres.assem_dres_dcontrol()[:, ['psub']],
-            bvec.convert_bvec_to_petsc_colbmat(
-                bla.mult_mat_vec(-dres_dstatet, x[mode_real_labels]))]
-
-        # Set appropriate linearization directions
         dres.set_dstate(x[mode_real_labels])
         dres.set_dstatet(omega*x[mode_imag_labels])
         jac_row1 = [
             dres.assem_dres_dstate(),
             dres_dstate.copy(),
-            omega*dres_dstatet.copy(),
+            -omega*dres_dstatet.copy(),
             dres.assem_dres_dcontrol()[:, ['psub']],
             bvec.convert_bvec_to_petsc_colbmat(
-                bla.mult_mat_vec(dres_dstatet, x[mode_imag_labels]))]
+                bla.mult_mat_vec(-dres_dstatet, x[mode_imag_labels]))]
+
+        # Set appropriate linearization directions
+        dres.set_dstate(x[mode_imag_labels])
+        dres.set_dstatet(-omega*x[mode_real_labels])
+        jac_row2 = [
+            dres.assem_dres_dstate(),
+            omega*dres_dstatet.copy(),
+            dres_dstate.copy(),
+            dres.assem_dres_dcontrol()[:, ['psub']],
+            bvec.convert_bvec_to_petsc_colbmat(
+                bla.mult_mat_vec(dres_dstatet, x[mode_real_labels]))]
 
         jac_row3 = [
             NULL_MAT_SCALAR_STATE,
