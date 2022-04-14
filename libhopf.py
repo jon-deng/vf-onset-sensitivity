@@ -4,20 +4,20 @@ Contains code to create the Hopf system
 The hopf system represents the conditions satisified at a Hopf bifurcation. Consider a nonlinear
 dynamical system (the `res` model) defined by
 F(x_t, x; ...) ,
-where x_t is the state time derivative and x is the state. 
+where x_t is the state time derivative and x is the state.
 
 The first condition is a fixed point:
 F(x_t, x; ...) = 0
 
-The second condition is the linearized dynamics are periodic and neutrally stable. The linearized 
+The second condition is the linearized dynamics are periodic and neutrally stable. The linearized
 dynamics are given by
 d_x_t F delta x_t + d_x delta x = 0.
-Assuming an ansatz of 
-delta x_t = exp(omega_r + 1j*omega_i) * zeta 
+Assuming an ansatz of
+delta x_t = exp(omega_r + 1j*omega_i) * zeta
 and substituting in the above
-will get the mode shape conditions. Note that this is a different sign convention from that 
+will get the mode shape conditions. Note that this is a different sign convention from that
 adopted by Griewank and Reddien where they assume
-delta x_t = exp(omega_r - 1j*omega_i) * zeta 
+delta x_t = exp(omega_r - 1j*omega_i) * zeta
 so the Hopf equations below are slightly different.
 """
 import itertools
@@ -67,80 +67,86 @@ def hopf_state(res):
     labels = [state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels]
     return ret, labels
 
-def make_hopf_system(res, dres, props, ee=None):
-    """
-    Return the residual and jacobian of a Hopf bifurcation system
 
-    This system is based on the augmented system proposed by Griewank and Reddien (1983)
+class HopfModel:
+    """
+    Represents the system of equations defining a Hopf bifurcation
+
+    This sytem of equations is given by Griewank and Reddien (1983)
 
     Parameters
     ----------
-    res:
-        The fixed-point system residual, F
-    dres:
-        The linearized fixed-point system residual. This represents
-        dF/du * delta u + dF/dut * delta ut + dF/dg * delta g
+        res, dres: The system dynamics residual, and linearized residuals
     """
-    for model in (res, dres):
-        model.set_properties(props)
 
-    def assign_hopf_system_state(xhopf):
-        """
-        Sets the fixed-point and bifurcation parameter components of the Hopf state
+    def __init__(self, res, dres, ee=None):
+        self.res = res
+        self.dres = dres
 
-        The Hopf state consists of 5 blocks representing:
-        [fixed-point state, real mode, imaginary mode, bifurcation parameter, onset frequency]
+        self.state, _component_labels = hopf_state(res)
+        self.properties = res.properties.copy()
 
-        """
-        for model in (res, dres):
-            model.set_state(xhopf[state_labels])
+        # These labels represent the 5 sub-blocks in Griewank and Reddien's equations
+        self._component_labels = _component_labels
+        (self._state_labels,
+        self._mode_real_labels,
+        self._mode_imag_labels,
+        self._psub_labels,
+        self._omega_labels) = _component_labels
+
+        self.IDX_DIRICHLET = np.array(
+            list(res.solid.forms['bc.dirichlet'].get_boundary_values().keys()),
+            dtype=np.int32)
+
+        if ee is None:
+            ee = self.state[self._state_labels].copy()
+            # EBVEC['u'].array[0] = 1.0
+            # EBVEC['u'].array[:] = 1.0
+            ee.set(1.0)
+        self.EE = ee
+
+    def set_properties(self, props):
+        self.properties[:] = props
+        for model in (self.res, self.dres):
+            model.set_properties(props)
+
+    def set_state(self, xhopf):
+        self.state[:] = xhopf
+        for model in (self.res, self.dres):
+            model.set_state(xhopf[self._state_labels])
 
             _control = model.control.copy()
             _control['psub'].array[0] = xhopf['psub'].array[0]
             model.set_control(_control)
 
-    IDX_DIRICHLET = np.array(list(res.solid.forms['bc.dirichlet'].get_boundary_values().keys()), dtype=np.int32)
-    def apply_dirichlet_bvec(vec):
-        """Zeros dirichlet associated indices"""
+    def apply_dirichlet_bvec(self, vec):
+        """Zeros dirichlet associated indices on the Hopf state"""
         for label in ['u', 'v', 'u_mode_real', 'v_mode_real', 'u_mode_imag', 'v_mode_imag']:
             # zero the rows associated with each dirichlet DOF
             subvec = vec[label]
-            subvec.array[IDX_DIRICHLET] = 0
+            subvec.array[self.IDX_DIRICHLET] = 0
 
-    def apply_dirichlet_bmat(mat):
+    def apply_dirichlet_bmat(self, mat):
         """Zeros dirichlet associated indices"""
         # Apply dirichlet BC by zeroing appropriate matrix rows
         row_labels = ['u', 'v', 'u_mode_real', 'v_mode_real', 'u_mode_imag', 'v_mode_imag']
-        col_labels = HOPF_LABELS
+        col_labels = self.state.labels[0]
         for row, col in itertools.product(row_labels, col_labels):
             submat = mat[row, col]
             if row == col:
-                submat.zeroRows(IDX_DIRICHLET, diag=1.0)
+                submat.zeroRows(self.IDX_DIRICHLET, diag=1.0)
             else:
-                submat.zeroRows(IDX_DIRICHLET, diag=0.0)
+                submat.zeroRows(self.IDX_DIRICHLET, diag=0.0)
 
-    # Create the input vector for the system
-    x, labels = hopf_state(res)
-    state_labels, mode_real_labels, mode_imag_labels, *_ = labels
-
-    HOPF_LABELS = tuple(reduce(lambda a, b: a+b, labels))
-
-    if ee is None:
-        ee = x[state_labels].copy()
-        # EBVEC['u'].array[0] = 1.0
-        # EBVEC['u'].array[:] = 1.0
-        ee.set(1.0)
-
-    # null linearization directions are potentially needed since `dres` is used to compute
-    # residuals in multiple directions
-    # DSTATE_NULL, DSTATET_NULL = dres.dstate.copy(), dres.dstatet.copy()
-    # DSTATE_NULL.set(0.0)
-    # DSTATET_NULL.set(0.0)
-
-    def hopf_res(x):
+    def assem_res(self):
         """Return the Hopf system residual"""
+        # Load the needed 'local variables'
+        res, dres = self.res, self.dres
+        mode_real_labels, mode_imag_labels = self._mode_real_labels, self._mode_imag_labels
+        x = self.state
+        ee = self.EE
+
         # Set the model state and subglottal pressure (bifurcation parameter)
-        assign_hopf_system_state(x)
         omega = x['omega'][0]
 
         res_state = res.assem_res()
@@ -161,37 +167,41 @@ def make_hopf_system(res, dres, props, ee=None):
         res_omega = x[['omega']].copy()
         res_omega['omega'][0] = bla.dot(ee, x[mode_imag_labels]) - 1.0
 
-        ret_bvec =  bvec.concatenate_vec(
-            [res_state, res_mode_real, res_mode_imag, res_psub, res_omega], labels=[HOPF_LABELS])
-        apply_dirichlet_bvec(ret_bvec)
+        ret_bvec = bvec.concatenate_vec(
+            [res_state, res_mode_real, res_mode_imag, res_psub, res_omega],
+            labels=self.state.labels)
         return ret_bvec
 
-
-    # Make null matrix constants
-    mats = [
-        [bmat.zero_mat(row_size, col_size) for col_size in x[state_labels].bshape[0]]
-        for row_size in x[state_labels].bshape[0]]
-    NULL_MAT_STATE_STATE = bmat.BlockMatrix(mats, labels=(x[state_labels].labels[0], x[state_labels].labels[0]))
-
-    mats = [
-        [bmat.zero_mat(row_size, col_size) for col_size in [1]]
-        for row_size in x[state_labels].bshape[0]]
-    NULL_MAT_STATE_SCALAR = bmat.BlockMatrix(mats, labels=(x[state_labels].labels[0], ('1',)))
-
-    mats = [
-        [bmat.zero_mat(row_size, col_size) for col_size in x[state_labels].bshape[0]]
-        for row_size in [1]]
-    NULL_MAT_SCALAR_STATE = bmat.BlockMatrix(mats, labels=(('1',), x[state_labels].labels[0]))
-
-    mats = [[bmat.diag_mat(1, 0.0)]]
-    NULL_MAT_SCALAR_SCALAR = bmat.BlockMatrix(mats, labels=(('1',), ('1',)))
-
-    def hopf_jac(x):
+    def assem_dres_dstate(self):
         """Return the Hopf system jacobian"""
-        # Set the model state and subglottal pressure (bifurcation parameter)
-        assign_hopf_system_state(x)
+        # Load the needed 'local variables'
+        res, dres = self.res, self.dres
+        state_labels = self._state_labels
+        mode_real_labels, mode_imag_labels = self._mode_real_labels, self._mode_imag_labels
+        x = self.state
+        ee = self.EE
 
-        # build the Jacobian row by row
+        # Make null matrix constants
+        mats = [
+            [bmat.zero_mat(row_size, col_size)
+                for col_size in x[self._state_labels].bshape[0]]
+            for row_size in x[state_labels].bshape[0]]
+        NULL_MAT_STATE_STATE = bmat.BlockMatrix(mats, labels=(x[state_labels].labels[0], x[state_labels].labels[0]))
+
+        mats = [
+            [bmat.zero_mat(row_size, col_size) for col_size in [1]]
+            for row_size in x[state_labels].bshape[0]]
+        NULL_MAT_STATE_SCALAR = bmat.BlockMatrix(mats, labels=(x[state_labels].labels[0], ('1',)))
+
+        mats = [
+            [bmat.zero_mat(row_size, col_size) for col_size in x[state_labels].bshape[0]]
+            for row_size in [1]]
+        NULL_MAT_SCALAR_STATE = bmat.BlockMatrix(mats, labels=(('1',), x[state_labels].labels[0]))
+
+        mats = [[bmat.diag_mat(1, 0.0)]]
+        NULL_MAT_SCALAR_SCALAR = bmat.BlockMatrix(mats, labels=(('1',), ('1',)))
+
+        ## Build the Jacobian row by row
         dres_dstate = res.assem_dres_dstate()
         dres_dstatet = res.assem_dres_dstatet()
 
@@ -244,16 +254,10 @@ def make_hopf_system(res, dres, props, ee=None):
             ]
 
         ret_mats = [jac_row0, jac_row1, jac_row2, jac_row3, jac_row4]
-        ret_labels = (HOPF_LABELS, HOPF_LABELS)
-        ret_bmat = bmat.concatenate_mat(ret_mats, ret_labels)
-
-        apply_dirichlet_bmat(ret_bmat)
+        ret_labels = self.state.labels+self.state.labels
+        ret_bmat = bmat.concatenate_mat(ret_mats, labels=ret_labels)
         return ret_bmat
 
-    info = {
-        'dirichlet_dofs': IDX_DIRICHLET
-    }
-    return x, hopf_res, hopf_jac, apply_dirichlet_bvec, apply_dirichlet_bmat, labels, info
 
 def normalize_eigenvector_by_hopf_condition(evec_real, evec_imag, evec_ref):
     """
