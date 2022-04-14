@@ -523,7 +523,6 @@ def solve_reduced_gradient(functional, hopf: HopfModel):
 
     # Compute the reduced gradient
     dres_dprops = hopf.assem_dres_dprops()
-    dg_dprops = bla.mult_mat_vec(dres_dprops, -dg_dreshopf)
-
-    return dg_dprops
+    drg_dprops = bla.mult_mat_vec(dres_dprops, -dg_dreshopf) + dg_dprops
+    return drg_dprops
 
