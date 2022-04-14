@@ -27,8 +27,7 @@ from slepc4py import SLEPc
 
 # import blocktensor.subops as gops
 import blocktensor.linalg as bla
-from blocktensor import vec as bvec
-from blocktensor import mat as bmat
+from blocktensor import vec as bvec, mat as bmat
 
 import nonlineq as nleq
 
@@ -263,7 +262,7 @@ class HopfModel:
             mode_real_labels,
             mode_imag_labels,
             psub_labels,
-            omega_labels) = hopf.labels_hopf_components
+            omega_labels) = self.labels_hopf_components
 
         # Assemble the matrix by rows
         omega = self.state['omega'][0]
@@ -496,9 +495,8 @@ def solve_ls(res, xfp):
 def solve_reduced_gradient(functional, hopf: HopfModel):
     """Solve for the reduced gradient of a functional"""
 
-    dg_dxhopf = functional.assem_dg_dstate()
     dg_dprops = functional.assem_dg_dprops()
-    dg_dprops_ampl = functional.assem_dg_dprops_ampl()
+    dg_dxhopf = functional.assem_dg_dstate()
     _dg_dxhopf = dg_dxhopf.to_petsc()
 
     dres_dstate_adj = hopf.assem_dres_dstate().tranpose()
@@ -523,7 +521,7 @@ def solve_reduced_gradient(functional, hopf: HopfModel):
 
     # Compute the reduced gradient
     dres_dprops = hopf.assem_dres_dprops()
-    dg_dprops = blinalg.mult_mat_vec(dres_dprops, -dg_dreshopf)
+    dg_dprops = bla.mult_mat_vec(dres_dprops, -dg_dreshopf)
 
     return dg_dprops
 
