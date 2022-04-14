@@ -137,7 +137,7 @@ if __name__ == '__main__':
 
     if TEST_MODAL:
         print("\n-- Test modal analysis of system linearized dynamics --")
-        omegas, eigvecs_real, eigvecs_imag = libhopf.solve_ls(res, xfp_n)
+        omegas, eigvecs_real, eigvecs_imag = libhopf.solve_linear_stability(res, xfp_n)
         print(omegas)
 
     idx_hopf = 3

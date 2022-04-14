@@ -417,7 +417,7 @@ def solve_fixed_point(res, xfp_0, newton_params=None):
     xfp_n, info = nleq.newton_solve(xfp_0, linear_subproblem_fp, norm=bvec.norm, params=newton_params)
     return xfp_n, info
 
-def solve_ls(res, xfp):
+def solve_linear_stability(res, xfp):
     """
     Return a set of modes for the linear stability problem (ls)
 
