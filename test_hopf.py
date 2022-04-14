@@ -113,6 +113,16 @@ def test_assem_dres_dstate(hopf, state0, dstate):
 
     _test_taylor(state0, dstate, hopf_res, hopf_jac)
 
+def test_assem_dres_dprops(hopf, props0, dprops):
+    def hopf_res(x):
+        hopf.set_properties(x)
+        return hopf.assem_res()
+
+    def hopf_jac(x):
+        hopf.set_properties(x)
+        return hopf.assem_dres_dprops()
+
+    _test_taylor(props0, dprops, hopf_res, hopf_jac)
 
 if __name__ == '__main__':
     res, dres = setup_models()
@@ -132,6 +142,7 @@ if __name__ == '__main__':
      psub_labels,
      omega_labels) = model.labels_hopf_components
 
+    ## Test dF/dstate
     x0 = model.state.copy()
     x0[mode_real_labels].set(1.0)
     x0[mode_imag_labels].set(1.0)
@@ -147,4 +158,11 @@ if __name__ == '__main__':
         model.apply_dirichlet_bvec(dx)
 
         test_assem_dres_dstate(model, x0, dx)
+
+    ## Test dF/dprops
+    props0 = props.copy()
+    dprops = props0.copy()
+    dprops['emod'] = 1.0
+    print(f"\n -- Checking Hopf jacobian along emod --")
+    test_assem_dres_dprops(model, props0, dprops)
 

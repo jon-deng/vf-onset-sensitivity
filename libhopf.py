@@ -279,9 +279,11 @@ class HopfModel:
 
         _mats = [bmat.zero_mat(1, m) for m in self.properties.bshape[0]]
         row3 = [
-            bmat.BlockMatrix(_mats, (1, len(_mats)), psub_labels+omega_labels)]
+            bmat.BlockMatrix(_mats, (1, len(_mats)), (psub_labels,)+self.properties.labels)
+            ]
         row4 = [
-            bmat.BlockMatrix(_mats, (1, len(_mats)), omega_labels+omega_labels)]
+            bmat.BlockMatrix(_mats, (1, len(_mats)), (omega_labels,)+self.properties.labels)
+            ]
 
         bmats = [row0, row1, row2, row3, row4]
         return bmat.concatenate_mat(
