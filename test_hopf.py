@@ -101,55 +101,50 @@ def setup_models():
         fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
     return res, dres
 
-def test_hopf(res, dres, props):
-    """Test correctness of the Hopf jacobian/residual"""
-    ## Initialize the Hopf system
-    hopf = HopfModel(res, dres)
+def test_assem_dres_dstate(hopf, state0, dstate):
 
-    (state_labels,
-     mode_real_labels,
-     mode_imag_labels,
-     psub_labels,
-     omega_labels) = hopf.labels_hopf_components
-    # xhopf, hopf_res, hopf_jac, apply_dirichlet_vec, apply_dirichlet_mat, labels, info = make_hopf_system(res, dres, props)
-    # state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels = labels
+    def hopf_res(x):
+        hopf.set_state(x)
+        return hopf.assem_res()
 
-    # HOPF_LABELS = functools.reduce(lambda a, b: a+b, labels)
-    # IDX_DIRICHLET = info['dirichlet_dofs']
+    def hopf_jac(x):
+        hopf.set_state(x)
+        return hopf.assem_dres_dstate()
 
-    xhopf_0 = hopf.state.copy()
-    # xhopf_0.set(1e-5)
-    xhopf_0[mode_real_labels].set(1.0)
-    xhopf_0[mode_imag_labels].set(1.0)
-    xhopf_0[psub_labels[0]].array[:] = PSUB
-    xhopf_0[omega_labels[0]].array[:] = 1.0
-    hopf.apply_dirichlet_bvec(xhopf_0)
+    _test_taylor(state0, dstate, hopf_res, hopf_jac)
 
-    for label in hopf.state.labels[0]:
-        print(f"\n -- Checking Hopf jacobian along {label} --")
-        dxhopf = xhopf_0.copy()
-        dxhopf.set(0)
-        dxhopf[label] = 1e-5
-        hopf.apply_dirichlet_bvec(dxhopf)
-
-        def hopf_res(x):
-            hopf.set_state(x)
-            return hopf.assem_res()
-
-        def hopf_jac(x):
-            hopf.set_state(x)
-            return hopf.assem_dres_dstate()
-
-        _test_taylor(xhopf_0, dxhopf, hopf_res, hopf_jac)
 
 if __name__ == '__main__':
     res, dres = setup_models()
+    model = HopfModel(res, dres)
+
     ## Set model properties
     # get the scalar DOFs associated with the cover/body layers
     region_to_dofs = process_celllabel_to_dofs_from_forms(
         res.solid.forms, res.solid.forms['fspace.scalar'])
 
-    props = res.properties.copy()
+    props = model.properties.copy()
     props = set_properties(props, region_to_dofs, res)
 
-    test_hopf(res, dres, props)
+    (state_labels,
+     mode_real_labels,
+     mode_imag_labels,
+     psub_labels,
+     omega_labels) = model.labels_hopf_components
+
+    x0 = model.state.copy()
+    x0[mode_real_labels].set(1.0)
+    x0[mode_imag_labels].set(1.0)
+    x0[psub_labels[0]].array[:] = PSUB
+    x0[omega_labels[0]].array[:] = 1.0
+    model.apply_dirichlet_bvec(x0)
+
+    for label in model.state.labels[0]:
+        print(f"\n -- Checking Hopf jacobian along {label} --")
+        dx = x0.copy()
+        dx.set(0)
+        dx[label] = 1e-5
+        model.apply_dirichlet_bvec(dx)
+
+        test_assem_dres_dstate(model, x0, dx)
+
