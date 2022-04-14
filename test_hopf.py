@@ -162,6 +162,7 @@ if __name__ == '__main__':
     ## Test dF/dprops
     props0 = props.copy()
     dprops = props0.copy()
+    dprops.set(0.0)
     dprops['emod'] = 1.0
     print(f"\n -- Checking Hopf jacobian along emod --")
     test_assem_dres_dprops(model, props0, dprops)
