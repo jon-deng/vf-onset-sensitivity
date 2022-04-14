@@ -287,7 +287,23 @@ def normalize_eigenvector_amplitude(evec_real, evec_imag):
     return ampl*evec_real, ampl*evec_imag
 
 
-def solve_petsc_lu():
+def solve_petsc_lu(amat, b, out=None, ksp=None):
+    """
+    Solve Ax=b using PETSc's LU solver
+    """
+    if ksp is None:
+        ksp = PETSc.KSP().create()
+        ksp.setType(ksp.Type.PREONLY)
+        ksp.setOperators(amat)
+        ksp.setUp()
+
+        pc = ksp.getPC()
+        pc.setType(pc.Type.LU)
+
+    if out is None:
+        out = amat.getVecRight()
+    ksp.solve(b, out)
+    return out, ksp
 
 def solve_fixed_point(res, xfp_0, newton_params=None):
     """
