@@ -106,10 +106,10 @@ if __name__ == '__main__':
     #     xhopf, hopf_res, hopf_jac,
     #     apply_dirichlet_vec, apply_dirichlet_mat,
     #     labels, info) = libhopf.make_hopf_system(res, dres, props, EREF)
-    (state_labels, 
-        mode_real_labels, 
+    (state_labels,
+        mode_real_labels,
         mode_imag_labels,
-        psub_labels, 
+        psub_labels,
         omega_labels) = hopf.labels_hopf_components
 
     IDX_DIRICHLET = hopf.IDX_DIRICHLET

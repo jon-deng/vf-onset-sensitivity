@@ -21,7 +21,6 @@ delta x_t = exp(omega_r - 1j*omega_i) * zeta
 so the Hopf equations below are slightly different.
 """
 import itertools
-from functools import reduce
 import numpy as np
 from petsc4py import PETSc
 from slepc4py import SLEPc
@@ -286,6 +285,7 @@ def normalize_eigenvector_amplitude(evec_real, evec_imag):
     """
     ampl = 1/(evec_real.norm()**2 + evec_imag.norm()**2)**0.5
     return ampl*evec_real, ampl*evec_imag
+
 
 def solve_fixed_point(res, xfp_0, newton_params=None):
     """
