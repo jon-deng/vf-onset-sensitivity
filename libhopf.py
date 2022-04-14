@@ -87,19 +87,19 @@ class HopfModel:
         self.properties = res.properties.copy()
 
         # These labels represent the 5 sub-blocks in Griewank and Reddien's equations
-        self._component_labels = _component_labels
-        (self._state_labels,
-        self._mode_real_labels,
-        self._mode_imag_labels,
-        self._psub_labels,
-        self._omega_labels) = _component_labels
+        self.labels_hopf_components = _component_labels
+        (self.labels_state,
+            self.labels_mode_real,
+            self.labels_mode_imag,
+            self.labels_psub,
+            self.labels_omega) = _component_labels
 
         self.IDX_DIRICHLET = np.array(
             list(res.solid.forms['bc.dirichlet'].get_boundary_values().keys()),
             dtype=np.int32)
 
         if ee is None:
-            ee = self.state[self._state_labels].copy()
+            ee = self.state[self.labels_state].copy()
             # EBVEC['u'].array[0] = 1.0
             # EBVEC['u'].array[:] = 1.0
             ee.set(1.0)
@@ -113,7 +113,7 @@ class HopfModel:
     def set_state(self, xhopf):
         self.state[:] = xhopf
         for model in (self.res, self.dres):
-            model.set_state(xhopf[self._state_labels])
+            model.set_state(xhopf[self.labels_state])
 
             _control = model.control.copy()
             _control['psub'].array[0] = xhopf['psub'].array[0]
@@ -142,7 +142,7 @@ class HopfModel:
         """Return the Hopf system residual"""
         # Load the needed 'local variables'
         res, dres = self.res, self.dres
-        mode_real_labels, mode_imag_labels = self._mode_real_labels, self._mode_imag_labels
+        mode_real_labels, mode_imag_labels = self.labels_mode_real, self.labels_mode_imag
         x = self.state
         ee = self.EE
 
@@ -176,15 +176,15 @@ class HopfModel:
         """Return the Hopf system jacobian"""
         # Load the needed 'local variables'
         res, dres = self.res, self.dres
-        state_labels = self._state_labels
-        mode_real_labels, mode_imag_labels = self._mode_real_labels, self._mode_imag_labels
+        state_labels = self.labels_state
+        mode_real_labels, mode_imag_labels = self.labels_mode_real, self.labels_mode_imag
         x = self.state
         ee = self.EE
 
         # Make null matrix constants
         mats = [
             [bmat.zero_mat(row_size, col_size)
-                for col_size in x[self._state_labels].bshape[0]]
+                for col_size in x[self.labels_state].bshape[0]]
             for row_size in x[state_labels].bshape[0]]
         NULL_MAT_STATE_STATE = bmat.BlockMatrix(mats, labels=(x[state_labels].labels[0], x[state_labels].labels[0]))
 

@@ -110,7 +110,7 @@ def test_hopf(res, dres, props):
      mode_real_labels,
      mode_imag_labels,
      psub_labels,
-     omega_labels) = hopf._component_labels
+     omega_labels) = hopf.labels_hopf_components
     # xhopf, hopf_res, hopf_jac, apply_dirichlet_vec, apply_dirichlet_mat, labels, info = make_hopf_system(res, dres, props)
     # state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels = labels
 
