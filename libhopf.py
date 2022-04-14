@@ -257,6 +257,37 @@ class HopfModel:
         ret_bmat = bmat.concatenate_mat(ret_mats, labels=ret_labels)
         return ret_bmat
 
+    def assem_dres_dprops(self):
+        res, dres = self.res, self.dres
+        (state_labels,
+            mode_real_labels,
+            mode_imag_labels,
+            psub_labels,
+            omega_labels) = hopf.labels_hopf_components
+
+        # Assemble the matrix by rows
+        omega = self.state['omega'][0]
+
+        row0 = [res.assem_dres_dprops()]
+
+        dres.set_dstate(self.state[mode_real_labels])
+        dres.set_dstatet(-omega*self.state[mode_imag_labels])
+        row1 = [dres.assem_dres_dprops()]
+
+        dres.set_dstate(self.state[mode_imag_labels])
+        dres.set_dstatet(omega*self.state[mode_real_labels])
+        row2 = [dres.assem_dres_dprops()]
+
+        _mats = [bmat.zero_mat(1, m) for m in self.properties.bshape[0]]
+        row3 = [
+            bmat.BlockMatrix(_mats, (1, len(_mats)), psub_labels+omega_labels)]
+        row4 = [
+            bmat.BlockMatrix(_mats, (1, len(_mats)), omega_labels+omega_labels)]
+
+        bmats = [row0, row1, row2, row3, row4]
+        return bmat.concatenate_mat(
+            bmats, labels=self.state.labels+self.properties.labels)
+
 
 def normalize_eigenvector_by_hopf_condition(evec_real, evec_imag, evec_ref):
     """
