@@ -287,6 +287,8 @@ def normalize_eigenvector_amplitude(evec_real, evec_imag):
     return ampl*evec_real, ampl*evec_imag
 
 
+def solve_petsc_lu():
+
 def solve_fixed_point(res, xfp_0, newton_params=None):
     """
     Solve for a fixed-point
@@ -443,3 +445,38 @@ def solve_ls(res, xfp):
         eigvecs_imag[jj].set_vec(eigvec_imag)
 
     return omegas, eigvecs_real, eigvecs_imag
+
+def solve_reduced_gradient(functional, hopf: HopfModel):
+    """Solve for the reduced gradient of a functional"""
+
+    dg_dxhopf = functional.assem_dg_dstate()
+    dg_dprops = functional.assem_dg_dprops()
+    dg_dprops_ampl = functional.assem_dg_dprops_ampl()
+    _dg_dxhopf = dg_dxhopf.to_petsc()
+
+    dres_dstate_adj = hopf.assem_dres_dstate().tranpose()
+    hopf.apply_dirichlet_bmat(dres_dstate_adj)
+    _dres_dstate_adj = dres_dstate_adj.to_petsc()
+
+    dg_dreshopf = dg_dxhopf.copy()
+    _dg_dreshopf = _dres_dstate_adj.getVecRight()
+
+    # Solve the adjoint problem for the 'adjoint state'
+    ksp = PETSc.KSP().create()
+    ksp.setType(ksp.Type.PREONLY)
+
+    pc = ksp.getPC()
+    pc.setType(pc.Type.LU)
+
+    ksp.setOperators(_dres_dstate_adj)
+    ksp.setUp()
+    ksp.solve(_dg_dxhopf, _dg_dreshopf)
+
+    dg_dreshopf[:] = _dg_dreshopf
+
+    # Compute the reduced gradient
+    dres_dprops = hopf.assem_dres_dprops()
+    dg_dprops = blinalg.mult_mat_vec(dres_dprops, -dg_dreshopf)
+
+    return dg_dprops
+
