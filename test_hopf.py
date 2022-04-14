@@ -5,14 +5,14 @@ from os import path
 import numpy as np
 import functools
 
-from femvf.dynamicalmodels import solid as sldm, fluid as fldm
+from femvf.models.dynamical import solid as sldm, fluid as fldm
 from femvf.load import load_dynamical_fsi_model
 from femvf.meshutils import process_celllabel_to_dofs_from_forms
 
 import blocktensor.subops as gops
 import blocktensor.linalg as bla
 
-from libhopf import make_hopf_system
+from libhopf import HopfModel
 
 # slepc4py.init(sys.argv)
 
@@ -104,26 +104,41 @@ def setup_models():
 def test_hopf(res, dres, props):
     """Test correctness of the Hopf jacobian/residual"""
     ## Initialize the Hopf system
-    xhopf, hopf_res, hopf_jac, apply_dirichlet_vec, apply_dirichlet_mat, labels, info = make_hopf_system(res, dres, props)
-    state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels = labels
+    hopf = HopfModel(res, dres)
 
-    HOPF_LABELS = functools.reduce(lambda a, b: a+b, labels)
-    IDX_DIRICHLET = info['dirichlet_dofs']
+    (state_labels,
+     mode_real_labels,
+     mode_imag_labels,
+     psub_labels,
+     omega_labels) = hopf._component_labels
+    # xhopf, hopf_res, hopf_jac, apply_dirichlet_vec, apply_dirichlet_mat, labels, info = make_hopf_system(res, dres, props)
+    # state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels = labels
 
-    xhopf_0 = xhopf.copy()
+    # HOPF_LABELS = functools.reduce(lambda a, b: a+b, labels)
+    # IDX_DIRICHLET = info['dirichlet_dofs']
+
+    xhopf_0 = hopf.state.copy()
     # xhopf_0.set(1e-5)
     xhopf_0[mode_real_labels].set(1.0)
     xhopf_0[mode_imag_labels].set(1.0)
-    xhopf_0['psub'].array[:] = PSUB
-    xhopf_0['omega'].array[:] = 1.0
-    apply_dirichlet_vec(xhopf_0)
+    xhopf_0[psub_labels[0]].array[:] = PSUB
+    xhopf_0[omega_labels[0]].array[:] = 1.0
+    hopf.apply_dirichlet_bvec(xhopf_0)
 
-    for label in HOPF_LABELS:
+    for label in hopf.state.labels[0]:
         print(f"\n -- Checking Hopf jacobian along {label} --")
-        dxhopf = xhopf.copy()
+        dxhopf = xhopf_0.copy()
         dxhopf.set(0)
         dxhopf[label] = 1e-5
-        apply_dirichlet_vec(dxhopf)
+        hopf.apply_dirichlet_bvec(dxhopf)
+
+        def hopf_res(x):
+            hopf.set_state(x)
+            return hopf.assem_res()
+
+        def hopf_jac(x):
+            hopf.set_state(x)
+            return hopf.assem_dres_dstate()
 
         _test_taylor(xhopf_0, dxhopf, hopf_res, hopf_jac)
 
