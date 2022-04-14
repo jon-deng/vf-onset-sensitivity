@@ -92,28 +92,33 @@ if __name__ == '__main__':
 
     props = res.properties.copy()
     props = set_properties(props, region_to_dofs, res)
-    res.set_properties(props)
-    dres.set_properties(props)
+    # res.set_properties(props)
+    # dres.set_properties(props)
 
     ## Initialize the Hopf system
     # This vector normalizes the real/imag components of the unstable eigenvector
     EREF = res.state.copy()
     EREF['q'].set(1.0)
     EREF.set(1.0)
-    (
-        xhopf, hopf_res, hopf_jac,
-        apply_dirichlet_vec, apply_dirichlet_mat,
-        labels, info) = libhopf.make_hopf_system(res, dres, props, EREF)
-    (
-        state_labels, mode_real_labels, mode_imag_labels,
-        psub_labels, omega_labels) = labels
+    hopf = libhopf.HopfModel(res, dres, ee=EREF)
+    hopf.set_properties(props)
+    # (
+    #     xhopf, hopf_res, hopf_jac,
+    #     apply_dirichlet_vec, apply_dirichlet_mat,
+    #     labels, info) = libhopf.make_hopf_system(res, dres, props, EREF)
+    (state_labels, 
+        mode_real_labels, 
+        mode_imag_labels,
+        psub_labels, 
+        omega_labels) = hopf.labels_hopf_components
 
-    IDX_DIRICHLET = info['dirichlet_dofs']
+    IDX_DIRICHLET = hopf.IDX_DIRICHLET
 
     ## Test solving for fixed-points
     _control = res.control.copy()
     _control['psub'] = PSUB
     res.set_control(_control)
+    res.set_properties(props)
 
     if TEST_FP:
         print("\n-- Test solution of fixed-points --")
@@ -125,7 +130,7 @@ if __name__ == '__main__':
         print(info)
 
     ## Test solving for stabilty (modal analysis of the jacobian)
-    _XHOPF = xhopf.copy()
+    _XHOPF = hopf.state.copy()
     _XHOPF[state_labels] = xfp_n
     _XHOPF['psub'].array[:] = PSUB
     _XHOPF['omega'].array[:] = 1.0 # have to set omega=1 to get correct jacobian
@@ -142,21 +147,30 @@ if __name__ == '__main__':
 
     ## Test solving the Hopf system for the Hopf bifurcation
     # set the initial guess based on the stability analysis and fixed-point solution
-    xhopf_0 = xhopf.copy()
+    xhopf_0 = hopf.state.copy()
     xhopf_0[state_labels] = xfp_n
-    xhopf_0['psub'].array[:] = PSUB
-    xhopf_0['omega'].array[:] = omega_hopf
+    xhopf_0[psub_labels[0]].array[:] = PSUB
+    xhopf_0[omega_labels[0]].array[:] = omega_hopf
 
-    xmode_real, xmode_imag = libhopf.normalize_eigenvector_by_hopf_condition(mode_real_hopf, mode_imag_hopf, EREF)
+    xmode_real, xmode_imag = libhopf.normalize_eigenvector_by_hopf_condition(
+        mode_real_hopf, mode_imag_hopf, EREF)
     xhopf_0[mode_real_labels] = xmode_real
     xhopf_0[mode_imag_labels] = xmode_imag
 
     def linear_subproblem_hopf(xhopf_n):
         """Linear subproblem of a Newton solver"""
+        def hopf_res(x):
+            hopf.set_state(x)
+            return hopf.assem_res()
+
+        def hopf_jac(x):
+            hopf.set_state(x)
+            return hopf.assem_dres_dstate()
+
         res_n = hopf_res(xhopf_n)
         jac_n = hopf_jac(xhopf_n)
-        apply_dirichlet_vec(res_n)
-        apply_dirichlet_mat(jac_n)
+        hopf.apply_dirichlet_bvec(res_n)
+        hopf.apply_dirichlet_bmat(jac_n)
 
         def assem_res():
             """Return residual"""
