@@ -21,7 +21,7 @@ class GenericFunctional:
         self.model = model
 
         self.state = self.model.state
-        self.properties = self.model.props
+        self.properties = self.model.properties
 
         self.camp = bvec.convert_bvec_to_petsc(
             bvec.BlockVector([np.zeros(1), np.zeros(1)], (2,), (('amp', 'phase'),))
