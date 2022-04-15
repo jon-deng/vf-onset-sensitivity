@@ -130,10 +130,6 @@ if __name__ == '__main__':
 
     ## Test solving for stabilty (modal analysis of the jacobian)
     print("\n-- Test modal analysis of system linearized dynamics --")
-    _XHOPF = hopf.state.copy()
-    _XHOPF[state_labels] = xfp_n
-    _XHOPF['psub'].array[:] = PSUB
-    _XHOPF['omega'].array[:] = 1.0 # have to set omega=1 to get correct jacobian
 
     omegas, eigvecs_real, eigvecs_imag = libhopf.solve_linear_stability(res, xfp_n)
     print(omegas)
