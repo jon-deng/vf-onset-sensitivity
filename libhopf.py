@@ -20,6 +20,7 @@ adopted by Griewank and Reddien where they assume
 delta x_t = exp(omega_r - 1j*omega_i) * zeta
 so the Hopf equations below are slightly different.
 """
+import typing
 import itertools
 import numpy as np
 from petsc4py import PETSc
@@ -31,9 +32,11 @@ from blocktensor import vec as bvec, mat as bmat
 
 import nonlineq as nleq
 
+import libfunctionals as libfunc
+
 # pylint: disable=invalid-name
 
-def hopf_state(res):
+def _hopf_state(res):
     """
     Return the state vector for a Hopf system
     """
@@ -65,7 +68,6 @@ def hopf_state(res):
     labels = [state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels]
     return ret, labels
 
-
 class HopfModel:
     """
     Represents the system of equations defining a Hopf bifurcation
@@ -81,7 +83,7 @@ class HopfModel:
         self.res = res
         self.dres = dres
 
-        self.state, _component_labels = hopf_state(res)
+        self.state, _component_labels = _hopf_state(res)
         self.properties = res.properties.copy()
 
         # These labels represent the 5 sub-blocks in Griewank and Reddien's equations
@@ -417,6 +419,48 @@ def solve_fixed_point(res, xfp_0, newton_params=None):
     xfp_n, info = nleq.newton_solve(xfp_0, linear_subproblem_fp, norm=bvec.norm, params=newton_params)
     return xfp_n, info
 
+def solve_hopf_newton(
+        hopf: HopfModel,
+        xhopf_0: bvec.BlockVector,
+        out=None, newton_params=None) -> (bvec.BlockVector, typing.Dict):
+    """Solve the nonlinear Hopf problem using a newton method"""
+    if out is None:
+        out = xhopf_0.copy()
+
+    def linear_subproblem(xhopf_n):
+        """Linear subproblem of a Newton solver"""
+        hopf.set_state(xhopf_n)
+
+        res_n = hopf.assem_res()
+        jac_n = hopf.assem_dres_dstate()
+        hopf.apply_dirichlet_bvec(res_n)
+        hopf.apply_dirichlet_bmat(jac_n)
+
+        def assem_res():
+            """Return residual"""
+            return res_n
+
+        def solve(rhs_n):
+            """Return jac^-1 res"""
+            _rhs_n = rhs_n.to_petsc()
+            _jac_n = jac_n.to_petsc()
+            _dx_n = _jac_n.getVecRight()
+
+            _dx_n, _ = solve_petsc_lu(_jac_n, _rhs_n, out=_dx_n)
+
+            dx_n = xhopf_n.copy()
+            dx_n.set_vec(_dx_n)
+            return dx_n
+        return assem_res, solve
+
+    if newton_params is None:
+        newton_params = {
+            'maximum_iterations': 20
+        }
+
+    out[:], info = nleq.newton_solve(xhopf_0, linear_subproblem, norm=bvec.norm, params=newton_params)
+    return out, info
+
 def solve_linear_stability(res, xfp):
     """
     Return a set of modes for the linear stability problem (ls)
@@ -494,35 +538,26 @@ def solve_linear_stability(res, xfp):
 
     return omegas, eigvecs_real, eigvecs_imag
 
-def solve_reduced_gradient(functional, hopf: HopfModel):
+def solve_reduced_gradient(
+        functional: libfunc.GenericFunctional,
+        hopf: HopfModel) -> bvec.BlockVector:
     """Solve for the reduced gradient of a functional"""
 
     dg_dprops = functional.assem_dg_dprops()
-    dg_dxhopf = functional.assem_dg_dstate()
-    _dg_dxhopf = dg_dxhopf.to_petsc()
+    dg_dx = functional.assem_dg_dstate()
+    _dg_dx = dg_dx.to_petsc()
 
-    dres_dstate_adj = hopf.assem_dres_dstate().tranpose()
-    hopf.apply_dirichlet_bmat(dres_dstate_adj)
-    _dres_dstate_adj = dres_dstate_adj.to_petsc()
+    dres_dx_adj = hopf.assem_dres_dstate().tranpose()
+    hopf.apply_dirichlet_bmat(dres_dx_adj)
+    _dres_dx_adj = dres_dx_adj.to_petsc()
 
-    dg_dreshopf = dg_dxhopf.copy()
-    _dg_dreshopf = _dres_dstate_adj.getVecRight()
+    dg_dres = dg_dx.copy()
+    _dg_dres = _dres_dx_adj.getVecRight()
 
     # Solve the adjoint problem for the 'adjoint state'
-    ksp = PETSc.KSP().create()
-    ksp.setType(ksp.Type.PREONLY)
-
-    pc = ksp.getPC()
-    pc.setType(pc.Type.LU)
-
-    ksp.setOperators(_dres_dstate_adj)
-    ksp.setUp()
-    ksp.solve(_dg_dxhopf, _dg_dreshopf)
-
-    dg_dreshopf[:] = _dg_dreshopf
+    _dg_dres = solve_petsc_lu(_dres_dx_adj, _dg_dx, out=_dg_dres)
+    dg_dres[:] = _dg_dres
 
     # Compute the reduced gradient
     dres_dprops = hopf.assem_dres_dprops()
-    drg_dprops = bla.mult_mat_vec(dres_dprops, -dg_dreshopf) + dg_dprops
-    return drg_dprops
-
+    return bla.mult_mat_vec(dres_dprops, -dg_dres) + dg_dprops

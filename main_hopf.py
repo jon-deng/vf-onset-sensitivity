@@ -115,30 +115,28 @@ if __name__ == '__main__':
     IDX_DIRICHLET = hopf.IDX_DIRICHLET
 
     ## Test solving for fixed-points
+    print("\n-- Test solution of fixed-points --")
+
     _control = res.control.copy()
     _control['psub'] = PSUB
     res.set_control(_control)
     res.set_properties(props)
 
-    if TEST_FP:
-        print("\n-- Test solution of fixed-points --")
-        newton_params = {
-            'maximum_iterations': 20
-        }
-        xfp_0 = res.state.copy()
-        xfp_n, info = libhopf.solve_fixed_point(res, xfp_0, newton_params=newton_params)
-        print(info)
+    newton_params = {
+        'maximum_iterations': 20
+    }
+    xfp_0 = res.state.copy()
+    xfp_n, info = libhopf.solve_fixed_point(res, xfp_0, newton_params=newton_params)
 
     ## Test solving for stabilty (modal analysis of the jacobian)
+    print("\n-- Test modal analysis of system linearized dynamics --")
     _XHOPF = hopf.state.copy()
     _XHOPF[state_labels] = xfp_n
     _XHOPF['psub'].array[:] = PSUB
     _XHOPF['omega'].array[:] = 1.0 # have to set omega=1 to get correct jacobian
 
-    if TEST_MODAL:
-        print("\n-- Test modal analysis of system linearized dynamics --")
-        omegas, eigvecs_real, eigvecs_imag = libhopf.solve_linear_stability(res, xfp_n)
-        print(omegas)
+    omegas, eigvecs_real, eigvecs_imag = libhopf.solve_linear_stability(res, xfp_n)
+    print(omegas)
 
     idx_hopf = 3
     omega_hopf = abs(omegas[idx_hopf].imag)
@@ -147,6 +145,8 @@ if __name__ == '__main__':
 
     ## Test solving the Hopf system for the Hopf bifurcation
     # set the initial guess based on the stability analysis and fixed-point solution
+    print("\n-- Test solution of Hopf system for Hopf bifurcation point --")
+
     xhopf_0 = hopf.state.copy()
     xhopf_0[state_labels] = xfp_n
     xhopf_0[psub_labels[0]].array[:] = PSUB
@@ -157,56 +157,12 @@ if __name__ == '__main__':
     xhopf_0[mode_real_labels] = xmode_real
     xhopf_0[mode_imag_labels] = xmode_imag
 
-    def linear_subproblem_hopf(xhopf_n):
-        """Linear subproblem of a Newton solver"""
-        def hopf_res(x):
-            hopf.set_state(x)
-            return hopf.assem_res()
-
-        def hopf_jac(x):
-            hopf.set_state(x)
-            return hopf.assem_dres_dstate()
-
-        res_n = hopf_res(xhopf_n)
-        jac_n = hopf_jac(xhopf_n)
-        hopf.apply_dirichlet_bvec(res_n)
-        hopf.apply_dirichlet_bmat(jac_n)
-
-        def assem_res():
-            """Return residual"""
-            return res_n
-
-        def solve(rhs_n):
-            """Return jac^-1 res"""
-            _rhs_n = rhs_n.to_petsc()
-            _jac_n = jac_n.to_petsc()
-            _dx_n = _jac_n.getVecRight()
-
-            ksp = PETSc.KSP().create()
-            ksp.setType(ksp.Type.PREONLY)
-            ksp.setOperators(_jac_n)
-
-            pc = ksp.getPC()
-            pc.setType(pc.Type.LU)
-
-            pc.setUp()
-            ksp.setUp()
-            ksp.solve(_rhs_n, _dx_n)
-
-            dx_n = xhopf_n.copy()
-            dx_n.set_vec(_dx_n)
-            return dx_n
-        return assem_res, solve
-
-    if TEST_HOPF_BIFURCATION:
-        print("\n-- Test solution of Hopf system for Hopf bifurcation point --")
-
-        newton_params = {
-            'maximum_iterations': 20
-        }
-        xhopf_n, info = nleq.newton_solve(xhopf_0, linear_subproblem_hopf, norm=bvec.norm, params=newton_params)
-        print(xhopf_n.norm())
-        print(info)
+    newton_params = {
+        'maximum_iterations': 20
+    }
+    xhopf_n, info = libhopf.solve_hopf_newton(hopf, xhopf_0)
+    print(xhopf_n.norm())
+    print(info)
 
     with h5py.File("out/hopf_state.h5", mode='w') as f:
         h5utils.create_resizable_block_vector_group(
