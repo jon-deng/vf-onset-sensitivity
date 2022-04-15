@@ -26,7 +26,7 @@ import numpy as np
 from petsc4py import PETSc
 from slepc4py import SLEPc
 
-# import blocktensor.subops as gops
+import blocktensor.subops as gops
 import blocktensor.linalg as bla
 from blocktensor import vec as bvec, mat as bmat
 
@@ -321,24 +321,6 @@ def normalize_eigenvector_amplitude(evec_real, evec_imag):
     return ampl*evec_real, ampl*evec_imag
 
 
-def solve_petsc_lu(amat, b, out=None, ksp=None):
-    """
-    Solve Ax=b using PETSc's LU solver
-    """
-    if ksp is None:
-        ksp = PETSc.KSP().create()
-        ksp.setType(ksp.Type.PREONLY)
-        ksp.setOperators(amat)
-        ksp.setUp()
-
-        pc = ksp.getPC()
-        pc.setType(pc.Type.LU)
-
-    if out is None:
-        out = amat.getVecRight()
-    ksp.solve(b, out)
-    return out, ksp
-
 def solve_fixed_point(res, xfp_0, newton_params=None):
     """
     Solve for a fixed-point
@@ -446,7 +428,7 @@ def solve_hopf_newton(
             _jac_n = jac_n.to_petsc()
             _dx_n = _jac_n.getVecRight()
 
-            _dx_n, _ = solve_petsc_lu(_jac_n, _rhs_n, out=_dx_n)
+            _dx_n, _ = gops.solve_petsc_lu(_jac_n, _rhs_n, out=_dx_n)
 
             dx_n = xhopf_n.copy()
             dx_n.set_vec(_dx_n)
@@ -555,7 +537,7 @@ def solve_reduced_gradient(
     _dg_dres = _dres_dx_adj.getVecRight()
 
     # Solve the adjoint problem for the 'adjoint state'
-    _dg_dres = solve_petsc_lu(_dres_dx_adj, _dg_dx, out=_dg_dres)
+    _dg_dres = gops.solve_petsc_lu(_dres_dx_adj, _dg_dx, out=_dg_dres)
     dg_dres[:] = _dg_dres
 
     # Compute the reduced gradient
