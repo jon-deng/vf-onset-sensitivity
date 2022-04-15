@@ -3,13 +3,14 @@ Testing code for finding hopf bifurcations of coupled FE VF models
 """
 # import sys
 from os import path
+import warnings
 import h5py
 
 from femvf.models.dynamical import solid as sldm, fluid as fldm
 from femvf.load import load_dynamical_fsi_model
 from femvf.meshutils import process_celllabel_to_dofs_from_forms
 import blocktensor.subops as gops
-from blocktensor import h5utils
+from blocktensor import h5utils, linalg as bla
 
 import libhopf, libfunctionals as libfuncs
 from test_hopf import _test_taylor
@@ -156,12 +157,15 @@ def test_reduced_gradient(func, hopf, props0, dprops, xhopf0):
     """
 
     def res(props):
+        hopf.set_properties(props)
         x , info = libhopf.solve_hopf_newton(hopf, xhopf0)
+
         func.set_state(x)
         func.set_properties(props)
         return func.assem_g()
 
     def jac(props):
+        hopf.set_properties(props)
         x, info = libhopf.solve_hopf_newton(hopf, xhopf0)
 
         for xx in (func, hopf):
@@ -170,7 +174,7 @@ def test_reduced_gradient(func, hopf, props0, dprops, xhopf0):
 
         return libhopf.solve_reduced_gradient(func, hopf)
 
-    _test_taylor(props0, dprops, res, jac)
+    _test_taylor(props0, dprops, res, jac, action=bla.dot, norm=lambda x: x)
 
 if __name__ == '__main__':
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
@@ -180,6 +184,11 @@ if __name__ == '__main__':
     func = libfuncs.OnsetPressureFunctional(hopf)
 
     dprops = props0.copy()
+    dprops.set(0)
     dprops['emod'].set(1.0)
 
-    test_reduced_gradient(func, hopf, props0, dprops, xhopf)
+    with warnings.catch_warnings():
+        warnings.filterwarnings('error', category=UserWarning)
+
+        # warnings.warn("testing", UserWarning)
+        test_reduced_gradient(func, hopf, props0, dprops, xhopf)

@@ -53,23 +53,28 @@ def set_properties(props, region_to_dofs, res):
 
     return props
 
-def _test_taylor(x0, dx, res, jac):
+def _test_taylor(x0, dx, res, jac, action=None, norm=None):
     """
     Test that the Taylor convergence order is 2
     """
+    if action is None:
+        action = bla.mult_mat_vec
+    if norm is None:
+        norm = bla.norm
+
     alphas = 2**np.arange(4)[::-1] # start with the largest step and move to original
     res_ns = [res(x0+alpha*dx) for alpha in alphas]
     res_0 = res(x0)
 
     dres_exacts = [res_n-res_0 for res_n in res_ns]
-    dres_linear = bla.mult_mat_vec(jac(x0), dx)
+    dres_linear = action(jac(x0), dx)
 
     errs = [
-        (dres_exact-alpha*dres_linear).norm()
+        norm(dres_exact-alpha*dres_linear)
         for dres_exact, alpha in zip(dres_exacts, alphas)
     ]
     magnitudes = [
-        1/2*(dres_exact+alpha*dres_linear).norm()
+        1/2*norm(dres_exact+alpha*dres_linear)
         for dres_exact, alpha in zip(dres_exacts, alphas)
     ]
     with np.errstate(invalid='ignore'):
@@ -80,7 +85,7 @@ def _test_taylor(x0, dx, res, jac):
         rel_errs = np.array(errs)/np.array(magnitudes)*100
 
     print("")
-    print(f"||dres_linear||, ||dres_exact|| = {dres_linear.norm()}, {dres_exacts[-1].norm()}")
+    print(f"||dres_linear||, ||dres_exact|| = {norm(dres_linear)}, {norm(dres_exacts[-1])}")
     print("Relative errors: ", rel_errs)
     print("Convergence rates: ", np.array(conv_rates))
 

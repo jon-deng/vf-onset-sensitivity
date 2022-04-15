@@ -529,7 +529,7 @@ def solve_reduced_gradient(
     dg_dx = functional.assem_dg_dstate()
     _dg_dx = dg_dx.to_petsc()
 
-    dres_dx_adj = hopf.assem_dres_dstate().tranpose()
+    dres_dx_adj = hopf.assem_dres_dstate().transpose()
     hopf.apply_dirichlet_bmat(dres_dx_adj)
     _dres_dx_adj = dres_dx_adj.to_petsc()
 
@@ -537,9 +537,9 @@ def solve_reduced_gradient(
     _dg_dres = _dres_dx_adj.getVecRight()
 
     # Solve the adjoint problem for the 'adjoint state'
-    _dg_dres = gops.solve_petsc_lu(_dres_dx_adj, _dg_dx, out=_dg_dres)
-    dg_dres[:] = _dg_dres
+    _dg_dres, _ = gops.solve_petsc_lu(_dres_dx_adj, _dg_dx, out=_dg_dres)
+    dg_dres.set_vec(_dg_dres)
 
     # Compute the reduced gradient
     dres_dprops = hopf.assem_dres_dprops()
-    return bla.mult_mat_vec(dres_dprops, -dg_dres) + dg_dprops
+    return bla.mult_mat_vec(dres_dprops.transpose(), -dg_dres) + dg_dprops
