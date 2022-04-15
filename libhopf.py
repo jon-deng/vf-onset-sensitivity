@@ -32,7 +32,7 @@ from blocktensor import vec as bvec, mat as bmat
 
 import nonlineq as nleq
 
-import libfunctionals as libfunc
+# import libfunctionals as libfunc
 
 # pylint: disable=invalid-name
 
@@ -539,7 +539,7 @@ def solve_linear_stability(res, xfp):
     return omegas, eigvecs_real, eigvecs_imag
 
 def solve_reduced_gradient(
-        functional: libfunc.GenericFunctional,
+        functional: 'libfunctionals.GenericFunctional',
         hopf: HopfModel) -> bvec.BlockVector:
     """Solve for the reduced gradient of a functional"""
 
