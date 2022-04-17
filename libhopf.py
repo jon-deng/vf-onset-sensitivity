@@ -51,7 +51,6 @@ def _hopf_state(res):
     _mode_imag_labels = [label+'_mode_imag' for label in X_state.labels[0]]
     X_mode_imag = bvec.BlockVector(_mode_imag_vecs, labels=[_mode_imag_labels])
 
-    # breakpoint()
     X_psub = res.control[['psub']].copy()
 
     _omega = X_psub['psub'].copy()
@@ -171,6 +170,8 @@ class HopfModel:
         ret_bvec = bvec.concatenate_vec(
             [res_state, res_mode_real, res_mode_imag, res_psub, res_omega],
             labels=self.state.labels)
+
+        self.apply_dirichlet_bvec(ret_bvec)
         return ret_bvec
 
     def assem_dres_dstate(self):

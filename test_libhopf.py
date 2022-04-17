@@ -142,7 +142,6 @@ def setup_hopf_state(mesh_path):
 
 def test_solve_hopf_newton(hopf, xhopf0):
     xhopf, info = libhopf.solve_hopf_newton(hopf, xhopf0)
-    print(info)
 
 def test_solve_reduced_gradient(func, hopf, props0, dprops, xhopf0):
     """
@@ -222,7 +221,7 @@ if __name__ == '__main__':
     with warnings.catch_warnings():
         warnings.filterwarnings('error', category=UserWarning)
 
-        test_solve_hopf_newton(hopf, xhopf0)
+        test_solve_hopf_newton(hopf, xhopf)
 
         # warnings.warn("testing", UserWarning)
         # test_solve_reduced_gradient(func, hopf, props0, dprops, xhopf)
