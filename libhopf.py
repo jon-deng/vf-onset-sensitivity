@@ -84,7 +84,7 @@ class HopfModel:
         self.dres = dres
 
         self.state, _component_labels = _hopf_state(res)
-        self.properties = res.properties.copy()
+        self.props = res.props.copy()
 
         # These labels represent the 5 sub-blocks in Griewank and Reddien's equations
         self.labels_hopf_components = _component_labels
@@ -105,10 +105,10 @@ class HopfModel:
             ee.set(1.0)
         self.EE = ee
 
-    def set_properties(self, props):
-        self.properties[:] = props
+    def set_props(self, props):
+        self.props[:] = props
         for model in (self.res, self.dres):
-            model.set_properties(props)
+            model.set_props(props)
 
     def set_state(self, xhopf):
         self.state[:] = xhopf
@@ -281,17 +281,17 @@ class HopfModel:
         dres.set_dstatet(omega*self.state[mode_real_labels])
         row2 = [dres.assem_dres_dprops()]
 
-        _mats = [bmat.zero_mat(1, m) for m in self.properties.bshape[0]]
+        _mats = [bmat.zero_mat(1, m) for m in self.props.bshape[0]]
         row3 = [
-            bmat.BlockMatrix(_mats, (1, len(_mats)), (psub_labels,)+self.properties.labels)
+            bmat.BlockMatrix(_mats, (1, len(_mats)), (psub_labels,)+self.props.labels)
             ]
         row4 = [
-            bmat.BlockMatrix(_mats, (1, len(_mats)), (omega_labels,)+self.properties.labels)
+            bmat.BlockMatrix(_mats, (1, len(_mats)), (omega_labels,)+self.props.labels)
             ]
 
         bmats = [row0, row1, row2, row3, row4]
         return bmat.concatenate_mat(
-            bmats, labels=self.state.labels+self.properties.labels)
+            bmats, labels=self.state.labels+self.props.labels)
 
 
 def normalize_eigenvector_by_hopf_condition(evec_real, evec_imag, evec_ref):
@@ -576,7 +576,7 @@ class ReducedGradient:
         self.res = res
 
         self._hist_state = [self.res.state.copy()]
-        self._hist_props = [self.res.properties.copy()]
+        self._hist_props = [self.res.props.copy()]
 
         if newton_params is None:
             newton_params = {}
@@ -584,7 +584,7 @@ class ReducedGradient:
 
     @property
     def properties(self):
-        return self.res.properties
+        return self.res.props
 
     @property
     def hist_props(self):
@@ -608,7 +608,7 @@ class ReducedGradient:
             self.res, old_state, newton_params=self._newton_params)
 
         self.hist_state.append(new_state.copy())
-        self.hist_props.append(self.properties.copy())
+        self.hist_props.append(self.props.copy())
 
         self.res.set_state(new_state)
 
@@ -618,11 +618,11 @@ class ReducedGradient:
         """Set the complex amplitude"""
         self.func.set_camp(camp)
 
-    def set_properties(self, props):
+    def set_props(self, props):
         """
         Set the model properties
         """
-        self.func.set_properties(props)
+        self.func.set_props(props)
         _ = self._update_hopf()
 
     def assem_g(self):

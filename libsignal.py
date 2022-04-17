@@ -18,8 +18,8 @@ def make_glottal_width(res, dres, num_points=100):
     IDX_U = slice(0, res.state['u'].size)
     IDX_MEDIAL = res.fsimap.dofs_solid
 
-    YMID = float(res.properties['ymid'][0])
-    ZETA = float(res.properties['zeta_min'][0])
+    YMID = float(res.props['ymid'][0])
+    ZETA = float(res.props['zeta_min'][0])
 
     S = np.array(dres.fluid.s) # can also be res
 

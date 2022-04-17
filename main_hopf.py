@@ -48,7 +48,7 @@ def setup_models(mesh_path):
 
     return res, dres
 
-def set_properties(props, region_to_dofs, res):
+def set_props(props, region_to_dofs, res):
     """
     Set the model properties
     """
@@ -90,10 +90,10 @@ if __name__ == '__main__':
     region_to_dofs = process_celllabel_to_dofs_from_forms(
         res.solid.forms, res.solid.forms['fspace.scalar'])
 
-    props = res.properties.copy()
-    props = set_properties(props, region_to_dofs, res)
-    # res.set_properties(props)
-    # dres.set_properties(props)
+    props = res.props.copy()
+    props = set_props(props, region_to_dofs, res)
+    # res.set_props(props)
+    # dres.set_props(props)
 
     ## Initialize the Hopf system
     # This vector normalizes the real/imag components of the unstable eigenvector
@@ -101,7 +101,7 @@ if __name__ == '__main__':
     EREF['q'].set(1.0)
     EREF.set(1.0)
     hopf = libhopf.HopfModel(res, dres, ee=EREF)
-    hopf.set_properties(props)
+    hopf.set_props(props)
     # (
     #     xhopf, hopf_res, hopf_jac,
     #     apply_dirichlet_vec, apply_dirichlet_mat,
@@ -120,7 +120,7 @@ if __name__ == '__main__':
     _control = res.control.copy()
     _control['psub'] = PSUB
     res.set_control(_control)
-    res.set_properties(props)
+    res.set_props(props)
 
     newton_params = {
         'maximum_iterations': 20

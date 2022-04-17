@@ -21,7 +21,7 @@ class GenericFunctional:
         self.model = model
 
         self.state = self.model.state
-        self.properties = self.model.properties
+        self.props = self.model.props
 
         self.camp = bvec.convert_bvec_to_petsc(
             bvec.BlockVector([np.zeros(1), np.zeros(1)], (2,), (('amp', 'phase'),))
@@ -30,8 +30,8 @@ class GenericFunctional:
     def set_state(self, state):
         self.model.set_state(state)
 
-    def set_properties(self, props):
-        self.model.set_properties(props)
+    def set_props(self, props):
+        self.model.set_props(props)
 
     def set_camp(self, camp):
         self.camp[:] = camp
@@ -131,7 +131,7 @@ class OnsetPressureFunctional(GenericFunctional):
         return dg_dstate
 
     def assem_dg_dprops(self):
-        dg_dprops = self.properties.copy()
+        dg_dprops = self.props.copy()
         dg_dprops.set(0)
         return dg_dprops
 

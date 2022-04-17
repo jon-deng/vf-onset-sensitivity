@@ -16,7 +16,7 @@ from femvf.static import static_configuration_coupled_picard
 from blocktensor import linalg
 
 from lib_main_transient import case_config
-from main_hopf import set_properties
+from main_hopf import set_props
 # warnings.filterwarnings('error')
 
 parser = argparse.ArgumentParser()
@@ -66,8 +66,8 @@ region_to_dofs = process_celllabel_to_dofs_from_forms(
 
 ## Set model properties to nominal values
 props = model.get_properties_vec()
-props = set_properties(props, region_to_dofs, model)
-model.set_properties(props)
+props = set_props(props, region_to_dofs, model)
+model.set_props(props)
 
 # # geometric properties related to the symmetry/contact planes
 y_gap = 0.01
@@ -92,7 +92,7 @@ def run(psub):
     # Compute the static configuration for the initial state if needed
     if INIT_STATE_TYPE == 'static':
         model.set_control(controls[0])
-        model.set_properties(props)
+        model.set_props(props)
         x_static, info = static_configuration_coupled_picard(model)
         print(f"Solved for equilibrium state: {info}")
         ini_state['u'][:] = x_static['u']

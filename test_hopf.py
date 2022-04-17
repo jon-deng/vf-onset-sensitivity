@@ -23,7 +23,7 @@ EBODY = 5e3 * 10
 ECOV = 5e3 * 10
 PSUB = 800 * 10
 
-def set_properties(props, region_to_dofs, res):
+def set_props(props, region_to_dofs, res):
     """
     Set the model properties
     """
@@ -120,11 +120,11 @@ def test_assem_dres_dstate(hopf, state0, dstate):
 
 def test_assem_dres_dprops(hopf, props0, dprops):
     def hopf_res(x):
-        hopf.set_properties(x)
+        hopf.set_props(x)
         return hopf.assem_res()
 
     def hopf_jac(x):
-        hopf.set_properties(x)
+        hopf.set_props(x)
         return hopf.assem_dres_dprops()
 
     _test_taylor(props0, dprops, hopf_res, hopf_jac)
@@ -138,8 +138,8 @@ if __name__ == '__main__':
     region_to_dofs = process_celllabel_to_dofs_from_forms(
         res.solid.forms, res.solid.forms['fspace.scalar'])
 
-    props = model.properties.copy()
-    props = set_properties(props, region_to_dofs, res)
+    props = model.props.copy()
+    props = set_props(props, region_to_dofs, res)
 
     (state_labels,
      mode_real_labels,

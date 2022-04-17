@@ -40,7 +40,7 @@ def setup_models(mesh_path):
 
     return res, dres
 
-def set_properties(props, region_to_dofs, res):
+def set_props(props, region_to_dofs, res):
     """
     Set the model properties
     """
@@ -77,8 +77,8 @@ def setup_hopf_state(mesh_path):
     region_to_dofs = process_celllabel_to_dofs_from_forms(
         res.solid.forms, res.solid.forms['fspace.scalar'])
 
-    props = res.properties.copy()
-    props = set_properties(props, region_to_dofs, res)
+    props = res.props.copy()
+    props = set_props(props, region_to_dofs, res)
 
     ## Initialize the Hopf system
     # This vector normalizes the real/imag components of the unstable eigenvector
@@ -86,7 +86,7 @@ def setup_hopf_state(mesh_path):
     EREF['q'].set(1.0)
     EREF.set(1.0)
     hopf = libhopf.HopfModel(res, dres, ee=EREF)
-    hopf.set_properties(props)
+    hopf.set_props(props)
 
     (state_labels,
         mode_real_labels,
@@ -99,7 +99,7 @@ def setup_hopf_state(mesh_path):
     _control = res.control.copy()
     _control['psub'] = PSUB
     res.set_control(_control)
-    res.set_properties(props)
+    res.set_props(props)
 
     newton_params = {
         'maximum_iterations': 20
@@ -161,20 +161,20 @@ def test_solve_reduced_gradient(func, hopf, props0, dprops, xhopf0):
     """
 
     def res(props):
-        hopf.set_properties(props)
+        hopf.set_props(props)
         x , info = libhopf.solve_hopf_newton(hopf, xhopf0)
 
         func.set_state(x)
-        func.set_properties(props)
+        func.set_props(props)
         return func.assem_g()
 
     def jac(props):
-        hopf.set_properties(props)
+        hopf.set_props(props)
         x, info = libhopf.solve_hopf_newton(hopf, xhopf0)
 
         for xx in (func, hopf):
             xx.set_state(x)
-            xx.set_properties(props)
+            xx.set_props(props)
 
         return libhopf.solve_reduced_gradient(func, hopf)
 
@@ -190,13 +190,13 @@ def test_ReducedGradient(redu_grad, props_list):
         # For each property in a list of properties to test, set the properties
         # of the ReducedGradient; the ReducedGradient should handle solving the
         # Hopf system implictly
-        redu_grad.set_properties(props)
+        redu_grad.set_props(props)
         # print(redu_grad.assem_g())
 
         # Next, check that the Hopf system was correctly solved in
         # ReducedGradient by checking the Hopf residual
         hopf.set_state(redu_grad.hist_state[-1])
-        hopf.set_properties(redu_grad.hist_props[-1])
+        hopf.set_props(redu_grad.hist_props[-1])
         print(bla.norm(hopf.assem_res()))
 
 
@@ -211,7 +211,7 @@ if __name__ == '__main__':
     # currently this required the Hopf system have state and properties that
     # initially satisfy the equations
     hopf.set_state(xhopf)
-    hopf.set_properties(props0)
+    hopf.set_props(props0)
     redu_grad = libhopf.ReducedGradient(func, hopf)
 
     dprops = props0.copy()
