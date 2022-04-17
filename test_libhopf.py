@@ -5,6 +5,7 @@ Testing code for finding hopf bifurcations of coupled FE VF models
 from os import path
 import warnings
 import h5py
+import numpy as np
 
 from femvf.models.dynamical import solid as sldm, fluid as fldm
 from femvf.load import load_dynamical_fsi_model
@@ -139,9 +140,13 @@ def setup_hopf_state(mesh_path):
         h5utils.append_block_vector_to_group(f, xhopf_n)
     return hopf, xhopf_n, props
 
-def test_reduced_gradient(func, hopf, props0, dprops, xhopf0):
+def test_solve_hopf_newton(hopf, xhopf0):
+    xhopf, info = libhopf.solve_hopf_newton(hopf, xhopf0)
+    print(info)
+
+def test_solve_reduced_gradient(func, hopf, props0, dprops, xhopf0):
     """
-    Test the reduced gradient
+    Test the solve_reduced_gradient function
 
     Parameters
     ----------
@@ -176,12 +181,39 @@ def test_reduced_gradient(func, hopf, props0, dprops, xhopf0):
 
     _test_taylor(props0, dprops, res, jac, action=bla.dot, norm=lambda x: x)
 
+def test_reduced_gradient(redu_grad, props_list):
+    """
+    Test the ReducedGradientManager object
+    """
+
+    hopf = redu_grad.res
+    for props in props_list:
+        # For each property in a list of properties to test, set the properties
+        # of the ReducedGradient; the ReducedGradient should handle solving the
+        # Hopf system implictly
+        redu_grad.set_properties(props)
+        print(redu_grad.assem_g())
+
+        # Next, check that the Hopf system was correctly solved in
+        # ReducedGradient by checking the Hopf residual
+        hopf.set_state(redu_grad.hist_state[-1])
+        hopf.set_properties(redu_grad.hist_props[-1])
+        print(bla.norm(hopf.assem_res()))
+
+
 if __name__ == '__main__':
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
     mesh_path = path.join('./mesh', mesh_name+'.xml')
 
     hopf, xhopf, props0 = setup_hopf_state(mesh_path)
     func = libfuncs.OnsetPressureFunctional(hopf)
+
+    # Create the ReducedGradientManager object;
+    # currently this required the Hopf system have state and properties that
+    # initially satisfy the equations
+    hopf.set_state(xhopf)
+    hopf.set_properties(props0)
+    redu_grad = libhopf.ReducedGradient(func, hopf)
 
     dprops = props0.copy()
     dprops.set(0)
@@ -190,5 +222,10 @@ if __name__ == '__main__':
     with warnings.catch_warnings():
         warnings.filterwarnings('error', category=UserWarning)
 
+        test_solve_hopf_newton(hopf, xhopf0)
+
         # warnings.warn("testing", UserWarning)
-        test_reduced_gradient(func, hopf, props0, dprops, xhopf)
+        # test_solve_reduced_gradient(func, hopf, props0, dprops, xhopf)
+
+        # props_list = [props0 + alpha*dprops for alpha in np.arange(0, 100, 10)]
+        # test_reduced_gradient(redu_grad, props_list)

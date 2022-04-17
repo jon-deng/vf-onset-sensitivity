@@ -405,7 +405,7 @@ def solve_fixed_point(res, xfp_0, newton_params=None):
 def solve_hopf_newton(
         hopf: HopfModel,
         xhopf_0: bvec.BlockVector,
-        out=None, newton_params=None) -> (bvec.BlockVector, typing.Dict):
+        out=None, newton_params=None) -> typing.Union[bvec.BlockVector, typing.Dict]:
     """Solve the nonlinear Hopf problem using a newton method"""
     if out is None:
         out = xhopf_0.copy()
@@ -438,7 +438,7 @@ def solve_hopf_newton(
 
     if newton_params is None:
         newton_params = {
-            'maximum_iterations': 20
+            'maximum_iterations': 10
         }
 
     out[:], info = nleq.newton_solve(xhopf_0, linear_subproblem, norm=bvec.norm, params=newton_params)
@@ -603,7 +603,8 @@ class ReducedGradient:
         # Use the old state in the history of Hopf states as an initial guess
         # for solving the Hopf system with the new parameters
         old_state = self.hist_state[-1]
-        new_state, info = solve_hopf_newton(self.res, old_state, self._newton_params)
+        new_state, info = solve_hopf_newton(
+            self.res, old_state, newton_params=self._newton_params)
 
         self.hist_state.append(new_state.copy())
         self.hist_props.append(self.properties.copy())
@@ -624,7 +625,7 @@ class ReducedGradient:
         _ = self._update_hopf()
 
     def assem_g(self):
-        return self.res.assem_g()
+        return self.func.assem_g()
 
     def assem_dg_dp(self):
         dg_dp = solve_reduced_gradient(self.func, self.res)
