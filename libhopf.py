@@ -583,7 +583,7 @@ class ReducedGradient:
         self._newton_params = newton_params
 
     @property
-    def properties(self):
+    def props(self):
         return self.res.props
 
     @property
