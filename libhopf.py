@@ -630,3 +630,14 @@ class ReducedGradient:
         dg_dp = solve_reduced_gradient(self.func, self.res)
         dg_dcamp = self.func.assem_dg_dcamp()
         return bvec.concatenate_vec([dg_dp, dg_dcamp])
+
+
+def make_opt_grad(redu_grad):
+    """
+    Make a simple `grad(p)` type function that can be plugged into optimization loops.
+
+    Parameters
+    ----------
+    redu_grad : ReducedGradient
+    """
+    pass
