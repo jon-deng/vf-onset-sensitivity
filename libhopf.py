@@ -20,6 +20,7 @@ adopted by Griewank and Reddien where they assume
 delta x_t = exp(omega_r - 1j*omega_i) * zeta
 so the Hopf equations below are slightly different.
 """
+
 import typing
 import itertools
 import numpy as np
@@ -543,3 +544,89 @@ def solve_reduced_gradient(
     # Compute the reduced gradient
     dres_dprops = hopf.assem_dres_dprops()
     return bla.mult_mat_vec(dres_dprops.transpose(), -dg_dres) + dg_dprops
+
+
+class ReducedGradient:
+    """
+    This class handles solution of reduced gradients on the Hopf model
+
+    Consider the functional, g(x; p, camp), where x, p, camp represent the Hopf
+    state vector, parameters, and complex amplitude, respectively. Also consider
+    the Hopf system defined by F(x; p) = 0. The reduced gradient is the function
+    g^(p, camp) where x is implicitly constrained by the Hope system.
+
+    The reduced gradient is difficult to solve for since solution of the Hopf
+    system is not straightforward without a good initial guess at a parameter
+    set. This class tries to supply reasonable initial guesses for solving the
+    Hopf system so that the reduced graident can be plugged into an optimization
+    loop.
+
+    Parameters
+    ----------
+    res : HopfModel
+    functional : libfunctionals.GenericFunctional
+    newton_params :
+        dictionary specifying newton solver parameters for solving the Hopf
+        system
+    """
+
+    def __init__(self, func, res, newton_params=None):
+        self.func = func
+        self.res = res
+
+        self._hist_state = [self.res.state.copy()]
+        self._hist_props = [self.res.properties.copy()]
+
+        if newton_params is None:
+            newton_params = {}
+        self._newton_params = newton_params
+
+    @property
+    def properties(self):
+        return self.res.properties
+
+    @property
+    def hist_props(self):
+        return self._hist_props
+
+    @property
+    def hist_state(self):
+        return self._hist_state
+
+    def _update_hopf(self):
+        """
+        Keeps track of Hopf solution when properties are updated
+
+        This should be called whenever the properties are set, since the
+        Hopf system solution will change whenever the properties change
+        """
+        # Use the old state in the history of Hopf states as an initial guess
+        # for solving the Hopf system with the new parameters
+        old_state = self.hist_state[-1]
+        new_state, info = solve_hopf_newton(self.res, old_state, self._newton_params)
+
+        self.hist_state.append(new_state.copy())
+        self.hist_props.append(self.properties.copy())
+
+        self.res.set_state(new_state)
+
+        return info
+
+    def set_camp(self, camp):
+        """Set the complex amplitude"""
+        self.func.set_camp(camp)
+
+    def set_properties(self, props):
+        """
+        Set the model properties
+        """
+        self.func.set_properties(props)
+        _ = self._update_hopf()
+
+    def assem_g(self):
+        return self.res.assem_g()
+
+    def assem_dg_dp(self):
+        dg_dp = solve_reduced_gradient(self.func, self.res)
+        dg_dcamp = self.func.assem_dg_dcamp()
+        return bvec.concatenate_vec([dg_dp, dg_dcamp])
