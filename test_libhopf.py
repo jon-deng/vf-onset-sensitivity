@@ -180,7 +180,7 @@ def test_solve_reduced_gradient(func, hopf, props0, dprops, xhopf0):
 
     _test_taylor(props0, dprops, res, jac, action=bla.dot, norm=lambda x: x)
 
-def test_reduced_gradient(redu_grad, props_list):
+def test_ReducedGradient(redu_grad, props_list):
     """
     Test the ReducedGradientManager object
     """
@@ -191,7 +191,7 @@ def test_reduced_gradient(redu_grad, props_list):
         # of the ReducedGradient; the ReducedGradient should handle solving the
         # Hopf system implictly
         redu_grad.set_properties(props)
-        print(redu_grad.assem_g())
+        # print(redu_grad.assem_g())
 
         # Next, check that the Hopf system was correctly solved in
         # ReducedGradient by checking the Hopf residual
@@ -224,7 +224,7 @@ if __name__ == '__main__':
         test_solve_hopf_newton(hopf, xhopf)
 
         # warnings.warn("testing", UserWarning)
-        # test_solve_reduced_gradient(func, hopf, props0, dprops, xhopf)
+        test_solve_reduced_gradient(func, hopf, props0, dprops, xhopf)
 
-        # props_list = [props0 + alpha*dprops for alpha in np.arange(0, 100, 10)]
-        # test_reduced_gradient(redu_grad, props_list)
+        props_list = [props0 + alpha*dprops for alpha in np.arange(0, 100, 10)]
+        test_ReducedGradient(redu_grad, props_list)
