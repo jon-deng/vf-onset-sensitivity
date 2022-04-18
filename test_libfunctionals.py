@@ -3,7 +3,9 @@ Testing code for finding hopf bifurcations of coupled FE VF models
 """
 # import sys
 from os import path
+import numbers
 import warnings
+import operator
 import h5py
 import numpy as np
 
@@ -173,19 +175,34 @@ def test_assem_dg_dcamp(func, camp0, dcamp):
 
     _test_taylor(camp0, dcamp, res, jac, action=bla.dot, norm=lambda x: x)
 
+def test_op(op, *funcs):
+    # Compare the result of applying an operation on functionals with the
+    # correct result
+
+    # The correct functional value should be the operation applied on the
+    # individual functional values
+    g_correct = op(*[
+        func if isinstance(func, numbers.Number) else func.assem_g()
+        for func in funcs])
+
+    # The tested functional is the operation applied on the functional objects
+    # to create a DerivedFunctional
+    g_op = op(*funcs).assem_g()
+
+    print(g_op, g_correct)
+
 if __name__ == '__main__':
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
     mesh_path = path.join('./mesh', mesh_name+'.xml')
 
     hopf, xhopf, props0 = setup_hopf_state(mesh_path)
     func = libfuncs.OnsetPressureFunctional(hopf)
+    print(xhopf['psub'][:])
 
     state0 = xhopf.copy()
     dstate = state0.copy()
     dstate.set(0)
     dstate.set(1.0)
-    # dstate['u'].array[:] = 1.0
-    # dstate['u'].array[:] = 1.0
     hopf.apply_dirichlet_bvec(dstate)
     test_assem_dg_dstate(func, state0, dstate)
 
@@ -199,3 +216,13 @@ if __name__ == '__main__':
     dcamp['amp'].set(1.0)
     dcamp['phase'].set(np.pi*1/180)
     test_assem_dg_dcamp(func, camp0, dcamp)
+
+    test_op(operator.add, func, func)
+
+    test_op(operator.mul, func, 5.0)
+    test_op(operator.mul, 5.0, func)
+
+    test_op(operator.truediv, func, func)
+    test_op(operator.truediv, func, 5.0)
+
+    test_op(operator.pow, func, 2)
