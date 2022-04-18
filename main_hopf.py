@@ -181,7 +181,7 @@ if __name__ == '__main__':
     print(unit_xmode_real.norm())
     print(unit_xmode_imag.norm())
     for ampl in np.linspace(0, 100000.0, 5):
-        gw = proc_glottal_width(xhopf_n.to_ndarray(), ampl, 0.0)
+        gw = proc_glottal_width(xhopf_n.to_ndarray(), np.array([ampl, 0.0]))
         ax.plot(gw, label=f"Amplitude {ampl:.2e}")
     ax.set_xlabel(f"Time [period]")
     ax.set_ylabel("Glottal width [cm]")

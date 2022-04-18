@@ -3,6 +3,8 @@ Contains definitions of functionals
 """
 import numbers
 import numpy as np
+from jax import numpy as jnp
+import jax
 
 from libhopf import HopfModel
 
@@ -217,5 +219,43 @@ class OnsetPressureFunctional(BaseFunctional):
     def assem_dg_dcamp(self):
         dg_dcamp = self.camp.copy()
         dg_dcamp.set(0)
+        return dg_dcamp
+
+class GlottalWidthErrorFunctional(BaseFunctional):
+    """
+    Return a weighted square error between model and reference glottal width
+    """
+
+    def __init__(self, model, gw_ref):
+        super().__init__(model)
+
+        eval_gw = make_glottal_width(model, gw_ref.size)
+
+        def _err(state, camp):
+            gw_hopf = eval_gw(state, camp)
+            return jnp.sum((gw_ref - gw_hopf)**2)
+
+        self._err = _err
+        self._grad_state_err = jax.grad(_err, argums=0)
+        self._grad_camp_err = jax.grad(_err, argums=1)
+
+    def assem_g(self):
+        return self._err(self.state.to_ndarray(), self.camp.to_ndarray())
+
+    def assem_dg_dstate(self):
+        _dg_dstate = self._grad_state_err(self.state.to_ndarray(), self.camp.to_ndarray())
+        dg_dstate = self.state.copy()
+        dg_dstate.set_vec(_dg_dstate)
+        return dg_dstate
+
+    def assem_dg_dprops(self):
+        dg_dprops = self.props.copy()
+        dg_dprops.set(0)
+        return dg_dprops
+
+    def assem_dg_dcamp(self):
+        _dg_dcamp = self._grad_camp_err(self.state.to_ndarray(), self.camp.to_ndarray())
+        dg_dcamp = self.camp.copy()
+        dg_dcamp.set_vec(_dg_dcamp)
         return dg_dcamp
 
