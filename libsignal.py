@@ -9,21 +9,52 @@ from jax import numpy as jnp
 from femvf.models.equations.fluid.bernoulli_sep_at_min import (
     smooth_min_weight, wavg)
 
-def make_glottal_width(res, dres, num_points=100):
+def _split_mono_hopf_state(state, sizes):
+    """
+    Split a monolithic Hopf state vector into components
+
+    The Hopf state vector consists of 5 components (the fixed-point,
+    real/imag mode shapes, psub, and omega).
+
+    Parameters
+    ----------
+    state : array_like
+        A monolothic vector representing the Hopf system state
+    sizes : tuple of length 5
+        The sizes of each block in the Hopf state
+    """
+    assert len(sizes) == 5
+    idx_bounds = np.cumsum((0,)+sizes)
+    return tuple([
+        state[idxa:idxb]
+        for idxa, idxb in zip(idx_bounds[:-1], idx_bounds[1:])
+        ])
+
+def make_glottal_width(hopf, num_points=100):
     """
     Return a glottal width signal
     """
-    XREF = res.solid.XREF.vector()
+    XREF = hopf.res.solid.XREF.vector()
 
-    IDX_U = slice(0, res.state['u'].size)
-    IDX_MEDIAL = res.fsimap.dofs_solid
+    IDX_U = slice(0, hopf.res.state['u'].size)
+    IDX_MEDIAL = hopf.res.fsimap.dofs_solid
 
-    YMID = float(res.props['ymid'][0])
-    ZETA = float(res.props['zeta_min'][0])
+    YMID = float(hopf.res.props['ymid'][0])
+    ZETA = float(hopf.res.props['zeta_min'][0])
 
-    S = np.array(dres.fluid.s) # can also be res
+    S = np.array(hopf.dres.fluid.s) # can also be res
 
-    def glottal_width(xfp, mode_real, mode_imag, psub, omega, ampl, phase):
+    HOPF_COMPONENT_SIZES = tuple([
+        hopf.state[labels].mshape[0]
+        for labels in hopf.labels_hopf_components])
+
+    def glottal_width(state, ampl, phase):
+        (xfp,
+            mode_real,
+            mode_imag,
+            psub,
+            omega) = _split_mono_hopf_state(state, HOPF_COMPONENT_SIZES)
+
         # get the reference position of the surface
         ucur = (xfp[IDX_U] + XREF)
         ymedial_ref = ucur[1::2][IDX_MEDIAL]

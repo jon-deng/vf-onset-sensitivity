@@ -172,7 +172,7 @@ if __name__ == '__main__':
     psub = xhopf_n['psub'][0]
     omega = xhopf_n['omega'][0]
 
-    proc_glottal_width = libsignal.make_glottal_width(res, dres, 100)
+    proc_glottal_width = libsignal.make_glottal_width(hopf, 100)
     unit_xmode_real, unit_xmode_imag = libhopf.normalize_eigenvector_amplitude(xmode_real, xmode_imag)
 
     fig, ax = plt.subplots(1, 1)
@@ -180,12 +180,8 @@ if __name__ == '__main__':
     print(xfp.norm())
     print(unit_xmode_real.norm())
     print(unit_xmode_imag.norm())
-    for ampl in np.linspace(0, 10000.0, 5):
-        gw = proc_glottal_width(
-            xfp.to_ndarray(),
-            unit_xmode_real.to_ndarray(),
-            unit_xmode_imag.to_ndarray(),
-            psub, omega, ampl, 0.0)
+    for ampl in np.linspace(0, 100000.0, 5):
+        gw = proc_glottal_width(xhopf_n.to_ndarray(), ampl, 0.0)
         ax.plot(gw, label=f"Amplitude {ampl:.2e}")
     ax.set_xlabel(f"Time [period]")
     ax.set_ylabel("Glottal width [cm]")
