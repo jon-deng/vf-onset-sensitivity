@@ -11,7 +11,7 @@ from femvf.models.dynamical import solid as sldm, fluid as fldm
 from femvf.load import load_dynamical_fsi_model
 from femvf.meshutils import process_celllabel_to_dofs_from_forms
 import blocktensor.subops as gops
-from blocktensor import h5utils, linalg as bla
+from blocktensor import h5utils, linalg as bla, vec as bvec
 
 import libhopf, libfunctionals as libfuncs
 from test_hopf import _test_taylor
@@ -199,6 +199,11 @@ def test_ReducedGradient(redu_grad, props_list):
         hopf.set_props(redu_grad.hist_props[-1])
         print(bla.norm(hopf.assem_res()))
 
+def test_make_opt_grad(redu_grad, props_list):
+    opt_obj, opt_grad = libhopf.make_opt_grad(redu_grad)
+
+    for props in props_list:
+        print(opt_obj(props.to_ndarray()))
 
 if __name__ == '__main__':
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
@@ -228,3 +233,10 @@ if __name__ == '__main__':
 
         props_list = [props0 + alpha*dprops for alpha in np.arange(0, 100, 10)]
         test_ReducedGradient(redu_grad, props_list)
+
+        camp = func.camp.copy()
+        props_list = [
+            bvec.concatenate_vec([props0 + alpha*dprops, camp])
+            for alpha in np.arange(0, 100, 10)
+            ]
+        test_make_opt_grad(redu_grad, props_list)

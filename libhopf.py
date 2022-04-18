@@ -581,6 +581,9 @@ class ReducedGradient:
         if newton_params is None:
             newton_params = {}
         self._newton_params = newton_params
+    @property
+    def camp(self):
+        return self.func.camp
 
     @property
     def props(self):
@@ -628,10 +631,12 @@ class ReducedGradient:
     def assem_g(self):
         return self.func.assem_g()
 
-    def assem_dg_dp(self):
-        dg_dp = solve_reduced_gradient(self.func, self.res)
-        dg_dcamp = self.func.assem_dg_dcamp()
-        return bvec.concatenate_vec([dg_dp, dg_dcamp])
+    def assem_dg_dprops(self):
+        return solve_reduced_gradient(self.func, self.res)
+
+    def assem_dg_dcamp(self):
+        return self.func.assem_dg_dcamp()
+
 
 
 def make_opt_grad(redu_grad):
@@ -641,5 +646,48 @@ def make_opt_grad(redu_grad):
     Parameters
     ----------
     redu_grad : ReducedGradient
+
+    Returns
+    -------
+    opt_obj : Callable[[array_like], float]
+    opt_grad : Callable[[array_like], array_like]
     """
-    pass
+    def _set_p(p):
+        # Set properties and complex amplitude of the ReducedGradient
+        # This has to convert the monolithic input parameters to the block
+        # format of the ReducedGradient object
+        p_hopf = p[:-2]
+        _p_hopf = redu_grad.props.copy()
+        _p_hopf.set_vec(p_hopf)
+
+        p_camp = p[-2:]
+        _p_camp = redu_grad.camp.copy()
+        _p_camp.set_vec(p_camp)
+
+        redu_grad.set_props(_p_hopf)
+        redu_grad.set_camp(_p_camp)
+
+    def opt_obj(p):
+        _set_p(p)
+
+        return redu_grad.assem_g()
+
+    def opt_grad(p):
+        _set_p(p)
+
+        # Set properties and complex amplitude of the ReducedGradient
+        p_hopf = p[:-2]
+        _p_hopf = redu_grad.props.copy()
+        _p_hopf.set_vec(p_hopf)
+
+        p_camp = p[-2:]
+        _p_camp = redu_grad.camp.copy()
+        _p_camp.set_vec(p_camp)
+
+        redu_grad.set_props(_p_hopf)
+        redu_grad.set_camp(_p_camp)
+
+        _dg_dp = bvec.concatenate_vec([redu_grad.assem_dg_drops(), redu_grad.assem_dg_dcamp()])
+        return _dg_dp.to_ndarray()
+
+    return opt_obj, opt_grad
