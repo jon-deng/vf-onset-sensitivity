@@ -1,41 +1,19 @@
 """
 Contains definitions of functionals
 """
-
+import numbers
 import numpy as np
 
 from libhopf import HopfModel
 
 from blocktensor import vec as bvec
 
+# pylint: disable=abstract-method
+
 class GenericFunctional:
     """
-    Represents a functional object acting on the Hopf state
-
-    The functional is represented by
-        f(x, p, camp)
-    where x is the Hopf state vector, p are the model properties and camp is the
-    complex amplitude.
+    All functionals have to supply the below functions
     """
-    def __init__(self, model: HopfModel):
-        self.model = model
-
-        self.state = self.model.state
-        self.props = self.model.props
-
-        self.camp = bvec.convert_bvec_to_petsc(
-            bvec.BlockVector([np.zeros(1), np.zeros(1)], (2,), (('amp', 'phase'),))
-            )
-
-    def set_state(self, state):
-        self.model.set_state(state)
-
-    def set_props(self, props):
-        self.model.set_props(props)
-
-    def set_camp(self, camp):
-        self.camp[:] = camp
-
     def assem_g(self):
         raise NotImplementedError()
 
@@ -48,15 +26,89 @@ class GenericFunctional:
     def assem_dg_dcamp(self):
         raise NotImplementedError()
 
-class BinaryFunctional(GenericFunctional):
+
+    def __pos__(self):
+        return self
+
+    def __neg__(self):
+        return ScalarProduct(self, scalar=-1)
+
+    def __add__(self, other):
+        return Sum(self, other)
+
+    def __radd__(self, other):
+        return Sum(other, self)
+
+    def __sub__(self, other):
+        return Sum(self, -other)
+
+    def __rsub__(self, other):
+        return Sum(other, -self)
+
+    def __mul__(self, other):
+        if isinstance(other, numbers.Number):
+            return ScalarProduct(self, scalar=other)
+        else:
+            return Product(self, other)
+
+    def __rmul__(self, other):
+        if isinstance(other, numbers.Number):
+            return ScalarProduct(self, scalar=other)
+        else:
+            return Product(other, self)
+
+    def __truediv__(self, other):
+        if isinstance(other, numbers.Number):
+            return ScalarProduct(self, scalar=other**-1)
+        else:
+            return Product(self, other**-1)
+
+    def __rtruediv__(self, other):
+        if isinstance(other, numbers.Number):
+            return ScalarProduct(self**-1, scalar=other)
+        else:
+            return Product(other, self**-1)
+
+    def __pow__(self, other):
+        if isinstance(other, numbers.Number):
+            return ScalarPower(self, scalar=other)
+        else:
+            return NotImplemented
+
+
+class DerivedFunctional(GenericFunctional):
+    """
+    Derived functional are computed from other functionals
+    """
+    def __init__(self, funcs):
+        self.funcs = tuple(funcs)
+
+    def set_state(self, state):
+        for func in self.funcs:
+            func.set_state(state)
+
+    def set_props(self, props):
+        for func in self.funcs:
+            func.set_props(props)
+
+    def set_camp(self, camp):
+        for func in self.funcs:
+            func.set_camp(camp)
+
+class BinaryFunctional(DerivedFunctional):
     def __init__(self, a: GenericFunctional, b: GenericFunctional):
         self.a = a
         self.b = b
 
-class UnaryFunctional(GenericFunctional):
+        super().__init__((a, b))
+
+class UnaryFunctional(DerivedFunctional):
     def __init__(self, a: GenericFunctional, scalar=0.0):
         self.a = a
         self.C = scalar
+
+        super().__init__((a,))
+
 
 class Sum(BinaryFunctional):
     def assem_g(self):
@@ -111,7 +163,34 @@ class ScalarProduct(UnaryFunctional):
         return self.C * self.a.assem_dg_dcamp()
 
 
-class OnsetPressureFunctional(GenericFunctional):
+class BaseFunctional(GenericFunctional):
+    """
+    Represents a functional object acting on the Hopf state
+
+    The functional is represented by
+        f(x, p, camp)
+    where x is the Hopf state vector, p are the model properties and camp is the
+    complex amplitude.
+    """
+    def __init__(self, model: HopfModel):
+        self.model = model
+
+        self.state = self.model.state
+        self.props = self.model.props
+        self.camp = bvec.convert_bvec_to_petsc(
+            bvec.BlockVector([np.zeros(1), np.zeros(1)], (2,), (('amp', 'phase'),))
+            )
+
+    def set_state(self, state):
+        self.model.set_state(state)
+
+    def set_props(self, props):
+        self.model.set_props(props)
+
+    def set_camp(self, camp):
+        self.camp[:] = camp
+
+class OnsetPressureFunctional(BaseFunctional):
     """
     Represents a functional returning the onset pressure
 
