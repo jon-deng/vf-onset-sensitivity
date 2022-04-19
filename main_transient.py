@@ -44,7 +44,7 @@ R_SEP = 1.0
 ZETA = 1e-4
 
 DT = 5e-5
-T_TOTAL = 0.2
+T_TOTAL = 0.6
 
 def setup_models(mesh_path):
     model = load.load_transient_fsi_model(

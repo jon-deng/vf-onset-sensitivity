@@ -687,7 +687,7 @@ def make_opt_grad(redu_grad):
         redu_grad.set_props(_p_hopf)
         redu_grad.set_camp(_p_camp)
 
-        _dg_dp = bvec.concatenate_vec([redu_grad.assem_dg_drops(), redu_grad.assem_dg_dcamp()])
+        _dg_dp = bvec.concatenate_vec([redu_grad.assem_dg_dprops(), redu_grad.assem_dg_dcamp()])
         return _dg_dp.to_ndarray()
 
     return opt_obj, opt_grad
