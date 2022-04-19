@@ -151,7 +151,7 @@ def test_assem_dg_dstate(func, state0, dstate):
         func.set_state(state)
         return func.assem_dg_dstate()
 
-    _test_taylor(state0, dstate, res, jac, action=bla.dot, norm=lambda x: x)
+    _test_taylor(state0, dstate, res, jac, action=bla.dot, norm=lambda x: (x**2)**0.5)
 
 def test_assem_dg_dprops(func, props0, dprops):
     def res(props):
@@ -162,7 +162,7 @@ def test_assem_dg_dprops(func, props0, dprops):
         func.set_props(props)
         return func.assem_dg_dprops()
 
-    _test_taylor(props0, dprops, res, jac, action=bla.dot, norm=lambda x: x)
+    _test_taylor(props0, dprops, res, jac, action=bla.dot, norm=lambda x: (x**2)**0.5)
 
 def test_assem_dg_dcamp(func, camp0, dcamp):
     def res(camp):
@@ -173,7 +173,7 @@ def test_assem_dg_dcamp(func, camp0, dcamp):
         func.set_camp(camp)
         return func.assem_dg_dcamp()
 
-    _test_taylor(camp0, dcamp, res, jac, action=bla.dot, norm=lambda x: x)
+    _test_taylor(camp0, dcamp, res, jac, action=bla.dot, norm=lambda x: (x**2)**0.5)
 
 def test_op(op, *funcs):
     # Compare the result of applying an operation on functionals with the
