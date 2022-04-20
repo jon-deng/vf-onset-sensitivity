@@ -39,50 +39,66 @@ class GenericFunctional:
     def __add__(self, other):
         if isinstance(other, numbers.Number):
             return ScalarSum(self, scalar=other)
-        else:
+        elif isinstance(other, GenericFunctional):
             return Sum(self, other)
+        else:
+            return NotImplemented
 
     def __radd__(self, other):
         if isinstance(other, numbers.Number):
             return ScalarSum(self, scalar=other)
-        else:
+        elif isinstance(other, GenericFunctional):
             return Sum(other, self)
+        else:
+            return NotImplemented
 
     def __sub__(self, other):
         if isinstance(other, numbers.Number):
             return ScalarSum(self, scalar=-other)
-        else:
+        elif isinstance(other, GenericFunctional):
             return Sum(self, -other)
+        else:
+            return NotImplemented
 
     def __rsub__(self, other):
         if isinstance(other, numbers.Number):
             return ScalarSum(-self, scalar=other)
-        else:
+        elif isinstance(other, GenericFunctional):
             return Sum(other, -self)
+        else:
+            return NotImplemented
 
     def __mul__(self, other):
         if isinstance(other, numbers.Number):
             return ScalarProduct(self, scalar=other)
-        else:
+        elif isinstance(other, GenericFunctional):
             return Product(self, other)
+        else:
+            return NotImplemented
 
     def __rmul__(self, other):
         if isinstance(other, numbers.Number):
             return ScalarProduct(self, scalar=other)
-        else:
+        elif isinstance(other, GenericFunctional):
             return Product(other, self)
+        else:
+            return NotImplemented
 
     def __truediv__(self, other):
         if isinstance(other, numbers.Number):
             return ScalarProduct(self, scalar=other**-1)
-        else:
+        elif isinstance(other, GenericFunctional):
             return Product(self, other**-1)
+        else:
+            return NotImplemented
 
     def __rtruediv__(self, other):
         if isinstance(other, numbers.Number):
             return ScalarProduct(self**-1, scalar=other)
-        else:
+        elif isinstance(other, GenericFunctional):
             return Product(other, self**-1)
+        else:
+            return NotImplemented
 
     def __pow__(self, other):
         if isinstance(other, numbers.Number):
@@ -97,6 +113,14 @@ class DerivedFunctional(GenericFunctional):
     """
     def __init__(self, funcs):
         self.funcs = tuple(funcs)
+
+    @property
+    def state(self):
+        return self.funcs[0].state
+
+    @property
+    def camp(self):
+        return self.funcs[0].camp
 
     def set_state(self, state):
         for func in self.funcs:
