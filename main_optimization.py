@@ -21,8 +21,11 @@ if __name__ == '__main__':
     hopf, xhopf, props0 = setup_hopf_state(mesh_path)
 
     # Load the measurement glottal width error + reduced gradient
-    # func = libfuncs.OnsetPressureFunctional(hopf)
-    func = libfuncs.GlottalWidthErrorFunctional(hopf)
+    func_onset_pressure = libfuncs.OnsetPressureFunctional(hopf)
+    func_onset_frequency = libfuncs.OnsetFrequencyFunctional(hopf)
+    breakpoint()
+    func = func_onset_pressure + (func_onset_frequency-float(xhopf['omega'][0]))**2
+    # func = libfuncs.GlottalWidthErrorFunctional(hopf)
 
     redu_grad = libhopf.ReducedGradient(func, hopf)
 
