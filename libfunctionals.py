@@ -37,16 +37,28 @@ class GenericFunctional:
         return ScalarProduct(self, scalar=-1)
 
     def __add__(self, other):
-        return Sum(self, other)
+        if isinstance(other, numbers.Number):
+            return ScalarSum(self, scalar=other)
+        else:
+            return Sum(self, other)
 
     def __radd__(self, other):
-        return Sum(other, self)
+        if isinstance(other, numbers.Number):
+            return ScalarSum(self, scalar=other)
+        else:
+            return Sum(other, self)
 
     def __sub__(self, other):
-        return Sum(self, -other)
+        if isinstance(other, numbers.Number):
+            return ScalarSum(self, scalar=-other)
+        else:
+            return Sum(self, -other)
 
     def __rsub__(self, other):
-        return Sum(other, -self)
+        if isinstance(other, numbers.Number):
+            return ScalarSum(-self, scalar=other)
+        else:
+            return Sum(other, -self)
 
     def __mul__(self, other):
         if isinstance(other, numbers.Number):
@@ -138,6 +150,19 @@ class Product(BinaryFunctional):
 
     def assem_dg_dcamp(self):
         return self.a.assem_g()*self.b.assem_dg_dcamp() + self.a.assem_dg_dcamp()*self.b.assem_g()
+
+class ScalarSum(UnaryFunctional):
+    def assem_g(self):
+        return self.a.assem_g() + self.C
+
+    def assem_dg_dstate(self):
+        return self.a.assem_dg_dstate()
+
+    def assem_dg_dprops(self):
+        return self.a.assem_dg_dprops()
+
+    def assem_dg_dcamp(self):
+        return self.a.assem_dg_dcamp()
 
 class ScalarPower(UnaryFunctional):
     def assem_g(self):
