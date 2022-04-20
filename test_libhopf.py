@@ -205,6 +205,11 @@ def test_make_opt_grad(redu_grad, props_list):
     for props in props_list:
         print(opt_obj(props.to_ndarray()))
 
+def test_bound_hopf_bifurcation(hopf, bound_pairs):
+    bounds, omegas = libhopf.bound_hopf_bifurcations(hopf, bound_pairs)
+    print(f"Hopf bifurcations between {bounds[0]} and {bounds[1]}")
+    print(f"with growth rates between {omegas[0]} and {omegas[1]}")
+
 if __name__ == '__main__':
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
     mesh_path = path.join('./mesh', mesh_name+'.xml')
@@ -227,6 +232,10 @@ if __name__ == '__main__':
         warnings.filterwarnings('error', category=UserWarning)
 
         test_solve_hopf_newton(hopf, xhopf)
+
+        lbs = [400.0*10]
+        ubs = [600.0*10]
+        test_bound_hopf_bifurcation(hopf.res, (lbs, ubs))
 
         # warnings.warn("testing", UserWarning)
         test_solve_reduced_gradient(func, hopf, props0, dprops, xhopf)

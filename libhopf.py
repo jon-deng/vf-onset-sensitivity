@@ -49,9 +49,9 @@ def max_real_omega(model, psub):
     psub : float
     """
     # First set the bifurcation parameter
-    props = model.props
-    props['psub'][:] = psub
-    model.set_props(props)
+    control = model.control
+    control['psub'][:] = psub
+    model.set_control(control)
 
     # Solve the for the fixed point
     xfp_0 = model.state.copy()
@@ -62,7 +62,7 @@ def max_real_omega(model, psub):
     omegas, eigvecs_real, _eigvecs_imag = solve_linear_stability(model, xfp)
 
     idx_max = np.argmax(omegas.real)
-    return float(omegas[idx_max]), eigvecs_real[idx_max]
+    return float(omegas.real[idx_max]), eigvecs_real[idx_max]
 
 def bound_hopf_bifurcations(model, bound_pairs, omega_pairs=None, nsplit=2, tol=10.0):
     """
@@ -89,8 +89,8 @@ def bound_hopf_bifurcations(model, bound_pairs, omega_pairs=None, nsplit=2, tol=
     lbs, ubs = bound_pairs
     if omega_pairs is None:
         omega_pairs = (
-            [max_real_omega(model, lb) for lb in lbs],
-            [max_real_omega(model, ub) for ub in ubs],
+            [max_real_omega(model, lb)[0] for lb in lbs],
+            [max_real_omega(model, ub)[0] for ub in ubs],
         )
 
     # Filter bound pairs so only pairs that contain Hopf bifurcations are present
@@ -118,17 +118,29 @@ def bound_hopf_bifurcations(model, bound_pairs, omega_pairs=None, nsplit=2, tol=
         # This is a nested list containing, for each lb/ub pair, a list of interior
         # segments
         bounds_points = [
-            list(np.linspace(lb, ub, nsplit+1)[1:-1]) for lb, ub in zip(lbs, ubs)]
+            list(np.linspace(lb, ub, nsplit+1)[1:-1]) for lb, ub in zip(_lbs, _ubs)]
         bounds_omegas = [
-            [max_real_omega(model, psub) for psub in psubs] for psubs in bounds_points
+            [max_real_omega(model, psub)[0] for psub in psubs] for psubs in bounds_points
         ]
 
         # Join the computed interior points for each bound into a new set of bound pairs and omega pairs
-        ret_lbs = reduce([[lb] + [bound_points] for lb, bound_points in zip(_lbs, bounds_points)], operator.add)
-        ret_ubs = reduce([[bound_points] + [ub] for ub, bound_points in zip(_ubs, bounds_points)], operator.add)
+        ret_lbs = [
+            x for lb, bound_points in zip(_lbs, bounds_points)
+            for x in ([lb] + bound_points)
+            ]
+        ret_ubs = [
+            x for ub, bound_points in zip(_ubs, bounds_points)
+            for x in (bound_points + [ub])
+            ]
 
-        ret_lomegas = reduce([[lomega] + [omegas] for lomega, omegas in zip(lomegas, bounds_omegas)], operator.add)
-        ret_uomegas = reduce([[omegas] + [uomega] for uomega, omegas in zip(uomegas, bounds_omegas)], operator.add)
+        ret_lomegas = [
+            x for lomega, omegas in zip(_lomegas, bounds_omegas)
+            for x in ([lomega] + omegas)
+            ]
+        ret_uomegas = [
+            x for uomega, omegas in zip(_uomegas, bounds_omegas)
+            for x in (omegas + [uomega])
+            ]
         return bound_hopf_bifurcations(
             model, (ret_lbs, ret_ubs), (ret_lomegas, ret_uomegas),
             nsplit=nsplit, tol=tol)
