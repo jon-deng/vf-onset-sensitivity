@@ -120,7 +120,7 @@ def bound_hopf_bifurcations(model, bound_pairs, omega_pairs=None, nsplit=2, tol=
         bounds_points = [
             list(np.linspace(lb, ub, nsplit+1)[1:-1]) for lb, ub in zip(lbs, ubs)]
         bounds_omegas = [
-            list(max_real_omega(model, psub)) for psub in bounds_points
+            [max_real_omega(model, psub) for psub in psubs] for psubs in bounds_points
         ]
 
         # Join the computed interior points for each bound into a new set of bound pairs and omega pairs
