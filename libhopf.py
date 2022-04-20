@@ -21,6 +21,8 @@ delta x_t = exp(omega_r - 1j*omega_i) * zeta
 so the Hopf equations below are slightly different.
 """
 
+import operator
+from functools import reduce
 import typing
 import itertools
 import numpy as np
@@ -36,6 +38,102 @@ import nonlineq as nleq
 # import libfunctionals as libfunc
 
 # pylint: disable=invalid-name
+
+def max_real_omega(model, psub):
+    """
+    Return the maximum real frequency component for a linearized dynamical model
+
+    Parameters
+    ----------
+    model : femvf.models.dynamical.base.DynamicalSystem
+    psub : float
+    """
+    # First set the bifurcation parameter
+    props = model.props
+    props['psub'][:] = psub
+    model.set_props(props)
+
+    # Solve the for the fixed point
+    xfp_0 = model.state.copy()
+    xfp_0.set(0)
+    xfp, _info = solve_fixed_point(model, xfp_0)
+
+    # Solve for linear stability around the fixed point
+    omegas, eigvecs_real, _eigvecs_imag = solve_linear_stability(model, xfp)
+
+    idx_max = np.argmax(omegas.real)
+    return float(omegas[idx_max]), eigvecs_real[idx_max]
+
+def bound_hopf_bifurcations(model, bound_pairs, omega_pairs=None, nsplit=2, tol=10.0):
+    """
+    Bound the onset pressure where a Hopf bifurcation occurs
+
+    Parameters
+    ----------
+    model : femvf.models.dynamical.base.DynamicalSystem
+    bound_pairs : Tuple[List[float, ...], List[float, ...]]
+        A list of lower/upper bound pairs, (lb, ub), of the bifurcation
+        parameters (subglottal pressure). Each bound pair is checked to see if a
+        Hopf bifurcation occurs between them.
+    omega_pairs : Tuple[List[float, ...], List[float, ...]]
+        The maximum real omega at the lower/upper bounds. If the maximum real
+        omega component changes from negative to positive from the lower to
+        upper bound, then a Hopf bifurcation must occur in that interval.
+    nsplit : int
+        The number of intervals to split a bound pair into for searching for a
+        refined bifurcation parameter
+    tol : float
+        Tolerance on the bound pairs
+    """
+    # If real omega are not supplied for each bound pair, compute it here
+    lbs, ubs = bound_pairs
+    if omega_pairs is None:
+        omega_pairs = (
+            [max_real_omega(model, lb) for lb in lbs],
+            [max_real_omega(model, ub) for ub in ubs],
+        )
+
+    # Filter bound pairs so only pairs that contain Hopf bifurcations are present
+    has_onset = [
+        lb < 0 and ub >= 0
+        for lb, ub in zip(*omega_pairs)
+    ]
+
+    _lbs = [lb for lb, valid in zip(lbs, has_onset) if valid]
+    _ubs = [ub for ub, valid in zip(ubs, has_onset) if valid]
+
+    lomegas, uomegas = omega_pairs
+    _lomegas = [lb for lb, valid in zip(lomegas, has_onset) if valid]
+    _uomegas = [ub for ub, valid in zip(uomegas, has_onset) if valid]
+
+    # Check if the bound pairs containing onset all satisfy the tolerance;
+    # if they do return the bounds,
+    # and if they don't, split the bounds into smaller segments and retry
+    tols = [ub-lb for lb, ub in zip(lbs, ubs)]
+    if all([_tol <= tol for _tol in tols]):
+        return (_lbs, _ubs), (_lomegas, _uomegas)
+    else:
+        # Split the pairs into `nsplit` segments and calculate important stuff
+        # at the interior points separating segments
+        # This is a nested list containing, for each lb/ub pair, a list of interior
+        # segments
+        bounds_points = [
+            list(np.linspace(lb, ub, nsplit+1)[1:-1]) for lb, ub in zip(lbs, ubs)]
+        bounds_omegas = [
+            list(max_real_omega(model, psub)) for psub in bounds_points
+        ]
+
+        # Join the computed interior points for each bound into a new set of bound pairs and omega pairs
+        ret_lbs = reduce([[lb] + [bound_points] for lb, bound_points in zip(_lbs, bounds_points)], operator.add)
+        ret_ubs = reduce([[bound_points] + [ub] for ub, bound_points in zip(_ubs, bounds_points)], operator.add)
+
+        ret_lomegas = reduce([[lomega] + [omegas] for lomega, omegas in zip(lomegas, bounds_omegas)], operator.add)
+        ret_uomegas = reduce([[omegas] + [uomega] for uomega, omegas in zip(uomegas, bounds_omegas)], operator.add)
+        return bound_hopf_bifurcations(
+            model, (ret_lbs, ret_ubs), (ret_lomegas, ret_uomegas),
+            nsplit=nsplit, tol=tol)
+
+
 
 def _hopf_state(res):
     """
