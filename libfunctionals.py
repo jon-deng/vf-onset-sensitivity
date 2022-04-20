@@ -222,6 +222,30 @@ class OnsetPressureFunctional(BaseFunctional):
         dg_dcamp.set(0)
         return dg_dcamp
 
+class OnsetFrequencyFunctional(BaseFunctional):
+    """
+    Represents a functional returning the onset frequency
+    """
+
+    def assem_g(self):
+        return self.state['omega'][0]
+
+    def assem_dg_dstate(self):
+        dg_dstate = self.state.copy()
+        dg_dstate.set(0.0)
+        dg_dstate['omega'][0] = 1.0
+        return dg_dstate
+
+    def assem_dg_dprops(self):
+        dg_dprops = self.props.copy()
+        dg_dprops.set(0)
+        return dg_dprops
+
+    def assem_dg_dcamp(self):
+        dg_dcamp = self.camp.copy()
+        dg_dcamp.set(0)
+        return dg_dcamp
+
 class GlottalWidthErrorFunctional(BaseFunctional):
     """
     Return a weighted square error between model and reference glottal width
