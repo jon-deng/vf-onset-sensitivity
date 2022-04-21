@@ -64,7 +64,7 @@ def max_real_omega(model, psub):
     idx_max = np.argmax(omegas.real)
     return float(omegas.real[idx_max]), eigvecs_real[idx_max]
 
-def bound_hopf_bifurcations(model, bound_pairs, omega_pairs=None, nsplit=2, tol=10.0):
+def bound_hopf_bifurcations(model, bound_pairs, omega_pairs=None, nsplit=2, tol=100.0):
     """
     Bound the onset pressure where a Hopf bifurcation occurs
 
@@ -144,6 +144,56 @@ def bound_hopf_bifurcations(model, bound_pairs, omega_pairs=None, nsplit=2, tol=
         return bound_hopf_bifurcations(
             model, (ret_lbs, ret_ubs), (ret_lomegas, ret_uomegas),
             nsplit=nsplit, tol=tol)
+
+def gen_hopf_initial_guess(hopf, eref, bound_pairs, omega_pairs=None, nsplit=2, tol=100.0):
+    """
+    Generate an initial guess for a Hopf system by bounding the bifurcation point
+    """
+    res = hopf.res
+    # Find lower/upper bounds for the Hopf bifurcation point
+    (lbs, ubs), _ = bound_hopf_bifurcations(
+        res, bound_pairs, omega_pairs=omega_pairs, nsplit=nsplit, tol=tol)
+
+    if len(ubs) > 1:
+        raise UserWarning("More than one Hopf bifurcation point found")
+    if len(ubs) == 0:
+        raise UserWarning(f"No Hopf bifurcation found between bounds {bound_pairs[0]} and {bound_pairs[1]}")
+
+    # Use the upper bound to generate an initial guess for the bifurcation
+    # First set the model subglottal pressure to the upper bound
+    psub = ubs[0]
+    control = res.control
+    control['psub'][:] = psub
+    res.set_control(control)
+
+    # Solve for the fixed point
+    x_fp0 = res.state.copy()
+    x_fp0.set(0.0)
+    x_fp, _info = solve_fixed_point(res, x_fp0)
+
+    # Solve for linear stability around the fixed point
+    omegas, eigvecs_real, eigvecs_imag = solve_linear_stability(res, x_fp)
+    idx_max = np.argmax(omegas.real)
+
+    x_mode_real = eigvecs_real[idx_max]
+    x_mode_imag = eigvecs_imag[idx_max]
+
+    x_mode_real, x_mode_imag = normalize_eigenvector_by_hopf_condition(
+        x_mode_real, x_mode_imag, eref)
+
+    x_omega = bvec.convert_bvec_to_petsc(
+        bvec.BlockVector([np.array([omegas[idx_max].imag])], labels=(('omega',),))
+        )
+
+    x_psub = bvec.convert_bvec_to_petsc(
+        bvec.BlockVector([np.array([psub])], labels=(('psub',),))
+        )
+
+    x_hopf = hopf.state.copy()
+    for labels, subvector in zip(hopf.labels_hopf_components, [x_fp, x_mode_real, x_mode_imag, x_psub, x_omega]):
+        x_hopf[labels] = subvector
+
+    return x_hopf
 
 
 
