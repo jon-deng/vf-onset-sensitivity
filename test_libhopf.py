@@ -200,10 +200,11 @@ def test_ReducedGradient(redu_grad, props_list):
         print(bla.norm(hopf.assem_res()))
 
 def test_make_opt_grad(redu_grad, props_list):
-    opt_obj, opt_grad = libhopf.make_opt_grad(redu_grad)
+    with h5py.File("out/_test_make_opt_grad.h5", mode='w') as f:
+        opt_obj_and_grad = libhopf.make_opt_grad(redu_grad, f)
 
-    for props in props_list:
-        print(opt_obj(props.to_ndarray()))
+        for props in props_list:
+            print(opt_obj_and_grad(props.to_ndarray()))
 
 def test_bound_hopf_bifurcation(hopf, bound_pairs):
     bounds, omegas = libhopf.bound_hopf_bifurcations(hopf, bound_pairs)
@@ -249,7 +250,6 @@ if __name__ == '__main__':
 
         test_gen_hopf_initial_guess(hopf, (lbs, ubs))
 
-        # warnings.warn("testing", UserWarning)
         test_solve_reduced_gradient(func, hopf, props0, dprops, xhopf)
 
         props_list = [props0 + alpha*dprops for alpha in np.arange(0, 100, 10)]

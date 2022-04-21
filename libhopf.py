@@ -816,15 +816,18 @@ def make_opt_grad(redu_grad, f):
     opt_grad : Callable[[array_like], array_like]
     """
     # Setup space for storing optimization history
+    labels = (redu_grad.props.labels[0]+redu_grad.camp.labels[0],)
+    bshape = (redu_grad.props.bshape[0]+redu_grad.camp.bshape[0],)
     h5utils.create_resizable_block_vector_group(
-        f['parameters'],
-        redu_grad.props.labels+redu_grad.camp.labels,
-        redu_grad.props.bshape+redu_grad.camp.bshape)
+        f.create_group('parameters'),
+        labels,
+        bshape)
     h5utils.create_resizable_block_vector_group(
-        f['grad'],
-        redu_grad.props.labels+redu_grad.camp.labels,
-        redu_grad.props.bshape+redu_grad.camp.bshape)
+        f.create_group('grad'),
+        labels,
+        bshape)
     f.create_dataset('objective', (0,), maxshape=(None,))
+    # breakpoint()
 
     def _set_p(p):
         # Set properties and complex amplitude of the ReducedGradient
@@ -843,7 +846,7 @@ def make_opt_grad(redu_grad, f):
 
         # Record the current parameter set
         h5utils.append_block_vector_to_group(
-            f['parameters'], bvec.concatenate_vec(redu_grad.props, redu_grad.camp))
+            f['parameters'], bvec.concatenate_vec([_p_hopf, _p_camp]))
 
     def opt_obj_and_grad(p):
         _set_p(p)

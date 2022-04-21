@@ -5,6 +5,7 @@ Solve a simple test optimization problem
 import os.path as path
 from pprint import pprint
 
+import h5py
 from scipy import optimize
 from blocktensor import vec as bvec
 
@@ -39,14 +40,16 @@ if __name__ == '__main__':
     }
     def opt_callback(xk):
         print("In callback")
-    opt_obj, opt_grad = libhopf.make_opt_grad(redu_grad)
-    opt_res = optimize.minimize(
-        opt_obj, x0.to_ndarray(),
-        method='L-BFGS-B',
-        jac=opt_grad,
-        options=opt_options,
-        callback=opt_callback
-        )
+
+    with h5py.File("out/opt_hist.h5", mode='w') as f:
+        opt_obj_and_grad = libhopf.make_opt_grad(redu_grad, f)
+        opt_res = optimize.minimize(
+            opt_obj_and_grad, x0.to_ndarray(),
+            method='L-BFGS-B',
+            jac=True,
+            options=opt_options,
+            callback=opt_callback
+            )
 
     pprint(opt_res)
 
