@@ -300,16 +300,22 @@ class GlottalWidthErrorFunctional(BaseFunctional):
     Return a weighted square error between model and reference glottal width
     """
 
-    def __init__(self, model, gw_ref=None):
+    def __init__(self, model, gw_ref=None, weights=None):
         super().__init__(model)
 
         if gw_ref is None:
             gw_ref = np.zeros((100,))
+
+        if weights is None:
+            weights = np.ones((100,))
+
+        assert weights.size == gw_ref.size
+
         eval_gw = libsignal.make_glottal_width(model, gw_ref.size)
 
         def _err(state, camp):
             gw_hopf = eval_gw(state, camp)
-            return jnp.sum((gw_ref - gw_hopf)**2)
+            return jnp.sum(weights*(gw_ref - gw_hopf)**2)
 
         self._err = _err
         self._grad_state_err = jax.grad(_err, argnums=0)
