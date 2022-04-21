@@ -29,6 +29,7 @@ import numpy as np
 from petsc4py import PETSc
 from slepc4py import SLEPc
 
+import blocktensor.h5utils as h5utils
 import blocktensor.subops as gops
 import blocktensor.linalg as bla
 from blocktensor import vec as bvec, mat as bmat
@@ -799,19 +800,32 @@ class ReducedGradient:
 
 
 
-def make_opt_grad(redu_grad):
+def make_opt_grad(redu_grad, f):
     """
     Make a simple `grad(p)` type function that can be plugged into optimization loops.
 
     Parameters
     ----------
     redu_grad : ReducedGradient
+    f : h5py.File
+        An h5 file to write out function information
 
     Returns
     -------
     opt_obj : Callable[[array_like], float]
     opt_grad : Callable[[array_like], array_like]
     """
+    # Setup space for storing optimization history
+    h5utils.create_resizable_block_vector_group(
+        f['parameters'],
+        redu_grad.props.labels+redu_grad.camp.labels,
+        redu_grad.props.bshape+redu_grad.camp.bshape)
+    h5utils.create_resizable_block_vector_group(
+        f['grad'],
+        redu_grad.props.labels+redu_grad.camp.labels,
+        redu_grad.props.bshape+redu_grad.camp.bshape)
+    f.create_dataset('objective', (0,), maxshape=(None,))
+
     def _set_p(p):
         # Set properties and complex amplitude of the ReducedGradient
         # This has to convert the monolithic input parameters to the block
@@ -827,27 +841,23 @@ def make_opt_grad(redu_grad):
         redu_grad.set_props(_p_hopf)
         redu_grad.set_camp(_p_camp)
 
-    def opt_obj(p):
+        # Record the current parameter set
+        h5utils.append_block_vector_to_group(
+            f['parameters'], bvec.concatenate_vec(redu_grad.props, redu_grad.camp))
+
+    def opt_obj_and_grad(p):
         _set_p(p)
 
-        return redu_grad.assem_g()
+        # Solve the objective function value
+        g = redu_grad.assem_g()
 
-    def opt_grad(p):
-        _set_p(p)
-
-        # Set properties and complex amplitude of the ReducedGradient
-        p_hopf = p[:-2]
-        _p_hopf = redu_grad.props.copy()
-        _p_hopf.set_vec(p_hopf)
-
-        p_camp = p[-2:]
-        _p_camp = redu_grad.camp.copy()
-        _p_camp.set_vec(p_camp)
-
-        redu_grad.set_props(_p_hopf)
-        redu_grad.set_camp(_p_camp)
-
+        # Solve the gradient of the objective function
         _dg_dp = bvec.concatenate_vec([redu_grad.assem_dg_dprops(), redu_grad.assem_dg_dcamp()])
-        return _dg_dp.to_ndarray()
 
-    return opt_obj, opt_grad
+        # Record the current objective function and gradient
+        h5utils.append_block_vector_to_group(f['grad'], _dg_dp)
+        f['objective'].resize(f['objective'].size+1, axis=0)
+        f['objective'][-1] = g
+        return g, _dg_dp.to_ndarray()
+
+    return opt_obj_and_grad
