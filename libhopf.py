@@ -28,6 +28,7 @@ import itertools
 import numpy as np
 from petsc4py import PETSc
 from slepc4py import SLEPc
+import h5py
 
 import blocktensor.h5utils as h5utils
 import blocktensor.subops as gops
@@ -776,7 +777,7 @@ class ReducedGradient:
 
         self.res.set_state(new_state)
 
-        return info
+        return new_state, info
 
     def set_camp(self, camp):
         """Set the complex amplitude"""
@@ -787,7 +788,8 @@ class ReducedGradient:
         Set the model properties
         """
         self.func.set_props(props)
-        _ = self._update_hopf()
+        hopf_state, info = self._update_hopf()
+        return hopf_state, info
 
     def assem_g(self):
         return self.func.assem_g()
@@ -799,68 +801,105 @@ class ReducedGradient:
         return self.func.assem_dg_dcamp()
 
 
-
-def make_opt_grad(redu_grad, f):
+class OptGradManager:
     """
-    Make a simple `grad(p)` type function that can be plugged into optimization loops.
+    An object that provides a `grad(x)` function for black-box optimizers
 
     Parameters
     ----------
     redu_grad : ReducedGradient
     f : h5py.File
-        An h5 file to write out function information
+        An h5 file to record function eval information
 
     Returns
     -------
     opt_obj : Callable[[array_like], float]
     opt_grad : Callable[[array_like], array_like]
     """
-    # Setup space for storing optimization history
-    labels = (redu_grad.props.labels[0]+redu_grad.camp.labels[0],)
-    bshape = (redu_grad.props.bshape[0]+redu_grad.camp.bshape[0],)
-    h5utils.create_resizable_block_vector_group(
-        f.create_group('parameters'),
-        labels,
-        bshape)
-    h5utils.create_resizable_block_vector_group(
-        f.create_group('grad'),
-        labels,
-        bshape)
-    f.create_dataset('objective', (0,), maxshape=(None,))
-    # breakpoint()
 
-    def _set_p(p):
+    def __init__(self, redu_grad: ReducedGradient, f: h5py.Group):
+        self.redu_grad = redu_grad
+        self.f = f
+
+        # Add groups to the h5 file to store optimization history
+        param_labels = (redu_grad.props.labels[0]+redu_grad.camp.labels[0],)
+        param_bshape = (redu_grad.props.bshape[0]+redu_grad.camp.bshape[0],)
+        h5utils.create_resizable_block_vector_group(
+            f.create_group('parameters'),
+            param_labels,
+            param_bshape)
+        h5utils.create_resizable_block_vector_group(
+            f.create_group('grad'),
+            param_labels,
+            param_bshape)
+        h5utils.create_resizable_block_vector_group(
+            f.create_group('hopf_state'),
+            redu_grad.res.state.labels,
+            redu_grad.res.state.bshape)
+        f.create_dataset('objective', (0,), maxshape=(None,))
+
+        # Newton solver convergence info for solving the Hopf bifurcation system
+        f.create_dataset('hopf_newton_num_iter', (0,), maxshape=(None,))
+        f.create_dataset('hopf_newton_status', (0,), maxshape=(None,))
+        f.create_dataset('hopf_newton_abs_err', (0,), maxshape=(None,))
+        f.create_dataset('hopf_newton_rel_err', (0,), maxshape=(None,))
+
+    def _update_hopf(self, p):
+        """
+        Update the Hopf model properties and solve for a Hopf bifurcation
+
+        Parameters
+        ----------
+        p : bvec.BlockVector
+            The parameter vector consisting of dynamical model properties +
+            complex amplitude properties (size 2)
+        """
         # Set properties and complex amplitude of the ReducedGradient
         # This has to convert the monolithic input parameters to the block
         # format of the ReducedGradient object
         p_hopf = p[:-2]
-        _p_hopf = redu_grad.props.copy()
+        _p_hopf = self.redu_grad.props.copy()
         _p_hopf.set_vec(p_hopf)
 
         p_camp = p[-2:]
-        _p_camp = redu_grad.camp.copy()
+        _p_camp = self.redu_grad.camp.copy()
         _p_camp.set_vec(p_camp)
 
-        redu_grad.set_props(_p_hopf)
-        redu_grad.set_camp(_p_camp)
+        # After setting `self.redu_grad` props, the Hopf system should be solved
+        hopf_state, info = self.redu_grad.set_props(_p_hopf)
+        self.redu_grad.set_camp(_p_camp)
 
+        ## Record current state to h5 file
         # Record the current parameter set
         h5utils.append_block_vector_to_group(
-            f['parameters'], bvec.concatenate_vec([_p_hopf, _p_camp]))
+            self.f['parameters'], bvec.concatenate_vec([_p_hopf, _p_camp]))
 
-    def opt_obj_and_grad(p):
-        _set_p(p)
+        h5utils.append_block_vector_to_group(
+            self.f['hopf_state'], hopf_state)
+
+        self.f['hopf_newton_num_iter'].resize(self.f['hopf_newton_num_iter'].size+1, axis=0)
+        self.f['hopf_newton_num_iter'][-1] = info['num_iter']
+
+        self.f['hopf_newton_status'].resize(self.f['hopf_newton_status'].size+1, axis=0)
+        self.f['hopf_newton_status'][-1] = info['status']
+
+        self.f['hopf_newton_rel_err'].resize(self.f['hopf_newton_rel_err'].size+1, axis=0)
+        self.f['hopf_newton_rel_err'][-1] = info['rel_errs'][-1]
+
+        self.f['hopf_newton_abs_err'].resize(self.f['hopf_newton_abs_err'].size+1, axis=0)
+        self.f['hopf_newton_abs_err'][-1] = info['abs_errs'][-1]
+
+    def grad(self, p):
+        self._update_hopf(p)
 
         # Solve the objective function value
-        g = redu_grad.assem_g()
+        g = self.redu_grad.assem_g()
 
         # Solve the gradient of the objective function
-        _dg_dp = bvec.concatenate_vec([redu_grad.assem_dg_dprops(), redu_grad.assem_dg_dcamp()])
+        _dg_dp = bvec.concatenate_vec([self.redu_grad.assem_dg_dprops(), self.redu_grad.assem_dg_dcamp()])
 
         # Record the current objective function and gradient
-        h5utils.append_block_vector_to_group(f['grad'], _dg_dp)
-        f['objective'].resize(f['objective'].size+1, axis=0)
-        f['objective'][-1] = g
+        h5utils.append_block_vector_to_group(self.f['grad'], _dg_dp)
+        self.f['objective'].resize(self.f['objective'].size+1, axis=0)
+        self.f['objective'][-1] = g
         return g, _dg_dp.to_ndarray()
-
-    return opt_obj_and_grad

@@ -199,12 +199,18 @@ def test_ReducedGradient(redu_grad, props_list):
         hopf.set_props(redu_grad.hist_props[-1])
         print(bla.norm(hopf.assem_res()))
 
-def test_make_opt_grad(redu_grad, props_list):
+def test_OptGradManager(redu_grad, props_list):
     with h5py.File("out/_test_make_opt_grad.h5", mode='w') as f:
-        opt_obj_and_grad = libhopf.make_opt_grad(redu_grad, f)
+        grad_manager = libhopf.OptGradManager(redu_grad, f)
 
         for props in props_list:
-            print(opt_obj_and_grad(props.to_ndarray()))
+            print(grad_manager.grad(props.to_ndarray()))
+
+        print(f.keys())
+
+        for key in list(f.keys()):
+            if 'hopf_newton_' in key:
+                print(f"key: {f[key][:]}")
 
 def test_bound_hopf_bifurcation(hopf, bound_pairs):
     bounds, omegas = libhopf.bound_hopf_bifurcations(hopf, bound_pairs)
@@ -258,6 +264,6 @@ if __name__ == '__main__':
         camp = func.camp.copy()
         props_list = [
             bvec.concatenate_vec([props0 + alpha*dprops, camp])
-            for alpha in np.arange(0, 100, 10)
+            for alpha in np.linspace(0, 100, 3)
             ]
-        test_make_opt_grad(redu_grad, props_list)
+        test_OptGradManager(redu_grad, props_list)
