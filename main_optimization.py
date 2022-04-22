@@ -42,9 +42,9 @@ if __name__ == '__main__':
         print("In callback")
 
     with h5py.File("out/opt_hist.h5", mode='w') as f:
-        opt_obj_and_grad = libhopf.make_opt_grad(redu_grad, f)
+        grad_manager = libhopf.OptGradManager(redu_grad, f)
         opt_res = optimize.minimize(
-            opt_obj_and_grad, x0.to_ndarray(),
+            grad_manager.grad, x0.to_ndarray(),
             method='L-BFGS-B',
             jac=True,
             options=opt_options,
