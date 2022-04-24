@@ -70,7 +70,7 @@ def set_props(props, region_to_dofs, res):
 
     return props
 
-def setup_hopf_state(mesh_path):
+def setup_hopf_state(mesh_path, hopf_state_path=None):
     ## Load the models
     res, dres = setup_models(mesh_path)
 
@@ -135,8 +135,9 @@ def setup_hopf_state(mesh_path):
     }
     xhopf_n, info = libhopf.solve_hopf_newton(hopf, xhopf_0)
 
-    with h5py.File("out/hopf_state.h5", mode='w') as f:
-        h5utils.create_resizable_block_vector_group(
-            f, xhopf_n.labels, xhopf_n.bshape)
-        h5utils.append_block_vector_to_group(f, xhopf_n)
+    if hopf_state_path is not None:
+        with h5py.File(hopf_state_path, mode='w') as f:
+            h5utils.create_resizable_block_vector_group(
+                f, xhopf_n.labels, xhopf_n.bshape)
+            h5utils.append_block_vector_to_group(f, xhopf_n)
     return hopf, xhopf_n, props
