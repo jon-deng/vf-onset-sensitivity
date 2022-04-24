@@ -17,7 +17,7 @@ from blocktensor import linalg
 
 from lib_main_transient import case_config
 # from main_hopf import set_props
-from setup import set_props
+from setup import set_props, setup_transient_model
 # warnings.filterwarnings('error')
 
 parser = argparse.ArgumentParser()
@@ -47,17 +47,9 @@ ZETA = 1e-4
 DT = 5e-5
 T_TOTAL = 0.6
 
-def setup_models(mesh_path):
-    model = load.load_transient_fsi_model(
-        mesh_path, None,
-        SolidType=smd.KelvinVoigt, FluidType=fmd.BernoulliMinimumSeparation,
-        coupling='explicit'
-        )
-    return model
-
 mesh_name = 'BC-dcov5.00e-02-cl1.00'
 mesh_path = f'mesh/{mesh_name}.xml'
-model = setup_models(mesh_path)
+model = setup_transient_model(mesh_path)
 
 # Get DOFs associated with layer regions
 

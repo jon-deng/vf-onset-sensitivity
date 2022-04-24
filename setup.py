@@ -4,24 +4,33 @@ This modules sets up a 'standard' Hopf model to test
 
 import h5py
 
+from femvf.models.transient import solid as smd, fluid as fmd
 from femvf.models.dynamical import solid as sldm, fluid as fldm
-from femvf.load import load_dynamical_fsi_model
+from femvf import load
 from femvf.meshutils import process_celllabel_to_dofs_from_forms
 import blocktensor.subops as gops
 from blocktensor import h5utils
 
 import libhopf
 
+def setup_transient_model(mesh_path):
+    model = load.load_transient_fsi_model(
+        mesh_path, None,
+        SolidType=smd.KelvinVoigt, FluidType=fmd.BernoulliMinimumSeparation,
+        coupling='explicit'
+        )
+    return model
+
 def setup_models(mesh_path):
     """
     Return residual + linear residual needed to model the Hopf system
     """
-    res = load_dynamical_fsi_model(
+    res = load.load_dynamical_fsi_model(
         mesh_path, None, SolidType = sldm.KelvinVoigt,
         FluidType = fldm.Bernoulli1DDynamicalSystem,
         fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
 
-    dres = load_dynamical_fsi_model(
+    dres = load.load_dynamical_fsi_model(
         mesh_path, None, SolidType = sldm.LinearizedKelvinVoigt,
         FluidType = fldm.LinearizedBernoulli1DDynamicalSystem,
         fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
