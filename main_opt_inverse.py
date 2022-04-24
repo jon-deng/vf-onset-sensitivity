@@ -70,9 +70,9 @@ if __name__ == '__main__':
     ## Create the objective function and gradient needed for optimization
 
     # Form the log-posterior functional
-    func_omega = libfuncs.OnsetFrequencyFunctional(hopf)
+    func_omega = libfuncs.AbsOnsetFrequencyFunctional(hopf)
     func_gw_err = libfuncs.GlottalWidthErrorFunctional(hopf, gw_ref=gw_ref, weights=1/std_gw)
-    func_freq_err = 1/std_omega * (func_omega - omega_ref) ** 2
+    func_freq_err = 1/std_omega * (func_omega - 2*np.pi*omega_ref) ** 2
     func = func_gw_err + func_freq_err
 
     redu_grad = libhopf.ReducedGradient(func, hopf)
