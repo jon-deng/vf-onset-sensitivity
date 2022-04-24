@@ -16,7 +16,8 @@ from femvf.static import static_configuration_coupled_picard
 from blocktensor import linalg
 
 from lib_main_transient import case_config
-from main_hopf import set_props
+# from main_hopf import set_props
+from setup import set_props
 # warnings.filterwarnings('error')
 
 parser = argparse.ArgumentParser()

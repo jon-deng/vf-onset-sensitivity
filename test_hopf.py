@@ -3,55 +3,19 @@ Testing code for finding hopf bifurcations of coupled FE VF models
 """
 from os import path
 import numpy as np
-import functools
 
-from femvf.models.dynamical import solid as sldm, fluid as fldm
-from femvf.load import load_dynamical_fsi_model
 from femvf.meshutils import process_celllabel_to_dofs_from_forms
-
-import blocktensor.subops as gops
 import blocktensor.linalg as bla
 
 from libhopf import HopfModel
+from setup import setup_models, set_props
 
 # slepc4py.init(sys.argv)
 
 # pylint: disable=redefined-outer-name
 # pylint: disable=invalid-name
 
-EBODY = 5e3 * 10
-ECOV = 5e3 * 10
-PSUB = 800 * 10
-
-def set_props(props, region_to_dofs, res):
-    """
-    Set the model properties
-    """
-
-    # VF material props
-    gops.set_vec(props['emod'], ECOV)
-    gops.set_vec(props['emod'], EBODY)
-    gops.set_vec(props['eta'], 5.0)
-    gops.set_vec(props['rho'], 1.0)
-    gops.set_vec(props['nu'], 0.45)
-
-    # Fluid separation smoothing props
-    gops.set_vec(props['zeta_min'], 1.0e-4)
-    gops.set_vec(props['zeta_sep'], 1.0e-4)
-
-    # Contact and midline symmetry properties
-    # y_gap = 0.5 / 10 # Set y gap to 0.5 mm
-    # y_gap = 1.0
-    y_gap = 0.01
-    y_contact_offset = 1/10*y_gap
-    y_max = res.solid.forms['mesh.mesh'].coordinates()[:, 1].max()
-    y_mid = y_max + y_gap
-    y_contact = y_mid - y_contact_offset
-    gops.set_vec(props['ycontact'], y_contact)
-    gops.set_vec(props['kcontact'], 1e16)
-    gops.set_vec(props['ymid'], y_mid)
-
-    return props
+PSUB = 450.0 * 10
 
 def _test_taylor(x0, dx, res, jac, action=None, norm=None):
     """
@@ -89,23 +53,6 @@ def _test_taylor(x0, dx, res, jac, action=None, norm=None):
     print("Relative errors: ", rel_errs)
     print("Convergence rates: ", np.array(conv_rates))
 
-def setup_models():
-    """Load the residual and linearized residual"""
-    ## Load residual functions needed to model the Hopf system
-    mesh_name = 'BC-dcov5.00e-02-cl2.00'
-    # mesh_name = 'vf-square'
-    mesh_path = path.join('./mesh', mesh_name+'.xml')
-
-    res = load_dynamical_fsi_model(
-        mesh_path, None, SolidType = sldm.KelvinVoigt,
-        FluidType = fldm.Bernoulli1DDynamicalSystem,
-        fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
-    dres = load_dynamical_fsi_model(
-        mesh_path, None, SolidType = sldm.LinearizedKelvinVoigt,
-        FluidType = fldm.LinearizedBernoulli1DDynamicalSystem,
-        fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
-    return res, dres
-
 def test_assem_dres_dstate(hopf, state0, dstate):
 
     def hopf_res(x):
@@ -129,8 +76,12 @@ def test_assem_dres_dprops(hopf, props0, dprops):
 
     _test_taylor(props0, dprops, hopf_res, hopf_jac)
 
+
 if __name__ == '__main__':
-    res, dres = setup_models()
+    mesh_name = 'BC-dcov5.00e-02-cl1.00'
+    mesh_path = path.join('./mesh', mesh_name+'.xml')
+
+    res, dres = setup_models(mesh_path)
     model = HopfModel(res, dres)
 
     ## Set model properties
@@ -169,6 +120,6 @@ if __name__ == '__main__':
     dprops = props0.copy()
     dprops.set(0.0)
     dprops['emod'] = 1.0
-    print(f"\n -- Checking Hopf jacobian along emod --")
+    print("\n -- Checking Hopf jacobian along emod --")
     test_assem_dres_dprops(model, props0, dprops)
 

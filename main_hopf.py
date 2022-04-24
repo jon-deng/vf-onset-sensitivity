@@ -3,21 +3,14 @@ Testing code for finding hopf bifurcations of coupled FE VF models
 """
 # import sys
 from os import path
-from petsc4py import PETSc
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
 
-from femvf.models.dynamical import solid as sldm, fluid as fldm
-from femvf.load import load_dynamical_fsi_model
 from femvf.meshutils import process_celllabel_to_dofs_from_forms
-
-import nonlineq as nleq
-
-import blocktensor.subops as gops
-from blocktensor import vec as bvec
 from blocktensor import h5utils
 
+from setup import setup_models, set_props
 import libhopf
 import libsignal
 
@@ -31,52 +24,6 @@ TEST_HOPF_BIFURCATION = True
 EBODY = 5e3 * 10
 ECOV = 5e3 * 10
 PSUB = 450 * 10
-
-def setup_models(mesh_path):
-    """
-    Return residual + linear residual needed to model the Hopf system
-    """
-    res = load_dynamical_fsi_model(
-        mesh_path, None, SolidType = sldm.KelvinVoigt,
-        FluidType = fldm.Bernoulli1DDynamicalSystem,
-        fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
-
-    dres = load_dynamical_fsi_model(
-        mesh_path, None, SolidType = sldm.LinearizedKelvinVoigt,
-        FluidType = fldm.LinearizedBernoulli1DDynamicalSystem,
-        fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
-
-    return res, dres
-
-def set_props(props, region_to_dofs, res):
-    """
-    Set the model properties
-    """
-    # VF material props
-    gops.set_vec(props['emod'], ECOV)
-    gops.set_vec(props['emod'], EBODY)
-    gops.set_vec(props['eta'], 5.0)
-    gops.set_vec(props['rho'], 1.0)
-    gops.set_vec(props['nu'], 0.45)
-
-    # Fluid separation smoothing props
-    gops.set_vec(props['zeta_min'], 1.0e-4)
-    gops.set_vec(props['zeta_sep'], 1.0e-4)
-
-    # Contact and midline symmetry properties
-    # y_gap = 0.5 / 10 # Set y gap to 0.5 mm
-    # y_gap = 1.0
-    y_gap = 0.01
-    y_contact_offset = 1/10*y_gap
-    y_max = res.solid.forms['mesh.mesh'].coordinates()[:, 1].max()
-    y_mid = y_max + y_gap
-    y_contact = y_mid - y_contact_offset
-    gops.set_vec(props['ycontact'], y_contact)
-    gops.set_vec(props['kcontact'], 1e16)
-    gops.set_vec(props['ymid'], y_mid)
-
-    return props
-
 
 if __name__ == '__main__':
     ## Load the models
