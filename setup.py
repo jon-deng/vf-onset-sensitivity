@@ -8,7 +8,7 @@ from femvf.models.transient import solid as smd, fluid as fmd
 from femvf.models.dynamical import solid as sldm, fluid as fldm
 from femvf import load
 from femvf.meshutils import process_celllabel_to_dofs_from_forms
-import blocktensor.subops as gops
+import blockarray.subops as gops
 from blocktensor import h5utils
 
 import libhopf

@@ -5,7 +5,7 @@ from os import path
 import numpy as np
 
 from femvf.meshutils import process_celllabel_to_dofs_from_forms
-import blocktensor.linalg as bla
+import blockarray.linalg as bla
 
 from libhopf import HopfModel
 from setup import setup_models, set_props

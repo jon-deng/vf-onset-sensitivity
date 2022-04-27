@@ -30,10 +30,10 @@ from petsc4py import PETSc
 from slepc4py import SLEPc
 import h5py
 
-import blocktensor.h5utils as h5utils
-import blocktensor.subops as gops
-import blocktensor.linalg as bla
-from blocktensor import vec as bvec, mat as bmat
+import blockarray.h5utils as h5utils
+import blockarray.subops as gops
+import blockarray.linalg as bla
+from blocktensor import blockvec  as bvec, blockmat as bmat
 
 import nonlineq as nleq
 

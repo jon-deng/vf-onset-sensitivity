@@ -9,7 +9,7 @@ import jax
 from libhopf import HopfModel
 import libsignal
 
-from blocktensor import vec as bvec
+from blocktensor import blockvec  as bvec
 
 # pylint: disable=abstract-method
 

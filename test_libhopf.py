@@ -7,7 +7,7 @@ import warnings
 import h5py
 import numpy as np
 
-from blocktensor import linalg as bla, vec as bvec
+from blocktensor import linalg as bla, blockvec as bvec
 
 import libhopf, libfunctionals as libfuncs
 from setup import setup_hopf_state

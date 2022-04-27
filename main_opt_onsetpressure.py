@@ -7,7 +7,7 @@ from pprint import pprint
 
 import h5py
 from scipy import optimize
-from blocktensor import vec as bvec
+from blocktensor import blockvec  as bvec
 
 import libhopf
 import libfunctionals as libfuncs

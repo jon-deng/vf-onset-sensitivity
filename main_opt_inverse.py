@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import h5py
 from scipy import optimize
-from blocktensor import vec as bvec
+from blocktensor import blockvec  as bvec
 from femvf import statefile as sf
 from femvf.signals import solid as solidsig
 from vfsig import modal as modalsig
