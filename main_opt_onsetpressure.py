@@ -7,7 +7,7 @@ from pprint import pprint
 
 import h5py
 from scipy import optimize
-from blocktensor import blockvec  as bvec
+from blockarray import blockvec  as bvec
 
 import libhopf
 import libfunctionals as libfuncs
@@ -44,7 +44,7 @@ if __name__ == '__main__':
     with h5py.File("out/opt_hist.h5", mode='w') as f:
         grad_manager = libhopf.OptGradManager(redu_grad, f)
         opt_res = optimize.minimize(
-            grad_manager.grad, x0.to_ndarray(),
+            grad_manager.grad, x0.to_mono_ndarray(),
             method='L-BFGS-B',
             jac=True,
             options=opt_options,

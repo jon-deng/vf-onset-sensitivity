@@ -7,7 +7,7 @@ import warnings
 import h5py
 import numpy as np
 
-from blocktensor import linalg as bla, blockvec as bvec
+from blockarray import linalg as bla, blockvec as bvec
 
 import libhopf, libfunctionals as libfuncs
 from setup import setup_hopf_state
@@ -80,7 +80,7 @@ def test_OptGradManager(redu_grad, props_list):
         grad_manager = libhopf.OptGradManager(redu_grad, f)
 
         for props in props_list:
-            print(grad_manager.grad(props.to_ndarray()))
+            print(grad_manager.grad(props.to_mono_ndarray()))
 
         print(f.keys())
 

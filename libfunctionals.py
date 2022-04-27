@@ -9,7 +9,7 @@ import jax
 from libhopf import HopfModel
 import libsignal
 
-from blocktensor import blockvec  as bvec
+from blockarray import blockvec  as bvec
 
 # pylint: disable=abstract-method
 
@@ -229,7 +229,7 @@ class BaseFunctional(GenericFunctional):
 
         self.state = self.model.state
         self.props = self.model.props
-        self.camp = bvec.convert_bvec_to_petsc(
+        self.camp = bvec.convert_subtype_to_petsc(
             bvec.BlockVector([np.zeros(1), np.zeros(1)], (2,), (('amp', 'phase'),))
             )
 
@@ -346,10 +346,10 @@ class GlottalWidthErrorFunctional(BaseFunctional):
         self._grad_camp_err = jax.grad(_err, argnums=1)
 
     def assem_g(self):
-        return self._err(self.state.to_ndarray(), self.camp.to_ndarray())
+        return self._err(self.state.to_mono_ndarray(), self.camp.to_mono_ndarray())
 
     def assem_dg_dstate(self):
-        _dg_dstate = self._grad_state_err(self.state.to_ndarray(), self.camp.to_ndarray())
+        _dg_dstate = self._grad_state_err(self.state.to_mono_ndarray(), self.camp.to_mono_ndarray())
         dg_dstate = self.state.copy()
         dg_dstate.set_vec(_dg_dstate)
         return dg_dstate
@@ -360,7 +360,7 @@ class GlottalWidthErrorFunctional(BaseFunctional):
         return dg_dprops
 
     def assem_dg_dcamp(self):
-        _dg_dcamp = self._grad_camp_err(self.state.to_ndarray(), self.camp.to_ndarray())
+        _dg_dcamp = self._grad_camp_err(self.state.to_mono_ndarray(), self.camp.to_mono_ndarray())
         dg_dcamp = self.camp.copy()
         dg_dcamp.set_vec(_dg_dcamp)
         return dg_dcamp

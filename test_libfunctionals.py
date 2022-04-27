@@ -7,7 +7,7 @@ import numbers
 import operator
 import numpy as np
 
-from blocktensor import linalg as bla
+from blockarray import linalg as bla
 
 import libfunctionals as libfuncs
 from setup import setup_hopf_state

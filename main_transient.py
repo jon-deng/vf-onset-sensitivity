@@ -13,7 +13,7 @@ from femvf import forward, load, statefile as sf
 from femvf.models.transient import solid as smd, fluid as fmd
 from femvf.meshutils import process_celllabel_to_dofs_from_forms
 from femvf.static import static_configuration_coupled_picard
-from blocktensor import linalg
+from blockarray import linalg
 
 from lib_main_transient import case_config
 # from main_hopf import set_props

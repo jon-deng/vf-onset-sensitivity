@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import h5py
 from scipy import optimize
-from blocktensor import blockvec  as bvec
+from blockarray import blockvec  as bvec
 from femvf import statefile as sf
 from femvf.signals import solid as solidsig
 from vfsig import modal as modalsig
@@ -86,14 +86,14 @@ if __name__ == '__main__':
         _camp.set_vec(x)
 
         func_gw_err.set_camp(_camp)
-        return func_gw_err.assem_g(), func_gw_err.assem_dg_dcamp().to_ndarray()
+        return func_gw_err.assem_g(), func_gw_err.assem_dg_dcamp().to_mono_ndarray()
     opt_res = optimize.minimize(_f, np.array([0.0, 0.0]), jac=True)
     camp0.set_vec(opt_res['x'])
 
     # As a sanity check, plot the initial guess glottal width and the reference glottal width
     camp = camp0
     proc_gw_hopf = libsignal.make_glottal_width(hopf, gw_ref.size)
-    gw_hopf = proc_gw_hopf(xhopf.to_ndarray(), camp.to_ndarray())
+    gw_hopf = proc_gw_hopf(xhopf.to_mono_ndarray(), camp.to_mono_ndarray())
 
     plt.plot(gw_hopf, label='hopf')
     plt.plot(gw_ref, label='ref')
@@ -114,7 +114,7 @@ if __name__ == '__main__':
     with h5py.File(f"out/opt_hist_{fname}.h5", mode='w') as f:
         grad_manager = libhopf.OptGradManager(redu_grad, f)
         opt_res = optimize.minimize(
-            grad_manager.grad, x0.to_ndarray(),
+            grad_manager.grad, x0.to_mono_ndarray(),
             method='L-BFGS-B',
             jac=True,
             options=opt_options,

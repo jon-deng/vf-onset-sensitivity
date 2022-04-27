@@ -8,7 +8,7 @@ import warnings
 
 import pandas
 
-from blocktensor import subops as gops
+from blockarray import subops as gops
 
 # import libhopf
 from setup import setup_hopf_state
@@ -23,8 +23,8 @@ def solve_hopf_newton_step(hopf, xhopf0):
     hopf.apply_dirichlet_bvec(res)
     hopf.apply_dirichlet_bmat(dres_dstate)
 
-    _dres_dstate = dres_dstate.to_petsc()
-    _res = res.to_petsc()
+    _dres_dstate = dres_dstate.to_mono_petsc()
+    _res = res.to_mono_petsc()
 
     _dxhopf = _dres_dstate.getVecRight()
     _dxhopf, _ = gops.solve_petsc_lu(_dres_dstate, _res, out=_dxhopf)

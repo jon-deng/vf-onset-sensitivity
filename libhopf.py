@@ -33,7 +33,7 @@ import h5py
 import blockarray.h5utils as h5utils
 import blockarray.subops as gops
 import blockarray.linalg as bla
-from blocktensor import blockvec  as bvec, blockmat as bmat
+from blockarray import blockvec  as bvec, blockmat as bmat
 
 import nonlineq as nleq
 
@@ -183,11 +183,11 @@ def gen_hopf_initial_guess(hopf, eref, bound_pairs, omega_pairs=None, nsplit=2, 
     x_mode_real, x_mode_imag = normalize_eigenvector_by_hopf_condition(
         x_mode_real, x_mode_imag, eref)
 
-    x_omega = bvec.convert_bvec_to_petsc(
+    x_omega = bvec.convert_subtype_to_petsc(
         bvec.BlockVector([np.array([omegas[idx_max].imag])], labels=(('omega',),))
         )
 
-    x_psub = bvec.convert_bvec_to_petsc(
+    x_psub = bvec.convert_subtype_to_petsc(
         bvec.BlockVector([np.array([psub])], labels=(('psub',),))
         )
 
@@ -387,7 +387,7 @@ class HopfModel:
             dres_dstate.copy(),
             -omega*dres_dstatet.copy(),
             dres.assem_dres_dcontrol()[:, ['psub']],
-            bvec.convert_bvec_to_petsc_colbmat(
+            bvec.to_block_colmat(
                 bla.mult_mat_vec(-dres_dstatet, x[mode_imag_labels]))]
 
         # Set appropriate linearization directions
@@ -398,12 +398,12 @@ class HopfModel:
             omega*dres_dstatet.copy(),
             dres_dstate.copy(),
             dres.assem_dres_dcontrol()[:, ['psub']],
-            bvec.convert_bvec_to_petsc_colbmat(
+            bvec.to_block_colmat(
                 bla.mult_mat_vec(dres_dstatet, x[mode_real_labels]))]
 
         jac_row3 = [
             NULL_MAT_SCALAR_STATE,
-            bvec.convert_bvec_to_petsc_rowbmat(ee),
+            bvec.to_block_rowmat(ee),
             NULL_MAT_SCALAR_STATE,
             NULL_MAT_SCALAR_SCALAR,
             NULL_MAT_SCALAR_SCALAR
@@ -412,7 +412,7 @@ class HopfModel:
         jac_row4 = [
             NULL_MAT_SCALAR_STATE,
             NULL_MAT_SCALAR_STATE,
-            bvec.convert_bvec_to_petsc_rowbmat(ee),
+            bvec.to_block_rowmat(ee),
             NULL_MAT_SCALAR_SCALAR,
             NULL_MAT_SCALAR_SCALAR
             ]
@@ -471,10 +471,10 @@ def normalize_eigenvector_by_hopf_condition(evec_real, evec_imag, evec_ref):
     b = bla.dot(evec_ref, evec_imag)
 
     theta = np.arctan(a/b)
-    amp = (a*np.sin(theta) + b*np.cos(theta))**-1
+    amp = float((a*np.sin(theta) + b*np.cos(theta))**-1)
 
-    ret_evec_real = amp*(evec_real*np.cos(theta) - evec_imag*np.sin(theta))
-    ret_evec_imag = amp*(evec_real*np.sin(theta) + evec_imag*np.cos(theta))
+    ret_evec_real = amp*(evec_real*float(np.cos(theta)) - evec_imag*float(np.sin(theta)))
+    ret_evec_imag = amp*(evec_real*float(np.sin(theta)) + evec_imag*float(np.cos(theta)))
     return ret_evec_real, ret_evec_imag
 
 def normalize_eigenvector_amplitude(evec_real, evec_imag):
@@ -539,8 +539,8 @@ def solve_fixed_point(res, xfp_0, newton_params=None):
 
         def solve(rhs_n):
             """Return jac^-1 res"""
-            _rhs_n = rhs_n.to_petsc()
-            _jac_n = jac_n.to_petsc()
+            _rhs_n = rhs_n.to_mono_petsc()
+            _jac_n = jac_n.to_mono_petsc()
             _dx_n = _jac_n.getVecRight()
 
             ksp = PETSc.KSP().create()
@@ -588,8 +588,8 @@ def solve_hopf_newton(
 
         def solve(rhs_n):
             """Return jac^-1 res"""
-            _rhs_n = rhs_n.to_petsc()
-            _jac_n = jac_n.to_petsc()
+            _rhs_n = rhs_n.to_mono_petsc()
+            _jac_n = jac_n.to_mono_petsc()
             _dx_n = _jac_n.getVecRight()
 
             _dx_n, _ = gops.solve_petsc_lu(_jac_n, _rhs_n, out=_dx_n)
@@ -653,8 +653,8 @@ def solve_linear_stability(res, xfp):
     apply_dirichlet_bmat(df_dx, diag=1.0)
     apply_dirichlet_bmat(df_dxt, diag=1.0e-10)
 
-    _df_dx = df_dx.to_petsc()
-    _df_dxt = df_dxt.to_petsc()
+    _df_dx = df_dx.to_mono_petsc()
+    _df_dxt = df_dxt.to_mono_petsc()
 
     eps = SLEPc.EPS().create()
     eps.setOperators(_df_dxt, _df_dx)
@@ -691,11 +691,11 @@ def solve_reduced_gradient(
 
     dg_dprops = functional.assem_dg_dprops()
     dg_dx = functional.assem_dg_dstate()
-    _dg_dx = dg_dx.to_petsc()
+    _dg_dx = dg_dx.to_mono_petsc()
 
     dres_dx_adj = hopf.assem_dres_dstate().transpose()
     hopf.apply_dirichlet_bmat(dres_dx_adj)
-    _dres_dx_adj = dres_dx_adj.to_petsc()
+    _dres_dx_adj = dres_dx_adj.to_mono_petsc()
 
     dg_dres = dg_dx.copy()
     _dg_dres = _dres_dx_adj.getVecRight()
@@ -903,4 +903,4 @@ class OptGradManager:
         h5utils.append_block_vector_to_group(self.f['grad'], _dg_dp)
         self.f['objective'].resize(self.f['objective'].size+1, axis=0)
         self.f['objective'][-1] = g
-        return g, _dg_dp.to_ndarray()
+        return g, _dg_dp.to_mono_ndarray()
