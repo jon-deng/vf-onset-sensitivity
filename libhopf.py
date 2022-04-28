@@ -743,12 +743,14 @@ class ReducedGradient:
     Consider the functional, g(x; p, camp), where x, p, camp represent the Hopf
     state vector, parameters, and complex amplitude, respectively. Also consider
     the Hopf system defined by F(x; p) = 0. The reduced gradient is the function
-    g^(p, camp) where x is implicitly constrained by the Hope system.
+    g^(p, camp)=g(x(p), p, camp) where x is implicitly constrained by the Hopf
+    system.
 
     The reduced gradient is difficult to solve for since solution of the Hopf
-    system is not straightforward without a good initial guess at a parameter
-    set. This class tries to supply reasonable initial guesses for solving the
-    Hopf system so that the reduced graident can be plugged into an optimization
+    system is not straightforward without a good initial guess for a given
+    parameter set. This class tries to supply reasonable initial guesses for
+    solving the Hopf system so that the reduced graident can be treated as
+    purely a function of parameters and plugged into an optimization
     loop.
 
     Parameters
@@ -798,36 +800,46 @@ class ReducedGradient:
 
         # Use the latest state in the history of Hopf states as an initial guess
         # for solving the Hopf system with the new parameters
+        max_n_iter = 2
+        n_iter = 0
         xhopf_0 = self.hist_state[-1]
-        xhopf_n, info = solve_hopf_newton(
-            self.res, xhopf_0, newton_params=self._newton_params)
-
-        # If the newton solver doesn't converge, retry with a better initial guess
-        if info['status'] != 0:
-            # Arbitratrily search over the range 0 to 1500 Pa for Hopf bifurcation
-            PSUBS = 10*np.arange(0, 1500, 100)
-            omegas_max = [max_real_omega(self.res.res, psub)[0] for psub in PSUBS]
-            has_transition = [
-                omega2 >= 0.0 and omega1 < 0.0
-                for omega1, omega2 in zip(omegas_max[:-1], omegas_max[1:])
-            ]
-            idxs_bif = np.arange(PSUBS.size-1)[has_transition]
-            if idxs_bif.size == 0:
-                raise RuntimeError("No Hopf bifurcations detected")
-            elif idxs_bif.size > 1:
-                warnings.warn("Found more than one Hopf bifurcation pressure; using smallest one")
-
-            idx_bif = idxs_bif[0]
-            lbs = [PSUBS[idx_bif]]
-            ubs = [PSUBS[idx_bif+1]]
-            bounds = (lbs, ubs)
-            omega_lbs = [omegas_max[idx_bif]]
-            omega_ubs = [omegas_max[idx_bif+1]]
-            omega_pairs = (omega_lbs, omega_ubs)
-            xhopf_0 = gen_hopf_initial_guess(self.res, self.res.EE, bounds, omega_pairs, tol=5.0)
-
+        while True:
             xhopf_n, info = solve_hopf_newton(
                 self.res, xhopf_0, newton_params=self._newton_params)
+
+            n_iter += 1
+            if n_iter > 1:
+                if info['status'] != 0:
+                    warnings.warn(
+                        "Hopf system could not be solved with initial guess!"
+                    )
+                break
+            elif info['status'] != 0:
+                warnings.warn(
+                    "Hopf system could not be solved with initial guess."
+                    " Attemping to find a better initial guess."
+                )
+                # Arbitratrily search over the range 0 to 1500 Pa for Hopf bifurcation
+                PSUBS = 10*np.arange(0, 1500, 100)
+                omegas_max = [max_real_omega(self.res.res, psub)[0] for psub in PSUBS]
+                has_transition = [
+                    omega2 >= 0.0 and omega1 < 0.0
+                    for omega1, omega2 in zip(omegas_max[:-1], omegas_max[1:])
+                ]
+                idxs_bif = np.arange(PSUBS.size-1)[has_transition]
+                if idxs_bif.size == 0:
+                    raise RuntimeError("No Hopf bifurcations detected")
+                elif idxs_bif.size > 1:
+                    warnings.warn("Found more than one Hopf bifurcation pressure; using the smallest one")
+
+                idx_bif = idxs_bif[0]
+                lbs = [PSUBS[idx_bif]]
+                ubs = [PSUBS[idx_bif+1]]
+                bounds = (lbs, ubs)
+                omega_lbs = [omegas_max[idx_bif]]
+                omega_ubs = [omegas_max[idx_bif+1]]
+                omega_pairs = (omega_lbs, omega_ubs)
+                xhopf_0 = gen_hopf_initial_guess(self.res, self.res.EE, bounds, omega_pairs, tol=5.0)
 
 
         self.hist_state.append(xhopf_n.copy())
