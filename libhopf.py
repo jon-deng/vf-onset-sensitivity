@@ -21,8 +21,9 @@ delta x_t = exp(omega_r - 1j*omega_i) * zeta
 so the Hopf equations below are slightly different.
 """
 
-from typing import Tuple, List, Union, Dict, Optional
+from typing import Tuple, List, Dict, Optional
 import itertools
+import warnings
 import numpy as np
 from petsc4py import PETSc
 from slepc4py import SLEPc
@@ -38,9 +39,6 @@ from blockarray import blockvec as bvec, blockmat as bmat
 
 # pylint: disable=invalid-name
 ListPair = Tuple[List[float], List[float]]
-
-
-
 
 def _hopf_state(res):
     """
@@ -800,9 +798,9 @@ class ReducedGradient:
 
         # Use the latest state in the history of Hopf states as an initial guess
         # for solving the Hopf system with the new parameters
-        old_state = self.hist_state[-1]
-        new_state, info = solve_hopf_newton(
-            self.res, old_state, newton_params=self._newton_params)
+        xhopf_0 = self.hist_state[-1]
+        xhopf_n, info = solve_hopf_newton(
+            self.res, xhopf_0, newton_params=self._newton_params)
 
         # If the newton solver doesn't converge, retry with a better initial guess
         if info['status'] != 0:
@@ -814,28 +812,30 @@ class ReducedGradient:
                 for omega1, omega2 in zip(omegas_max[:-1], omegas_max[1:])
             ]
             idxs_bif = np.arange(PSUBS.size-1)[has_transition]
-            if idxs_bif.size > 1:
-                raise RuntimeError("Found more than one Hopf bifurcation pressure")
-            else:
-                idx_bif = idxs_bif[0]
-                lbs = [PSUBS[idx_bif]]
-                ubs = [PSUBS[idx_bif+1]]
-                bounds = (lbs, ubs)
-                omega_lbs = [omegas_max[idx_bif]]
-                omega_ubs = [omegas_max[idx_bif+1]]
-                omega_pairs = (omega_lbs, omega_ubs)
-                xhopf_0 = gen_hopf_initial_guess(self.res, self.res.EE, bounds, omega_pairs, tol=25.0)
+            if idxs_bif.size == 0:
+                raise RuntimeError("No Hopf bifurcations detected")
+            elif idxs_bif.size > 1:
+                warnings.warn("Found more than one Hopf bifurcation pressure; using smallest one")
 
-                new_state, info = solve_hopf_newton(
-                    self.res, xhopf_0, newton_params=self._newton_params)
+            idx_bif = idxs_bif[0]
+            lbs = [PSUBS[idx_bif]]
+            ubs = [PSUBS[idx_bif+1]]
+            bounds = (lbs, ubs)
+            omega_lbs = [omegas_max[idx_bif]]
+            omega_ubs = [omegas_max[idx_bif+1]]
+            omega_pairs = (omega_lbs, omega_ubs)
+            xhopf_0 = gen_hopf_initial_guess(self.res, self.res.EE, bounds, omega_pairs, tol=5.0)
+
+            xhopf_n, info = solve_hopf_newton(
+                self.res, xhopf_0, newton_params=self._newton_params)
 
 
-        self.hist_state.append(new_state.copy())
+        self.hist_state.append(xhopf_n.copy())
         self.hist_props.append(self.props.copy())
 
-        self.res.set_state(new_state)
+        self.res.set_state(xhopf_n)
 
-        return new_state, info
+        return xhopf_n, info
 
     def set_camp(self, camp):
         """Set the complex amplitude"""
