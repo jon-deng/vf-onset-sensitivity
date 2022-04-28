@@ -80,9 +80,10 @@ class HopfModel:
     Parameters
     ----------
         res, dres: The system dynamics residual, and linearized residuals
+        e_mode: a normalization vector for the real and imaginary mode components
     """
 
-    def __init__(self, res, dres, ee=None):
+    def __init__(self, res, dres, e_mode=None):
         self.res = res
         self.dres = dres
 
@@ -101,12 +102,10 @@ class HopfModel:
             list(res.solid.forms['bc.dirichlet'].get_boundary_values().keys()),
             dtype=np.int32)
 
-        if ee is None:
-            ee = self.state[self.labels_state].copy()
-            # EBVEC['u'].array[0] = 1.0
-            # EBVEC['u'].array[:] = 1.0
-            ee.set(1.0)
-        self.EE = ee
+        if e_mode is None:
+            e_mode = self.state[self.labels_state].copy()
+            e_mode.set(1.0)
+        self.E_MODE = e_mode
 
     def set_props(self, props):
         self.props[:] = props
@@ -147,7 +146,7 @@ class HopfModel:
         res, dres = self.res, self.dres
         mode_real_labels, mode_imag_labels = self.labels_mode_real, self.labels_mode_imag
         x = self.state
-        ee = self.EE
+        ee = self.E_MODE
 
         # Set the model state and subglottal pressure (bifurcation parameter)
         omega = x['omega'][0]
@@ -184,7 +183,7 @@ class HopfModel:
         state_labels = self.labels_state
         mode_real_labels, mode_imag_labels = self.labels_mode_real, self.labels_mode_imag
         x = self.state
-        ee = self.EE
+        ee = self.E_MODE
 
         # Make null matrix constants
         mats = [
@@ -767,7 +766,8 @@ class ReducedGradient:
         self.res = res
 
         self._hist_state = [self.res.state.copy()]
-        self._hist_props = [self.res.props.copy()]
+        self._hist_props = [self.props.copy()]
+        self._hist_camp = [self.camp.copy()]
 
         if newton_params is None:
             newton_params = {}
@@ -788,6 +788,10 @@ class ReducedGradient:
     @property
     def hist_state(self):
         return self._hist_state
+
+    @property
+    def hist_camp(self):
+        return self._hist_camp
 
     def _update_hopf(self):
         """
@@ -844,6 +848,7 @@ class ReducedGradient:
 
         self.hist_state.append(xhopf_n.copy())
         self.hist_props.append(self.props.copy())
+        self.hist_camp.append(self.camp.copy())
 
         self.res.set_state(xhopf_n)
 
@@ -915,7 +920,7 @@ class OptGradManager:
         f.create_dataset('hopf_newton_abs_err', (0,), maxshape=(None,))
         f.create_dataset('hopf_newton_rel_err', (0,), maxshape=(None,))
 
-    def _update_hopf(self, p):
+    def _update_h5(self, hopf_state, info, p):
         """
         Update the Hopf model properties and solve for a Hopf bifurcation
 
@@ -925,26 +930,12 @@ class OptGradManager:
             The parameter vector consisting of dynamical model properties +
             complex amplitude properties (size 2)
         """
-        # Set properties and complex amplitude of the ReducedGradient
-        # This has to convert the monolithic input parameters to the block
-        # format of the ReducedGradient object
-        p_hopf = p[:-2]
-        _p_hopf = self.redu_grad.props.copy()
-        _p_hopf.set_vec(p_hopf)
-
-        p_camp = p[-2:]
-        _p_camp = self.redu_grad.camp.copy()
-        _p_camp.set_vec(p_camp)
-
-        # After setting `self.redu_grad` props, the Hopf system should be solved
-        hopf_state, info = self.redu_grad.set_props(_p_hopf)
-        self.redu_grad.set_camp(_p_camp)
-
         ## Record current state to h5 file
         # Record the current parameter set
         h5utils.append_block_vector_to_group(
-            self.f['parameters'], bvec.concatenate_vec([_p_hopf, _p_camp]))
+            self.f['parameters'], p)
 
+        hopf_state = self.redu_grad.hist_state[-1]
         h5utils.append_block_vector_to_group(
             self.f['hopf_state'], hopf_state)
 
@@ -960,8 +951,26 @@ class OptGradManager:
         self.f['hopf_newton_abs_err'].resize(self.f['hopf_newton_abs_err'].size+1, axis=0)
         self.f['hopf_newton_abs_err'][-1] = info['abs_errs'][-1]
 
+    def set_props(self, p):
+        # Set properties and complex amplitude of the ReducedGradient
+        # This has to convert the monolithic input parameters to the block
+        # format of the ReducedGradient object
+        p_hopf = p[:-2]
+        _p_hopf = self.redu_grad.props.copy()
+        _p_hopf.set_vec(p_hopf)
+
+        p_camp = p[-2:]
+        _p_camp = self.redu_grad.camp.copy()
+        _p_camp.set_vec(p_camp)
+
+        # After setting `self.redu_grad` props, the Hopf system should be solved
+        hopf_state, info = self.redu_grad.set_props(_p_hopf)
+        self.redu_grad.set_camp(_p_camp)
+
+        self._update_h5(hopf_state, info, bvec.concatenate_vec([_p_hopf, _p_camp]))
+
     def grad(self, p):
-        self._update_hopf(p)
+        self.set_props(p)
 
         # Solve the objective function value
         g = self.redu_grad.assem_g()
