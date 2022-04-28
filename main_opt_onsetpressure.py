@@ -23,9 +23,9 @@ if __name__ == '__main__':
 
     # Load the measurement glottal width error + reduced gradient
     func_onset_pressure = libfuncs.OnsetPressureFunctional(hopf)
-    func_onset_frequency = libfuncs.OnsetFrequencyFunctional(hopf)
+    func_onset_frequency = libfuncs.AbsOnsetFrequencyFunctional(hopf)
     # breakpoint()
-    func = func_onset_pressure + 1000.0*(func_onset_frequency-float(xhopf['omega'][0]))**2
+    func = func_onset_pressure + 1000.0*(func_onset_frequency-float(abs(xhopf['omega'][0])))**2
     # func = libfuncs.GlottalWidthErrorFunctional(hopf)
 
     redu_grad = libhopf.ReducedGradient(func, hopf)
