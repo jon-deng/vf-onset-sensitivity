@@ -843,7 +843,7 @@ class ReducedGradient:
                 omega_lbs = [omegas_max[idx_bif]]
                 omega_ubs = [omegas_max[idx_bif+1]]
                 omega_pairs = (omega_lbs, omega_ubs)
-                xhopf_0 = gen_hopf_initial_guess(self.res, self.res.EE, bounds, omega_pairs, tol=5.0)
+                xhopf_0 = gen_hopf_initial_guess(self.res, self.res.E_MODE, bounds, omega_pairs, tol=5.0)
 
 
         self.hist_state.append(xhopf_n.copy())

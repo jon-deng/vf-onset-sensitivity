@@ -34,7 +34,8 @@ if __name__ == '__main__':
 
     opt_options = {
         'disp': 1,
-        'maxiter': 100
+        'maxiter': 100,
+        'ftol': 1e-12
     }
     def opt_callback(xk):
         print("In callback")
