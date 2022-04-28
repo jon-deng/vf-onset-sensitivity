@@ -21,15 +21,14 @@ delta x_t = exp(omega_r - 1j*omega_i) * zeta
 so the Hopf equations below are slightly different.
 """
 
-import operator
-from functools import reduce
-import typing
+from typing import Tuple, Union, Dict
 import itertools
 import numpy as np
 from petsc4py import PETSc
 from slepc4py import SLEPc
 import h5py
 
+from femvf.models.dynamical import base as dynbase
 import blockarray.h5utils as h5utils
 import blockarray.subops as gops
 import blockarray.linalg as bla
@@ -41,7 +40,7 @@ import nonlineq as nleq
 
 # pylint: disable=invalid-name
 
-def max_real_omega(model, psub):
+def max_real_omega(model: dynbase.DynamicalSystem, psub: float) -> Tuple[float, float]:
     """
     Return the maximum real frequency component for a linearized dynamical model
 
@@ -568,7 +567,7 @@ def solve_fixed_point(res, xfp_0, newton_params=None):
 def solve_hopf_newton(
         hopf: HopfModel,
         xhopf_0: bvec.BlockVector,
-        out=None, newton_params=None) -> typing.Union[bvec.BlockVector, typing.Dict]:
+        out=None, newton_params=None) -> Union[bvec.BlockVector, Dict]:
     """Solve the nonlinear Hopf problem using a newton method"""
     if out is None:
         out = xhopf_0.copy()
