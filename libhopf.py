@@ -800,7 +800,7 @@ class ReducedGradient:
 
         # Use the latest state in the history of Hopf states as an initial guess
         # for solving the Hopf system with the new parameters
-        max_n_iter = 2
+        # max_n_iter = 2
         n_iter = 0
         xhopf_0 = self.hist_state[-1]
         while True:

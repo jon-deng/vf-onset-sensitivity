@@ -16,10 +16,10 @@ from test_hopf import _test_taylor
 # pylint: disable=redefined-outer-name
 # pylint: disable=no-member
 
-def test_solve_hopf_newton(hopf, xhopf0):
-    xhopf, info = libhopf.solve_hopf_newton(hopf, xhopf0)
+def test_solve_hopf_newton(hopf, xhopf_0):
+    xhopf, info = libhopf.solve_hopf_newton(hopf, xhopf_0)
 
-def test_solve_reduced_gradient(func, hopf, props0, dprops, xhopf0):
+def test_solve_reduced_gradient(func, hopf, props_0, dprops, xhopf_0):
     """
     Test the solve_reduced_gradient function
 
@@ -38,7 +38,7 @@ def test_solve_reduced_gradient(func, hopf, props0, dprops, xhopf0):
 
     def res(props):
         hopf.set_props(props)
-        x , info = libhopf.solve_hopf_newton(hopf, xhopf0)
+        x, info = libhopf.solve_hopf_newton(hopf, xhopf_0)
 
         func.set_state(x)
         func.set_props(props)
@@ -46,7 +46,7 @@ def test_solve_reduced_gradient(func, hopf, props0, dprops, xhopf0):
 
     def jac(props):
         hopf.set_props(props)
-        x, info = libhopf.solve_hopf_newton(hopf, xhopf0)
+        x, info = libhopf.solve_hopf_newton(hopf, xhopf_0)
 
         for xx in (func, hopf):
             xx.set_state(x)
@@ -54,7 +54,7 @@ def test_solve_reduced_gradient(func, hopf, props0, dprops, xhopf0):
 
         return libhopf.solve_reduced_gradient(func, hopf)
 
-    _test_taylor(props0, dprops, res, jac, action=bla.dot, norm=lambda x: x)
+    _test_taylor(props_0, dprops, res, jac, action=bla.dot, norm=lambda x: x)
 
 def test_ReducedGradient(redu_grad, props_list):
     """
@@ -107,22 +107,24 @@ if __name__ == '__main__':
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
     mesh_path = path.join('./mesh', mesh_name+'.xml')
 
-    hopf, xhopf, props0 = setup_hopf_state(mesh_path)
+    hopf, xhopf, props_0 = setup_hopf_state(mesh_path)
     func = libfuncs.OnsetPressureFunctional(hopf)
 
     # Create the ReducedGradientManager object;
     # currently this required the Hopf system have state and properties that
     # initially satisfy the equations
-    hopf.set_state(xhopf)
-    hopf.set_props(props0)
+    xhopf_0 = xhopf.copy()
+    xhopf_0.set(0.0)
+    hopf.set_state(xhopf_0)
+    hopf.set_props(props_0)
     redu_grad = libhopf.ReducedGradient(func, hopf)
 
-    dprops = props0.copy()
+    dprops = props_0.copy()
     dprops.set(0)
     dprops['emod'].set(1.0)
 
     with warnings.catch_warnings():
-        warnings.filterwarnings('error', category=UserWarning)
+        # warnings.filterwarnings('error', category=UserWarning)
 
         test_solve_hopf_newton(hopf, xhopf)
 
@@ -132,14 +134,14 @@ if __name__ == '__main__':
 
         test_gen_hopf_initial_guess(hopf, (lbs, ubs))
 
-        test_solve_reduced_gradient(func, hopf, props0, dprops, xhopf)
+        test_solve_reduced_gradient(func, hopf, props_0, dprops, xhopf)
 
-        props_list = [props0 + alpha*dprops for alpha in np.arange(0, 100, 10)]
+        props_list = [props_0 + alpha*dprops for alpha in np.arange(0, 1000, 100)]
         test_ReducedGradient(redu_grad, props_list)
 
         camp = func.camp.copy()
         props_list = [
-            bvec.concatenate_vec([props0 + alpha*dprops, camp])
+            bvec.concatenate_vec([props_0 + alpha*dprops, camp])
             for alpha in np.linspace(0, 100, 3)
             ]
         test_OptGradManager(redu_grad, props_list)
