@@ -32,23 +32,30 @@ if __name__ == '__main__':
     x0 = bvec.concatenate_vec([redu_grad.props.copy(), redu_grad.camp.copy()])
     x0['amp'].set(1.0)
 
+    ## Optimization
     opt_options = {
-        'disp': 1,
+        'disp': 99,
         'maxiter': 100,
-        'ftol': 1e-12
+        'ftol': 0.0,
+        'maxls': 100
     }
     def opt_callback(xk):
         print("In callback")
 
     with h5py.File("out/opt_hist.h5", mode='w') as f:
         grad_manager = libhopf.OptGradManager(redu_grad, f)
-        opt_res = optimize.minimize(
+        # opt_res = optimize.minimize(
+        #     grad_manager.grad, x0.to_mono_ndarray(),
+        #     method='L-BFGS-B',
+        #     jac=True,
+        #     options=opt_options,
+        #     callback=opt_callback
+        # )
+
+        opt_res = optimize.fmin_l_bfgs_b(
             grad_manager.grad, x0.to_mono_ndarray(),
-            method='L-BFGS-B',
-            jac=True,
-            options=opt_options,
-            callback=opt_callback
-            )
+            factr=0.0, iprint=99
+        )
 
     pprint(opt_res)
 
