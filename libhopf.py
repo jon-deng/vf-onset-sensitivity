@@ -21,7 +21,7 @@ delta x_t = exp(omega_r - 1j*omega_i) * zeta
 so the Hopf equations below are slightly different.
 """
 
-from typing import Tuple, Union, Dict
+from typing import Tuple, List, Union, Dict, Optional
 import itertools
 import numpy as np
 from petsc4py import PETSc
@@ -37,162 +37,8 @@ from blockarray import blockvec as bvec, blockmat as bmat
 # import libfunctionals as libfunc
 
 # pylint: disable=invalid-name
+ListPair = Tuple[List[float], List[float]]
 
-def max_real_omega(model: dynbase.DynamicalSystem, psub: float) -> Tuple[float, float]:
-    """
-    Return the maximum real frequency component for a linearized dynamical model
-
-    Parameters
-    ----------
-    model : femvf.models.dynamical.base.DynamicalSystem
-    psub : float
-    """
-    # First set the bifurcation parameter
-    control = model.control
-    control['psub'][:] = psub
-    model.set_control(control)
-
-    # Solve the for the fixed point
-    xfp_0 = model.state.copy()
-    xfp_0.set(0)
-    xfp, _info = solve_fixed_point(model, xfp_0)
-
-    # Solve for linear stability around the fixed point
-    omegas, eigvecs_real, _eigvecs_imag = solve_linear_stability(model, xfp)
-
-    idx_max = np.argmax(omegas.real)
-    return float(omegas.real[idx_max]), eigvecs_real[idx_max]
-
-def bound_hopf_bifurcations(model, bound_pairs, omega_pairs=None, nsplit=2, tol=100.0):
-    """
-    Bound the onset pressure where a Hopf bifurcation occurs
-
-    Parameters
-    ----------
-    model : femvf.models.dynamical.base.DynamicalSystem
-    bound_pairs : Tuple[List[float, ...], List[float, ...]]
-        A list of lower/upper bound pairs, (lb, ub), of the bifurcation
-        parameters (subglottal pressure). Each bound pair is checked to see if a
-        Hopf bifurcation occurs between them.
-    omega_pairs : Tuple[List[float, ...], List[float, ...]]
-        The maximum real omega at the lower/upper bounds. If the maximum real
-        omega component changes from negative to positive from the lower to
-        upper bound, then a Hopf bifurcation must occur in that interval.
-    nsplit : int
-        The number of intervals to split a bound pair into for searching for a
-        refined bifurcation parameter
-    tol : float
-        Tolerance on the bound pairs
-    """
-    # If real omega are not supplied for each bound pair, compute it here
-    lbs, ubs = bound_pairs
-    if omega_pairs is None:
-        omega_pairs = (
-            [max_real_omega(model, lb)[0] for lb in lbs],
-            [max_real_omega(model, ub)[0] for ub in ubs],
-        )
-
-    # Filter bound pairs so only pairs that contain Hopf bifurcations are present
-    has_onset = [
-        lb < 0 and ub >= 0
-        for lb, ub in zip(*omega_pairs)
-    ]
-
-    _lbs = [lb for lb, valid in zip(lbs, has_onset) if valid]
-    _ubs = [ub for ub, valid in zip(ubs, has_onset) if valid]
-
-    lomegas, uomegas = omega_pairs
-    _lomegas = [lb for lb, valid in zip(lomegas, has_onset) if valid]
-    _uomegas = [ub for ub, valid in zip(uomegas, has_onset) if valid]
-
-    # Check if the bound pairs containing onset all satisfy the tolerance;
-    # if they do return the bounds,
-    # and if they don't, split the bounds into smaller segments and retry
-    tols = [ub-lb for lb, ub in zip(lbs, ubs)]
-    if all([_tol <= tol for _tol in tols]):
-        return (_lbs, _ubs), (_lomegas, _uomegas)
-    else:
-        # Split the pairs into `nsplit` segments and calculate important stuff
-        # at the interior points separating segments
-        # This is a nested list containing, for each lb/ub pair, a list of interior
-        # segments
-        bounds_points = [
-            list(np.linspace(lb, ub, nsplit+1)[1:-1]) for lb, ub in zip(_lbs, _ubs)]
-        bounds_omegas = [
-            [max_real_omega(model, psub)[0] for psub in psubs] for psubs in bounds_points
-        ]
-
-        # Join the computed interior points for each bound into a new set of bound pairs and omega pairs
-        ret_lbs = [
-            x for lb, bound_points in zip(_lbs, bounds_points)
-            for x in ([lb] + bound_points)
-            ]
-        ret_ubs = [
-            x for ub, bound_points in zip(_ubs, bounds_points)
-            for x in (bound_points + [ub])
-            ]
-
-        ret_lomegas = [
-            x for lomega, omegas in zip(_lomegas, bounds_omegas)
-            for x in ([lomega] + omegas)
-            ]
-        ret_uomegas = [
-            x for uomega, omegas in zip(_uomegas, bounds_omegas)
-            for x in (omegas + [uomega])
-            ]
-        return bound_hopf_bifurcations(
-            model, (ret_lbs, ret_ubs), (ret_lomegas, ret_uomegas),
-            nsplit=nsplit, tol=tol)
-
-def gen_hopf_initial_guess(hopf, eref, bound_pairs, omega_pairs=None, nsplit=2, tol=100.0):
-    """
-    Generate an initial guess for a Hopf system by bounding the bifurcation point
-    """
-    res = hopf.res
-    # Find lower/upper bounds for the Hopf bifurcation point
-    (lbs, ubs), _ = bound_hopf_bifurcations(
-        res, bound_pairs, omega_pairs=omega_pairs, nsplit=nsplit, tol=tol)
-
-    if len(ubs) > 1:
-        raise UserWarning("More than one Hopf bifurcation point found")
-    if len(ubs) == 0:
-        raise UserWarning(f"No Hopf bifurcation found between bounds {bound_pairs[0]} and {bound_pairs[1]}")
-
-    # Use the upper bound to generate an initial guess for the bifurcation
-    # First set the model subglottal pressure to the upper bound
-    psub = ubs[0]
-    control = res.control
-    control['psub'][:] = psub
-    res.set_control(control)
-
-    # Solve for the fixed point
-    x_fp0 = res.state.copy()
-    x_fp0.set(0.0)
-    x_fp, _info = solve_fixed_point(res, x_fp0)
-
-    # Solve for linear stability around the fixed point
-    omegas, eigvecs_real, eigvecs_imag = solve_linear_stability(res, x_fp)
-    idx_max = np.argmax(omegas.real)
-
-    x_mode_real = eigvecs_real[idx_max]
-    x_mode_imag = eigvecs_imag[idx_max]
-
-    x_mode_real, x_mode_imag = normalize_eigenvector_by_hopf_condition(
-        x_mode_real, x_mode_imag, eref)
-
-    x_omega = bvec.convert_subtype_to_petsc(
-        bvec.BlockVector([np.array([omegas[idx_max].imag])], labels=(('omega',),))
-        )
-
-    x_psub = bvec.convert_subtype_to_petsc(
-        bvec.BlockVector([np.array([psub])], labels=(('psub',),))
-        )
-
-    x_hopf = hopf.state.copy()
-    for labels, subvector in zip(hopf.labels_hopf_components, [x_fp, x_mode_real, x_mode_imag, x_psub, x_omega]):
-        x_hopf[labels] = subvector
-
-    return x_hopf
 
 
 
@@ -453,7 +299,181 @@ class HopfModel:
             bmats, labels=self.state.labels+self.props.labels)
 
 
-def normalize_eigenvector_by_hopf_condition(evec_real, evec_imag, evec_ref):
+def max_real_omega(model: dynbase.DynamicalSystem, psub: float) -> Tuple[float, bvec.BlockVector]:
+    """
+    Return the maximum real frequency component for a linearized dynamical model
+
+    Parameters
+    ----------
+    model : femvf.models.dynamical.base.DynamicalSystem
+    psub : float
+    """
+    # First set the bifurcation parameter
+    control = model.control
+    control['psub'][:] = psub
+    model.set_control(control)
+
+    # Solve the for the fixed point
+    xfp_0 = model.state.copy()
+    xfp_0.set(0)
+    xfp, _info = solve_fixed_point(model, xfp_0)
+
+    # Solve for linear stability around the fixed point
+    omegas, eigvecs_real, _eigvecs_imag = solve_linear_stability(model, xfp)
+
+    idx_max = np.argmax(omegas.real)
+    return float(omegas.real[idx_max]), eigvecs_real[idx_max]
+
+def bound_hopf_bifurcations(
+        model: dynbase.DynamicalSystem,
+        bound_pairs: ListPair,
+        omega_pairs: ListPair=None,
+        nsplit: int=2,
+        tol: float=100.0
+    ) -> Tuple[ListPair, ListPair]:
+    """
+    Bound the onset pressure where a Hopf bifurcation occurs
+
+    Parameters
+    ----------
+    model : femvf.models.dynamical.base.DynamicalSystem
+    bound_pairs : Tuple[List[float, ...], List[float, ...]]
+        A list of lower/upper bound pairs, (lb, ub), of the bifurcation
+        parameters (subglottal pressure). Each bound pair is checked to see if a
+        Hopf bifurcation occurs between them.
+    omega_pairs : Tuple[List[float, ...], List[float, ...]]
+        The maximum real omega at the lower/upper bounds. If the maximum real
+        omega component changes from negative to positive from the lower to
+        upper bound, then a Hopf bifurcation must occur in that interval.
+    nsplit : int
+        The number of intervals to split a bound pair into for searching for a
+        refined bifurcation parameter
+    tol : float
+        Tolerance on the bound pairs
+    """
+    # If real omega are not supplied for each bound pair, compute it here
+    lbs, ubs = bound_pairs
+    if omega_pairs is None:
+        omega_pairs = (
+            [max_real_omega(model, lb)[0] for lb in lbs],
+            [max_real_omega(model, ub)[0] for ub in ubs],
+        )
+
+    # Filter bound pairs so only pairs that contain Hopf bifurcations are present
+    has_onset = [
+        lb < 0 and ub >= 0
+        for lb, ub in zip(*omega_pairs)
+    ]
+
+    _lbs = [lb for lb, valid in zip(lbs, has_onset) if valid]
+    _ubs = [ub for ub, valid in zip(ubs, has_onset) if valid]
+
+    lomegas, uomegas = omega_pairs
+    _lomegas = [lb for lb, valid in zip(lomegas, has_onset) if valid]
+    _uomegas = [ub for ub, valid in zip(uomegas, has_onset) if valid]
+
+    # Check if the bound pairs containing onset all satisfy the tolerance;
+    # if they do return the bounds,
+    # and if they don't, split the bounds into smaller segments and retry
+    tols = [ub-lb for lb, ub in zip(lbs, ubs)]
+    if all([_tol <= tol for _tol in tols]):
+        return (_lbs, _ubs), (_lomegas, _uomegas)
+    else:
+        # Split the pairs into `nsplit` segments and calculate important stuff
+        # at the interior points separating segments
+        # This is a nested list containing, for each lb/ub pair, a list of interior
+        # segments
+        bounds_points = [
+            list(np.linspace(lb, ub, nsplit+1)[1:-1]) for lb, ub in zip(_lbs, _ubs)]
+        bounds_omegas = [
+            [max_real_omega(model, psub)[0] for psub in psubs] for psubs in bounds_points
+        ]
+
+        # Join the computed interior points for each bound into a new set of bound pairs and omega pairs
+        ret_lbs = [
+            x for lb, bound_points in zip(_lbs, bounds_points)
+            for x in ([lb] + bound_points)
+            ]
+        ret_ubs = [
+            x for ub, bound_points in zip(_ubs, bounds_points)
+            for x in (bound_points + [ub])
+            ]
+
+        ret_lomegas = [
+            x for lomega, omegas in zip(_lomegas, bounds_omegas)
+            for x in ([lomega] + omegas)
+            ]
+        ret_uomegas = [
+            x for uomega, omegas in zip(_uomegas, bounds_omegas)
+            for x in (omegas + [uomega])
+            ]
+        return bound_hopf_bifurcations(
+            model, (ret_lbs, ret_ubs), (ret_lomegas, ret_uomegas),
+            nsplit=nsplit, tol=tol)
+
+def gen_hopf_initial_guess(
+        hopf: HopfModel,
+        eref: bvec.BlockVector,
+        bound_pairs: ListPair,
+        omega_pairs: Optional[ListPair]=None,
+        nsplit: int=2,
+        tol: float=100.0
+    ) -> bvec.BlockVector:
+    """
+    Generate an initial guess for a Hopf system by bounding the bifurcation point
+    """
+    res = hopf.res
+    # Find lower/upper bounds for the Hopf bifurcation point
+    (lbs, ubs), _ = bound_hopf_bifurcations(
+        res, bound_pairs, omega_pairs=omega_pairs, nsplit=nsplit, tol=tol)
+
+    if len(ubs) > 1:
+        raise UserWarning("More than one Hopf bifurcation point found")
+    if len(ubs) == 0:
+        raise UserWarning(f"No Hopf bifurcation found between bounds {bound_pairs[0]} and {bound_pairs[1]}")
+
+    # Use the upper bound to generate an initial guess for the bifurcation
+    # First set the model subglottal pressure to the upper bound
+    psub = ubs[0]
+    control = res.control
+    control['psub'][:] = psub
+    res.set_control(control)
+
+    # Solve for the fixed point
+    x_fp0 = res.state.copy()
+    x_fp0.set(0.0)
+    x_fp, _info = solve_fixed_point(res, x_fp0)
+
+    # Solve for linear stability around the fixed point
+    omegas, eigvecs_real, eigvecs_imag = solve_linear_stability(res, x_fp)
+    idx_max = np.argmax(omegas.real)
+
+    x_mode_real = eigvecs_real[idx_max]
+    x_mode_imag = eigvecs_imag[idx_max]
+
+    x_mode_real, x_mode_imag = normalize_eigenvector_by_hopf_condition(
+        x_mode_real, x_mode_imag, eref)
+
+    x_omega = bvec.convert_subtype_to_petsc(
+        bvec.BlockVector([np.array([omegas[idx_max].imag])], labels=(('omega',),))
+        )
+
+    x_psub = bvec.convert_subtype_to_petsc(
+        bvec.BlockVector([np.array([psub])], labels=(('psub',),))
+        )
+
+    x_hopf = hopf.state.copy()
+    for labels, subvector in zip(hopf.labels_hopf_components, [x_fp, x_mode_real, x_mode_imag, x_psub, x_omega]):
+        x_hopf[labels] = subvector
+
+    return x_hopf
+
+
+def normalize_eigenvector_by_hopf_condition(
+        evec_real: bvec.BlockVector,
+        evec_imag: bvec.BlockVector,
+        evec_ref: bvec.BlockVector
+    ) -> Tuple[bvec.BlockVector, bvec.BlockVector]:
     """
     Scales real and imaginary components of an eigenvector by a complex constant
 
@@ -474,7 +494,10 @@ def normalize_eigenvector_by_hopf_condition(evec_real, evec_imag, evec_ref):
     ret_evec_imag = amp*(evec_real*float(np.sin(theta)) + evec_imag*float(np.cos(theta)))
     return ret_evec_real, ret_evec_imag
 
-def normalize_eigenvector_amplitude(evec_real, evec_imag):
+def normalize_eigenvector_amplitude(
+        evec_real: bvec.BlockVector,
+        evec_imag: bvec.BlockVector
+    ) -> Tuple[bvec.BlockVector, bvec.BlockVector]:
     """
     Scales real and imaginary components of an eigenvector so it has unit norm
     """
@@ -482,7 +505,11 @@ def normalize_eigenvector_amplitude(evec_real, evec_imag):
     return ampl*evec_real, ampl*evec_imag
 
 
-def solve_fixed_point(res, xfp_0, newton_params=None):
+def solve_fixed_point(
+        res: dynbase.DynamicalSystem,
+        xfp_0: bvec.BlockVector,
+        newton_params: Optional[Dict]=None
+    ) -> Tuple[bvec.BlockVector, Dict]:
     """
     Solve for a fixed-point
 
@@ -565,7 +592,8 @@ def solve_fixed_point(res, xfp_0, newton_params=None):
 def solve_hopf_newton(
         hopf: HopfModel,
         xhopf_0: bvec.BlockVector,
-        out=None, newton_params=None) -> Union[bvec.BlockVector, Dict]:
+        out=None, newton_params=None
+    ) -> Tuple[bvec.BlockVector, Dict]:
     """Solve the nonlinear Hopf problem using a newton method"""
     if out is None:
         out = xhopf_0.copy()
@@ -604,7 +632,10 @@ def solve_hopf_newton(
     out[:], info = nleq.newton_solve(xhopf_0, linear_subproblem, norm=bvec.norm, params=newton_params)
     return out, info
 
-def solve_linear_stability(res, xfp):
+def solve_linear_stability(
+        res: dynbase.DynamicalSystem,
+        xfp: bvec.BlockVector
+    ) -> Tuple[List[float], List[bvec.BlockVector], List[bvec.BlockVector]]:
     """
     Return a set of modes for the linear stability problem (ls)
 
@@ -683,7 +714,8 @@ def solve_linear_stability(res, xfp):
 
 def solve_reduced_gradient(
         functional: 'libfunctionals.GenericFunctional',
-        hopf: HopfModel) -> bvec.BlockVector:
+        hopf: HopfModel
+    ) -> bvec.BlockVector:
     """Solve for the reduced gradient of a functional"""
 
     dg_dprops = functional.assem_dg_dprops()
