@@ -155,12 +155,12 @@ class HopfModel:
 
         # Set appropriate linearization directions
         dres.set_dstate(x[mode_real_labels])
-        dres.set_dstatet(-omega*x[mode_imag_labels])
+        dres.set_dstatet(-float(omega)*x[mode_imag_labels])
         res_mode_real = dres.assem_res()
 
         # Set appropriate linearization directions
         dres.set_dstate(x[mode_imag_labels])
-        dres.set_dstatet(omega*x[mode_real_labels])
+        dres.set_dstatet(float(omega)*x[mode_real_labels])
         res_mode_imag = dres.assem_res()
 
         res_psub = x[['psub']].copy()
@@ -221,21 +221,21 @@ class HopfModel:
         omega = x['omega'][0]
         # Set appropriate linearization directions
         dres.set_dstate(x[mode_real_labels])
-        dres.set_dstatet(omega*x[mode_imag_labels])
+        dres.set_dstatet(float(omega)*x[mode_imag_labels])
         jac_row1 = [
             dres.assem_dres_dstate(),
             dres_dstate.copy(),
-            -omega*dres_dstatet.copy(),
+            -float(omega)*dres_dstatet.copy(),
             dres.assem_dres_dcontrol()[:, ['psub']],
             bvec.to_block_colmat(
                 bla.mult_mat_vec(-dres_dstatet, x[mode_imag_labels]))]
 
         # Set appropriate linearization directions
         dres.set_dstate(x[mode_imag_labels])
-        dres.set_dstatet(-omega*x[mode_real_labels])
+        dres.set_dstatet(-float(omega)*x[mode_real_labels])
         jac_row2 = [
             dres.assem_dres_dstate(),
-            omega*dres_dstatet.copy(),
+            float(omega)*dres_dstatet.copy(),
             dres_dstate.copy(),
             dres.assem_dres_dcontrol()[:, ['psub']],
             bvec.to_block_colmat(
@@ -276,11 +276,11 @@ class HopfModel:
         row0 = [res.assem_dres_dprops()]
 
         dres.set_dstate(self.state[mode_real_labels])
-        dres.set_dstatet(-omega*self.state[mode_imag_labels])
+        dres.set_dstatet(-float(omega)*self.state[mode_imag_labels])
         row1 = [dres.assem_dres_dprops()]
 
         dres.set_dstate(self.state[mode_imag_labels])
-        dres.set_dstatet(omega*self.state[mode_real_labels])
+        dres.set_dstatet(float(omega)*self.state[mode_real_labels])
         row2 = [dres.assem_dres_dprops()]
 
         _mats = [bmat.zero_mat(1, m) for m in self.props.bshape[0]]
