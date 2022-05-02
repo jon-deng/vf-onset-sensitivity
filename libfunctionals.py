@@ -5,6 +5,8 @@ import numbers
 import numpy as np
 from jax import numpy as jnp
 import jax
+import dolfin as dfn
+import ufl
 
 from libhopf import HopfModel
 import libsignal
@@ -365,3 +367,38 @@ class GlottalWidthErrorFunctional(BaseFunctional):
         dg_dcamp.set_vec(_dg_dcamp)
         return dg_dcamp
 
+class ModulusGradientNormSqr(BaseFunctional):
+    """
+    Returns the L2 norm (^2) of the gradient of the modulus
+    """
+    def __init__(self, model):
+        super().__init__(model)
+
+        # Define the modulus gradient
+        forms = model.res.solid.forms
+        E = forms['coeff.prop.emod']
+        dx = forms['measure.dx']
+        grad_E = ufl.grad(E)
+        self._functional = ufl.inner(grad_E, grad_E) * dx
+        self._dfunctional_demod = dfn.derivative(self._functional, E)
+
+    def assem_g(self):
+        return dfn.assemble(self._functional)
+
+    def assem_dg_dstate(self):
+        dg_dstate = self.state.copy()
+        dg_dstate.set(0.0)
+        return dg_dstate
+
+    def assem_dg_dprops(self):
+        dg_dprops = self.props.copy()
+        dg_dprops.set(0)
+        dg_dprops['emod'][:] = dfn.assemble(
+            self._dfunctional_demod, tensor=dfn.PETScVector()
+        ).vec()
+        return dg_dprops
+
+    def assem_dg_dcamp(self):
+        dg_dcamp = self.camp.copy()
+        dg_dcamp.set(0)
+        return dg_dcamp

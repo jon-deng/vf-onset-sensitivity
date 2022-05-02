@@ -72,6 +72,9 @@ if __name__ == '__main__':
     # Form the log-posterior functional
     func_omega = libfuncs.AbsOnsetFrequencyFunctional(hopf)
     func_gw_err = libfuncs.GlottalWidthErrorFunctional(hopf, gw_ref=gw_ref, weights=1/std_gw)
+    func_egrad_norm = libfuncs.ModulusGradientNormSqr(hopf)
+    func_egrad_norm.assem_g()
+
     func_freq_err = 1/std_omega * (func_omega - 2*np.pi*omega_ref) ** 2
     func = func_gw_err + func_freq_err
 
