@@ -466,6 +466,8 @@ def gen_hopf_initial_guess(
     return x_hopf
 
 
+## Normalize eigenvectors
+
 def normalize_eigenvector_by_hopf_condition(
         evec_real: bvec.BlockVector,
         evec_imag: bvec.BlockVector,
@@ -500,6 +502,9 @@ def normalize_eigenvector_amplitude(
     """
     ampl = 1/(evec_real.norm()**2 + evec_imag.norm()**2)**0.5
     return ampl*evec_real, ampl*evec_imag
+
+
+## Solve the Hopf system, fixed point, etc.
 
 def solve_fixed_point(res: dynbase.DynamicalSystem, n_load=5):
     """
