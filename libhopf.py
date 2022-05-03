@@ -296,7 +296,10 @@ class HopfModel:
             bmats, labels=self.state.labels+self.props.labels)
 
 
-def max_real_omega(model: dynbase.DynamicalSystem, psub: float) -> Tuple[float, bvec.BlockVector]:
+def max_real_omega(
+        model: dynbase.DynamicalSystem,
+        psub: float
+    ) -> Tuple[float, bvec.BlockVector, bvec.BlockVector, bvec.BlockVector]:
     """
     Return the maximum real frequency component for a linearized dynamical model
 
@@ -319,7 +322,7 @@ def max_real_omega(model: dynbase.DynamicalSystem, psub: float) -> Tuple[float, 
     omegas, eigvecs_real, eigvecs_imag = solve_linear_stability(model, xfp)
 
     idx_max = np.argmax(omegas.real)
-    return omegas[idx_max], eigvecs_real[idx_max], eigvecs_imag[idx_max]
+    return omegas[idx_max], eigvecs_real[idx_max], eigvecs_imag[idx_max], xfp
 
 def bound_hopf_bifurcations(
         model: dynbase.DynamicalSystem,
