@@ -48,6 +48,12 @@ def set_props(props, region_to_dofs, res):
     # VF material props
     gops.set_vec(props['emod'], ECOV)
     gops.set_vec(props['emod'], EBODY)
+
+    props = set_constant_props(props, region_to_dofs, res)
+
+    return props
+
+def set_constant_props(props, region_to_dofs, res):
     gops.set_vec(props['eta'], 5.0)
     gops.set_vec(props['rho'], 1.0)
     gops.set_vec(props['nu'], 0.45)
