@@ -73,7 +73,7 @@ if __name__ == '__main__':
         'maximum_iterations': 20
     }
     xfp_0 = res.state.copy()
-    xfp_n, info = libhopf.solve_fixed_point(res, xfp_0, newton_params=newton_params)
+    xfp_n, info = libhopf.solve_fixed_point_newton(res, xfp_0, newton_params=newton_params)
 
     ## Test solving for stabilty (modal analysis of the jacobian)
     print("\n-- Test modal analysis of system linearized dynamics --")

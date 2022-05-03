@@ -313,7 +313,7 @@ def max_real_omega(model: dynbase.DynamicalSystem, psub: float) -> Tuple[float, 
     # Solve the for the fixed point
     xfp_0 = model.state.copy()
     xfp_0.set(0)
-    xfp, _info = solve_fixed_point(model, xfp_0)
+    xfp, _info = solve_fixed_point(model)
 
     # Solve for linear stability around the fixed point
     omegas, eigvecs_real, eigvecs_imag = solve_linear_stability(model, xfp)
@@ -439,7 +439,7 @@ def gen_hopf_initial_guess(
     # Solve for the fixed point
     x_fp0 = res.state.copy()
     x_fp0.set(0.0)
-    x_fp, _info = solve_fixed_point(res, x_fp0)
+    x_fp, _info = solve_fixed_point(res)
 
     # Solve for linear stability around the fixed point
     omegas, eigvecs_real, eigvecs_imag = solve_linear_stability(res, x_fp)
@@ -501,8 +501,32 @@ def normalize_eigenvector_amplitude(
     ampl = 1/(evec_real.norm()**2 + evec_imag.norm()**2)**0.5
     return ampl*evec_real, ampl*evec_imag
 
+def solve_fixed_point(res: dynbase.DynamicalSystem, n_load=5):
+    """
+    Solve for a fixed-point
 
-def solve_fixed_point(
+    This is high-level solver which uses intermediate loading steps with the
+    Newton method to find the fixed-point for target subglottal pressure.
+    """
+    # The target final subglottal pressure
+    psub_n = float(res.control['psub'][0])
+
+    # Use a sequence of intermediate loading steps to generate good initial
+    # guesses for the next fixed-point newton solve
+    xfp_0 = res.state.copy()
+    xfp_0.set(0.0)
+
+    for psub in np.linspace(0, psub_n, n_load+1)[1:]:
+        control = res.control
+        control['psub'][0] = psub
+        res.set_control(control)
+
+        xfp_0, info = solve_fixed_point_newton(res, xfp_0)
+
+    xfp_n = xfp_0
+    return xfp_n, info
+
+def solve_fixed_point_newton(
         res: dynbase.DynamicalSystem,
         xfp_0: bvec.BlockVector,
         newton_params: Optional[Dict]=None
