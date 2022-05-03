@@ -316,10 +316,10 @@ def max_real_omega(model: dynbase.DynamicalSystem, psub: float) -> Tuple[float, 
     xfp, _info = solve_fixed_point(model, xfp_0)
 
     # Solve for linear stability around the fixed point
-    omegas, eigvecs_real, _eigvecs_imag = solve_linear_stability(model, xfp)
+    omegas, eigvecs_real, eigvecs_imag = solve_linear_stability(model, xfp)
 
     idx_max = np.argmax(omegas.real)
-    return float(omegas.real[idx_max]), eigvecs_real[idx_max]
+    return omegas[idx_max], eigvecs_real[idx_max], eigvecs_imag[idx_max]
 
 def bound_hopf_bifurcations(
         model: dynbase.DynamicalSystem,
@@ -352,8 +352,8 @@ def bound_hopf_bifurcations(
     lbs, ubs = bound_pairs
     if omega_pairs is None:
         omega_pairs = (
-            [max_real_omega(model, lb)[0] for lb in lbs],
-            [max_real_omega(model, ub)[0] for ub in ubs],
+            [max_real_omega(model, lb)[0].real for lb in lbs],
+            [max_real_omega(model, ub)[0].real for ub in ubs],
         )
 
     # Filter bound pairs so only pairs that contain Hopf bifurcations are present
@@ -383,7 +383,7 @@ def bound_hopf_bifurcations(
         bounds_points = [
             list(np.linspace(lb, ub, nsplit+1)[1:-1]) for lb, ub in zip(_lbs, _ubs)]
         bounds_omegas = [
-            [max_real_omega(model, psub)[0] for psub in psubs] for psubs in bounds_points
+            [max_real_omega(model, psub)[0].real for psub in psubs] for psubs in bounds_points
         ]
 
         # Join the computed interior points for each bound into a new set of bound pairs and omega pairs
@@ -825,7 +825,7 @@ class ReducedGradient:
                 )
                 # Arbitratrily search over the range 0 to 1500 Pa for Hopf bifurcation
                 PSUBS = 10*np.arange(0, 1500, 100)
-                omegas_max = [max_real_omega(self.res.res, psub)[0] for psub in PSUBS]
+                omegas_max = [max_real_omega(self.res.res, psub)[0].real for psub in PSUBS]
                 has_transition = [
                     omega2 >= 0.0 and omega1 < 0.0
                     for omega1, omega2 in zip(omegas_max[:-1], omegas_max[1:])
