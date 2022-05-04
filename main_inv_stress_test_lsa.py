@@ -20,7 +20,7 @@ import libhopf
 # pylint: disable=redefined-outer-name
 
 # Range of psub to test for Hopf bifurcation
-PSUBS = np.arange(0, 1300, 50)*10
+PSUBS = np.arange(100, 1300, 100)*10
 
 def set_props(res_dyn, emod_cov, emod_bod):
     # Get the cover/body layer DOFs
@@ -32,7 +32,7 @@ def set_props(res_dyn, emod_cov, emod_bod):
 
     # Set any constant properties
     props = res_dyn.props
-    props = setup.set_constant_props(props, res_dyn, celllabel_to_dofs)
+    props = setup.set_constant_props(props, celllabel_to_dofs, res_dyn)
 
     # Set cover and body layer properties
     dofs_cov = np.array(celllabel_to_dofs['cover'], dtype=np.int32)
@@ -40,7 +40,6 @@ def set_props(res_dyn, emod_cov, emod_bod):
     props['emod'].array[dofs_cov] = emod_cov
     props['emod'].array[dofs_bod] = emod_bod
 
-    props['nu'] = 5.0
     res_dyn.set_props(props)
 
 def run_lsa(f, res_dyn, emod_cov, emod_bod):
@@ -111,24 +110,26 @@ if __name__ == '__main__':
 
     EMODS = np.arange(2.5, 12.5+2.5, 2.5) * 1e3*10
 
-    EMODS = np.arange(5.0, 12.5+2.5, 2.5) * 1e3*10
+    # EMODS = np.arange(5.0, 12.5+2.5, 2.5) * 1e3*10
     # print(EMODS)
 
-    for emod_cov, emod_bod in itertools.product(EMODS, EMODS):
-        fname = f'LSA_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
-        fpath = f'out/stress_test/{fname}.h5'
+    for ii, emod_bod in enumerate(EMODS):
+        for emod_cov in EMODS[ii:]:
+            fname = f'LSA_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
+            fpath = f'out/stress_test/{fname}.h5'
 
-        if not path.isfile(fpath):
-            with h5py.File(fpath, mode='w') as f:
-                with warnings.catch_warnings():
-                    warnings.simplefilter('error')
-                    run_lsa(f, res_dyn, emod_cov, emod_bod)
-        else:
-            print(f"File {fpath} already exists")
+            if not path.isfile(fpath):
+                with h5py.File(fpath, mode='w') as f:
+                    with warnings.catch_warnings():
+                        warnings.simplefilter('error')
+                        run_lsa(f, res_dyn, emod_cov, emod_bod)
+            else:
+                print(f"File {fpath} already exists")
 
-    for emod_cov, emod_bod in itertools.product(EMODS, EMODS):
-        fname = f'Hopf_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
-        fpath = f'out/stress_test/{fname}.h5'
+    for ii, emod_bod in enumerate(EMODS):
+        for emod_cov in EMODS[ii:]:
+            fname = f'Hopf_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
+            fpath = f'out/stress_test/{fname}.h5'
 
-        with h5py.File('out/test.h5', mode='w') as f:
-            run_solve_hopf(f, res_hopf, emod_cov, emod_bod)
+            with h5py.File('out/test.h5', mode='w') as f:
+                run_solve_hopf(f, res_hopf, emod_cov, emod_bod)
