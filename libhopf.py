@@ -336,20 +336,21 @@ def bound_hopf_bifurcations(
 
     Parameters
     ----------
-    model : femvf.models.dynamical.base.DynamicalSystem
-    bound_pairs : Tuple[List[float, ...], List[float, ...]]
-        A list of lower/upper bound pairs, (lb, ub), of the bifurcation
-        parameters (subglottal pressure). Each bound pair is checked to see if a
-        Hopf bifurcation occurs between them.
-    omega_pairs : Tuple[List[float, ...], List[float, ...]]
-        The maximum real omega at the lower/upper bounds. If the maximum real
-        omega component changes from negative to positive from the lower to
-        upper bound, then a Hopf bifurcation must occur in that interval.
-    nsplit : int
-        The number of intervals to split a bound pair into for searching for a
-        refined bifurcation parameter
-    tol : float
-        Tolerance on the bound pairs
+    model :
+        The Hopf model
+    bound_pairs :
+        A tuple of lower bounds (lbs) and upper bounds (ubs) of the bifurcation
+        parameter (psub) to test if a Hopf bifurcation occurs. Each interval
+        between `lbs[i]` to `ubs[i]` is tested to see if an eigenvalue switches
+        sign indicating a Hopf bifurcation.
+    omega_pairs :
+        The corresponding maximum real eigenvalue components at the lower/upper
+        bounds.
+    nsplit :
+        The number of intervals to split a lower/upper bound range to search
+        for a refined bound on the Hopf bifurcation.
+    tol :
+        The tolerance on the lower/upper bound range.
     """
     # If real omega are not supplied for each bound pair, compute it here
     lbs, ubs = bound_pairs
@@ -413,7 +414,6 @@ def bound_hopf_bifurcations(
 
 def gen_hopf_initial_guess(
         hopf: HopfModel,
-        eref: bvec.BlockVector,
         bound_pairs: ListPair,
         omega_pairs: Optional[ListPair]=None,
         nsplit: int=2,
@@ -421,6 +421,24 @@ def gen_hopf_initial_guess(
     ) -> bvec.BlockVector:
     """
     Generate an initial guess for a Hopf system by bounding the bifurcation point
+
+    Parameters
+    ----------
+    hopf :
+        The Hopf model
+    bound_pairs :
+        A tuple of lower bounds (lbs) and upper bounds (ubs) of the bifurcation
+        parameter (psub) to test if a Hopf bifurcation occurs. Each interval
+        between `lbs[i]` to `ubs[i]` is tested to see if an eigenvalue switches
+        sign indicating a Hopf bifurcation.
+    omega_pairs :
+        The corresponding maximum real eigenvalue components at the lower/upper
+        bounds.
+    nsplit :
+        The number of intervals to split a lower/upper bound range to search
+        for a refined bound on the Hopf bifurcation.
+    tol :
+        The tolerance on the lower/upper bound range.
     """
     res = hopf.res
     # Find lower/upper bounds for the Hopf bifurcation point
@@ -452,7 +470,7 @@ def gen_hopf_initial_guess(
     x_mode_imag = eigvecs_imag[idx_max]
 
     x_mode_real, x_mode_imag = normalize_eigenvector_by_hopf_condition(
-        x_mode_real, x_mode_imag, eref)
+        x_mode_real, x_mode_imag, hopf.E_MODE)
 
     x_omega = bvec.convert_subtype_to_petsc(
         bvec.BlockVector([np.array([omegas[idx_max].imag])], labels=(('omega',),))
