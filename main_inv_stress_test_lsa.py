@@ -12,10 +12,12 @@ import warnings
 import numpy as np
 import h5py
 from femvf import meshutils, forward, statefile as sf
+from femvf.signals import solid as sigsl
 from blockarray import h5utils, blockvec as bv
 
 import setup
 import libhopf
+import postprocutils
 
 # pylint: disable=redefined-outer-name
 
@@ -152,6 +154,25 @@ def run_large_amp_model(f, res, emod_cov, emod_bod):
     else:
         print(f"Skipping large amplitude simulation of {fname} because no Hopf bifurcation is detected")
 
+def postproc_gw(f, res, emods_cov, emods_bod):
+    """
+    Compute glottal width and time data from large amp. simulations
+    """
+    proc_gw = sigsl.make_sig_glottal_width_sharp(res)
+    def proc_time(f):
+        return f.get_times()
+
+    signal_to_proc = {
+        'gw': proc_gw, 'time': proc_time
+    }
+
+    in_names = [
+        f'LargeAmp_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
+        for emod_cov, emod_bod in zip(emods_cov, emods_bod)
+    ]
+    in_paths = [f'out/stress_test/{name}.h5' for name in in_names]
+
+    return postprocutils.postprocess_case_to_signal(f, in_paths, res, signal_to_proc)
 
 if __name__ == '__main__' :
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
@@ -162,6 +183,7 @@ if __name__ == '__main__' :
 
     EMODS = np.arange(2.5, 12.5+2.5, 2.5) * 1e3*10
 
+    # Run linear stability analysis to check if Hopf bifurcations occur or not
     for ii, emod_bod in enumerate(EMODS):
         for emod_cov in EMODS[:ii+1]:
             fname = f'LSA_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
@@ -175,6 +197,7 @@ if __name__ == '__main__' :
             else:
                 print(f"File {fpath} already exists")
 
+    # Solve the Hopf bifurcation system for each case
     for ii, emod_bod in enumerate(EMODS):
         for emod_cov in EMODS[:ii+1]:
             fname = f'Hopf_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
@@ -186,6 +209,7 @@ if __name__ == '__main__' :
             else:
                 print(f"File {fpath} already exists")
 
+    # Run a transient simulation for each Hopf bifurcation
     for ii, emod_bod in enumerate(EMODS):
         for emod_cov in EMODS[:ii+1]:
             fname = f'LargeAmp_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
@@ -196,3 +220,11 @@ if __name__ == '__main__' :
                     run_large_amp_model(f, res_lamp, emod_cov, emod_bod)
             else:
                 print(f"File {fpath} already exists")
+
+    # Post process the glottal width and time from each transient simulation
+    fpath = 'out/stress_test/signals.h5'
+    emods = [(ecov, ebod) for ecov, ebod in itertools.product(EMODS, EMODS) if ecov <= ebod]
+    emods_cov = [e[0] for e in emods]
+    emods_bod = [e[1] for e in emods]
+    with h5py.File(fpath, mode='a') as f:
+        SIGNALS = postproc_gw(fpath, res_lamp, emods_cov, emods_bod)
