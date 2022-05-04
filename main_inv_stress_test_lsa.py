@@ -58,6 +58,7 @@ def run_lsa(f, res_dyn, emod_cov, emod_bod):
     eigvecs_imag = [eiginfo[2] for eiginfo in eigs_info]
     xfps = [eiginfo[3] for eiginfo in eigs_info]
 
+    f['psub'] = PSUBS
     f['omega_real'] = np.array(omegas_real)
     f['omega_imag'] = np.array(omegas_imag)
     for group_name, eigvecs in zip(
