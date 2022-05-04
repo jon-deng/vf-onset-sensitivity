@@ -20,17 +20,22 @@ import libhopf
 # pylint: disable=redefined-outer-name
 
 # Range of psub to test for Hopf bifurcation
-PSUBS = np.arange(100, 1300, 100)*10
+PSUBS = np.arange(100, 1500, 100)*10
 
 def set_props(props, celllabel_to_dofs, emod_cov, emod_bod):
     # Set any constant properties
     props = setup.set_constant_props(props, celllabel_to_dofs, res_dyn)
 
     # Set cover and body layer properties
+
     dofs_cov = np.array(celllabel_to_dofs['cover'], dtype=np.int32)
     dofs_bod = np.array(celllabel_to_dofs['body'], dtype=np.int32)
     props['emod'].array[dofs_cov] = emod_cov
     props['emod'].array[dofs_bod] = emod_bod
+
+    dofs_share = set(dofs_cov) & set(dofs_bod)
+    dofs_share = np.array(list(dofs_share), dtype=np.int32)
+    props['emod'].array[dofs_share] = 1/2*(emod_cov + emod_bod)
     return props
 
 def run_lsa(f, res_dyn, emod_cov, emod_bod):
