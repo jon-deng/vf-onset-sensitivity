@@ -11,8 +11,8 @@ import warnings
 
 import numpy as np
 import h5py
-from femvf import meshutils
-from blockarray import h5utils
+from femvf import meshutils, forward, statefile as sf
+from blockarray import h5utils, blockvec as bv
 
 import setup
 import libhopf
@@ -30,12 +30,17 @@ def set_props(props, celllabel_to_dofs, emod_cov, emod_bod):
 
     dofs_cov = np.array(celllabel_to_dofs['cover'], dtype=np.int32)
     dofs_bod = np.array(celllabel_to_dofs['body'], dtype=np.int32)
-    props['emod'].array[dofs_cov] = emod_cov
-    props['emod'].array[dofs_bod] = emod_bod
-
     dofs_share = set(dofs_cov) & set(dofs_bod)
     dofs_share = np.array(list(dofs_share), dtype=np.int32)
-    props['emod'].array[dofs_share] = 1/2*(emod_cov + emod_bod)
+
+    if hasattr(props['emod'], 'array'):
+        props['emod'].array[dofs_cov] = emod_cov
+        props['emod'].array[dofs_bod] = emod_bod
+        props['emod'].array[dofs_share] = 1/2*(emod_cov + emod_bod)
+    else:
+        props['emod'][dofs_cov] = emod_cov
+        props['emod'][dofs_bod] = emod_bod
+        props['emod'][dofs_share] = 1/2*(emod_cov + emod_bod)
     return props
 
 def run_lsa(f, res_dyn, emod_cov, emod_bod):
@@ -80,8 +85,8 @@ def run_solve_hopf(f, res_hopf, emod_cov, emod_bod):
     lsa_fname = f'LSA_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
     lsa_fpath = f'out/stress_test/{lsa_fname}.h5'
 
-    with h5py.File(lsa_fpath, mode='r') as f:
-        omegas_real = f['omega_real'][:]
+    with h5py.File(lsa_fpath, mode='r') as f_lsa:
+        omegas_real = f_lsa['omega_real'][:]
 
     is_hopf_bif = [(w2 > 0 and w1 <=0) for w1, w2 in zip(omegas_real[:-1], omegas_real[1:])]
     # breakpoint()
@@ -100,26 +105,62 @@ def run_solve_hopf(f, res_hopf, emod_cov, emod_bod):
         )
         xhopf_n, info = libhopf.solve_hopf_newton(res_hopf, xhopf_0)
 
-        fname = f'Hopf_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
-        fpath = f'out/{fname}.h5'
-        with h5py.File(fpath, mode='w') as f:
-            h5utils.create_resizable_block_vector_group(f, xhopf_n.labels, xhopf_n.bshape)
-            h5utils.append_block_vector_to_group(f, xhopf_n)
+        h5utils.create_resizable_block_vector_group(f.require_group('state'), xhopf_n.labels, xhopf_n.bshape)
+        h5utils.append_block_vector_to_group(f['state'], xhopf_n)
+
+        h5utils.create_resizable_block_vector_group(f.require_group('props'), props.labels, props.bshape)
+        h5utils.append_block_vector_to_group(f['props'], props)
+
+def run_large_amp_model(f, res, emod_cov, emod_bod):
+    """
+    Run a non-linear/large amplitude (transient) oscillation model
+    """
+    # Set the cover/body layer properties
+    _forms = res.solid.forms
+    celllabel_to_dofs = meshutils.process_celllabel_to_dofs_from_forms(_forms, _forms['fspace.scalar'])
+    props = set_props(res.props, celllabel_to_dofs, emod_cov, emod_bod)
+    res.set_props(props)
+
+    # Load the onset pressure from the Hopf simulation
+    fname = f'Hopf_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
+    fpath = f'out/stress_test/{fname}.h5'
+    with h5py.File(fpath, mode='r') as f_hopf:
+        if 'state' in f_hopf:
+            xhopf = h5utils.read_block_vector_from_group(f_hopf['state'])
+            ponset = xhopf['psub'][0]
+            xfp = xhopf[:4]
+            # apriori known that the fixed point has 4 blocks (u, v, q, p)
+        else:
+            ponset = None
+            xfp = None
+
+    # Run a large amp. simulation at 100 Pa above the onset pressure, if applicable
+    if ponset is not None:
+        # Integrate the forward model in time
+        ini_state = res.state0.copy()
+        ini_state[['u', 'v', 'q', 'p']] = xfp
+        ini_state['a'][:] = 0.0
+
+        dt = 5e-5
+        _times = dt*np.arange(0, int(round(0.5/dt))+1)
+        times = bv.BlockVector([_times], labels=(('times',),))
+
+        control = res.control.copy()
+        control['psub'][:] = ponset + 100.0*10
+
+        forward.integrate(res, f, ini_state, [control], res.props, times, use_tqdm=True)
+    else:
+        print(f"Skipping large amplitude simulation of {fname} because no Hopf bifurcation is detected")
 
 
-if __name__ == '__main__':
+if __name__ == '__main__' :
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
     mesh_path = path.join('./mesh', mesh_name+'.xml')
+    res_lamp = setup.setup_transient_model(mesh_path)
     res_dyn, dres_dyn = setup.setup_models(mesh_path)
     res_hopf = libhopf.HopfModel(res_dyn, dres_dyn)
 
-    # _forms = res_dyn.solid.forms
-    # celllabel_to_dofs = meshutils.process_celllabel_to_dofs_from_forms(_forms, _forms['fspace.scalar'])
-
     EMODS = np.arange(2.5, 12.5+2.5, 2.5) * 1e3*10
-
-    # EMODS = np.arange(5.0, 12.5+2.5, 2.5) * 1e3*10
-    # print(EMODS)
 
     for ii, emod_bod in enumerate(EMODS):
         for emod_cov in EMODS[:ii+1]:
@@ -139,5 +180,19 @@ if __name__ == '__main__':
             fname = f'Hopf_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
             fpath = f'out/stress_test/{fname}.h5'
 
-            with h5py.File('out/test.h5', mode='w') as f:
-                run_solve_hopf(f, res_hopf, emod_cov, emod_bod)
+            if not path.isfile(fpath):
+                with h5py.File(fpath, mode='w') as f:
+                    run_solve_hopf(f, res_hopf, emod_cov, emod_bod)
+            else:
+                print(f"File {fpath} already exists")
+
+    for ii, emod_bod in enumerate(EMODS):
+        for emod_cov in EMODS[:ii+1]:
+            fname = f'LargeAmp_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
+            fpath = f'out/stress_test/{fname}.h5'
+
+            if not path.isfile(fpath):
+                with sf.StateFile(res_lamp, fpath, mode='w') as f:
+                    run_large_amp_model(f, res_lamp, emod_cov, emod_bod)
+            else:
+                print(f"File {fpath} already exists")
