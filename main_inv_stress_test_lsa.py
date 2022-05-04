@@ -10,14 +10,17 @@ import itertools
 import warnings
 
 import numpy as np
+from scipy import optimize
 import h5py
 from femvf import meshutils, forward, statefile as sf
 from femvf.signals import solid as sigsl
+from vfsig import modal as modalsig
 from blockarray import h5utils, blockvec as bv
 
 import setup
-import libhopf
+import libhopf, libfunctionals as libfuncs
 import postprocutils
+import h5utils
 
 # pylint: disable=redefined-outer-name
 
@@ -174,6 +177,59 @@ def postproc_gw(f, res, emods_cov, emods_bod):
 
     return postprocutils.postprocess_case_to_signal(f, in_paths, res, signal_to_proc)
 
+def run_inv_opt(f, res_hopf, emod_cov, emod_bod, gw_ref, omega_ref, alpha=0.0):
+
+    ## Set the Hopf system properties
+    _forms = res_hopf.res.solid.forms
+    celllabel_to_dofs = meshutils.process_celllabel_to_dofs_from_forms(_forms, _forms['fspace.scalar'])
+    props = set_props(res_hopf.props, celllabel_to_dofs, emod_cov, emod_bod)
+    res_hopf.set_props(props)
+
+    ## Form the log posterior functional
+    std_omega = 10.0
+    # uncertainty in glottal width (GW) is assumed to be 0.02 cm for the maximum
+    # glottal width and increases inversely with GW magnitude; a zero glottal width
+    # has infinite uncertainty
+    std_gw = (0.1/5) / (np.maximum(gw_ref, 0.0) / gw_ref.max())
+
+    func_omega = libfuncs.AbsOnsetFrequencyFunctional(res_hopf)
+    func_gw_err = libfuncs.GlottalWidthErrorFunctional(res_hopf, gw_ref=gw_ref, weights=1/std_gw)
+    func_egrad_norm = alpha * libfuncs.ModulusGradientNormSqr(res_hopf)
+
+    func_freq_err = 1/std_omega * (func_omega - 2*np.pi*omega_ref) ** 2
+    func = func_gw_err + func_freq_err + func_egrad_norm
+    redu_grad = libhopf.ReducedGradient(func, res_hopf)
+
+    breakpoint()
+    redu_grad.set_props(props)
+
+    camp0 = optimize_comp_amp(func_gw_err)
+
+def segment_last_period(y, dt):
+    # Segment the final cycle from the glottal width and estimate an uncertainty
+    fund_freq, *_ = modalsig.estimate_fundamental_mode(y)
+    n_period = int(round(1/fund_freq)) # the number of samples in a period
+
+    # The segmented glottal width makes up the simulated measurement
+    ret_y = y[-n_period:]
+    ret_omega = fund_freq / dt
+    return ret_y, ret_omega
+
+def optimize_comp_amp(func_gw_err):
+    ## Compute an initial guess for the complex amplitude
+    # Note that the initial guess for amplitude might be negative; this is fine
+    # as a negative amplitude is equivalent to pi radian phase shift
+    camp0 = func_gw_err.camp.copy()
+    def _f(x):
+        _camp = func_gw_err.camp
+        _camp.set_vec(x)
+
+        func_gw_err.set_camp(_camp)
+        return func_gw_err.assem_g(), func_gw_err.assem_dg_dcamp().to_mono_ndarray()
+    opt_res = optimize.minimize(_f, np.array([0.0, 0.0]), jac=True)
+    camp0.set_vec(opt_res['x'])
+    return camp0
+
 if __name__ == '__main__' :
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
     mesh_path = path.join('./mesh', mesh_name+'.xml')
@@ -228,3 +284,35 @@ if __name__ == '__main__' :
     emods_bod = [e[1] for e in emods]
     with h5py.File(fpath, mode='a') as f:
         SIGNALS = postproc_gw(fpath, res_lamp, emods_cov, emods_bod)
+
+    # Run the inverse analysis studies
+
+    # determine cover/body combinations that self-oscillate
+    emods = [
+        (ecov, ebod) for ecov, ebod in itertools.product(EMODS, EMODS)
+        if ecov <= ebod and f'LargeAmp_ecov{ecov:.2e}_ebody{ebod:.2e}/gw' in SIGNALS
+    ]
+    emods_cov = [e[0] for e in emods]
+    emods_bod = [e[1] for e in emods]
+    for emod_cov, emod_bod in zip(emods_cov, emods_bod):
+        # Load the reference glottal width and omega
+        _name = f'LargeAmp_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
+        gw_ref = SIGNALS[f'{_name}/gw']
+        t_ref = SIGNALS[f'{_name}/time']
+        dt = t_ref[1]-t_ref[0]
+
+        # Segment the last period
+        gw_ref, omega_ref = segment_last_period(gw_ref, dt)
+
+        with h5py.File('out/stress_test/test.h5', mode='w') as f:
+
+            run_inv_opt(
+                f,
+                res_hopf,
+                emod_cov, emod_bod,
+                gw_ref, omega_ref,
+                alpha=0
+            )
+
+
+
