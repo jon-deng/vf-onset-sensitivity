@@ -238,46 +238,49 @@ if __name__ == '__main__' :
     res_hopf = libhopf.HopfModel(res_dyn, dres_dyn)
 
     EMODS = np.arange(2.5, 12.5+2.5, 2.5) * 1e3*10
+    emods = [
+        (ecov, ebod) for ecov, ebod in itertools.product(EMODS, EMODS)
+        if ecov <= ebod
+    ]
+    emods_cov, emods_bod = [e[0] for e in emods], [e[1] for e in emods]
 
-    # Run linear stability analysis to check if Hopf bifurcations occur or not
-    for ii, emod_bod in enumerate(EMODS):
-        for emod_cov in EMODS[:ii+1]:
-            fname = f'LSA_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
-            fpath = f'out/stress_test/{fname}.h5'
+    ## Run linear stability analysis to check if Hopf bifurcations occur or not
 
-            if not path.isfile(fpath):
-                with h5py.File(fpath, mode='w') as f:
-                    with warnings.catch_warnings():
-                        warnings.simplefilter('error')
-                        run_lsa(f, res_dyn, emod_cov, emod_bod)
-            else:
-                print(f"File {fpath} already exists")
+    for emod_cov, emod_bod in zip(emods_cov, emods_bod):
+        fname = f'LSA_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
+        fpath = f'out/stress_test/{fname}.h5'
 
-    # Solve the Hopf bifurcation system for each case
-    for ii, emod_bod in enumerate(EMODS):
-        for emod_cov in EMODS[:ii+1]:
-            fname = f'Hopf_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
-            fpath = f'out/stress_test/{fname}.h5'
+        if not path.isfile(fpath):
+            with h5py.File(fpath, mode='w') as f:
+                with warnings.catch_warnings():
+                    warnings.simplefilter('error')
+                    run_lsa(f, res_dyn, emod_cov, emod_bod)
+        else:
+            print(f"File {fpath} already exists")
 
-            if not path.isfile(fpath):
-                with h5py.File(fpath, mode='w') as f:
-                    run_solve_hopf(f, res_hopf, emod_cov, emod_bod)
-            else:
-                print(f"File {fpath} already exists")
+    ## Solve the Hopf bifurcation system for each case
+    for emod_cov, emod_bod in zip(emods_cov, emods_bod):
+        fname = f'Hopf_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
+        fpath = f'out/stress_test/{fname}.h5'
 
-    # Run a transient simulation for each Hopf bifurcation
-    for ii, emod_bod in enumerate(EMODS):
-        for emod_cov in EMODS[:ii+1]:
-            fname = f'LargeAmp_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
-            fpath = f'out/stress_test/{fname}.h5'
+        if not path.isfile(fpath):
+            with h5py.File(fpath, mode='w') as f:
+                run_solve_hopf(f, res_hopf, emod_cov, emod_bod)
+        else:
+            print(f"File {fpath} already exists")
 
-            if not path.isfile(fpath):
-                with sf.StateFile(res_lamp, fpath, mode='w') as f:
-                    run_large_amp_model(f, res_lamp, emod_cov, emod_bod)
-            else:
-                print(f"File {fpath} already exists")
+    ## Run a transient simulation for each Hopf bifurcation
+    for emod_cov, emod_bod in zip(emods_cov, emods_bod):
+        fname = f'LargeAmp_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
+        fpath = f'out/stress_test/{fname}.h5'
 
-    # Post process the glottal width and time from each transient simulation
+        if not path.isfile(fpath):
+            with sf.StateFile(res_lamp, fpath, mode='w') as f:
+                run_large_amp_model(f, res_lamp, emod_cov, emod_bod)
+        else:
+            print(f"File {fpath} already exists")
+
+    ## Post process the glottal width and time from each transient simulation
     fpath = 'out/stress_test/signals.h5'
     emods = [(ecov, ebod) for ecov, ebod in itertools.product(EMODS, EMODS) if ecov <= ebod]
     emods_cov = [e[0] for e in emods]
@@ -285,12 +288,13 @@ if __name__ == '__main__' :
     with h5py.File(fpath, mode='a') as f:
         SIGNALS = postproc_gw(fpath, res_lamp, emods_cov, emods_bod)
 
-    # Run the inverse analysis studies
+    ## Run the inverse analysis studies
 
     # determine cover/body combinations that self-oscillate
     emods = [
         (ecov, ebod) for ecov, ebod in itertools.product(EMODS, EMODS)
-        if ecov <= ebod and f'LargeAmp_ecov{ecov:.2e}_ebody{ebod:.2e}/gw' in SIGNALS
+        if ecov <= ebod
+        and len(SIGNALS[f'LargeAmp_ecov{ecov:.2e}_ebody{ebod:.2e}/gw']) != 0
     ]
     emods_cov = [e[0] for e in emods]
     emods_bod = [e[1] for e in emods]
@@ -303,6 +307,7 @@ if __name__ == '__main__' :
 
         # Segment the last period
         gw_ref, omega_ref = segment_last_period(gw_ref, dt)
+        breakpoint()
 
         with h5py.File('out/stress_test/test.h5', mode='w') as f:
 
