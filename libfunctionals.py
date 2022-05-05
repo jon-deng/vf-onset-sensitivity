@@ -8,8 +8,7 @@ import jax
 import dolfin as dfn
 import ufl
 
-from libhopf import HopfModel
-import libsignal
+import libhopf, libsignal
 
 from blockarray import blockvec  as bvec
 
@@ -226,7 +225,7 @@ class BaseFunctional(GenericFunctional):
     where x is the Hopf state vector, p are the model properties and camp is the
     complex amplitude.
     """
-    def __init__(self, model: HopfModel):
+    def __init__(self, model: 'libhopf.HopfModel'):
         self.model = model
 
         self.state = self.model.state

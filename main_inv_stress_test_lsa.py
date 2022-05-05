@@ -8,6 +8,7 @@ the moduli range from 2.5 to 10 in steps of 2.5 (kPa).
 import os.path as path
 import itertools
 import warnings
+from pprint import pprint
 
 import numpy as np
 from scipy import optimize
@@ -60,7 +61,7 @@ def run_lsa(f, res_dyn, emod_cov, emod_bod):
             f.require_group(group_name), res_dyn.state.labels, res_dyn.state.bshape
         )
 
-    eigs_info = [libhopf.max_real_omega(res_dyn, psub) for psub in PSUBS]
+    eigs_info = [libhopf.solve_least_stable_mode(res_dyn, psub) for psub in PSUBS]
 
     omegas_real = [eiginfo[0].real for eiginfo in eigs_info]
     omegas_imag = [eiginfo[0].imag for eiginfo in eigs_info]
@@ -200,10 +201,33 @@ def run_inv_opt(f, res_hopf, emod_cov, emod_bod, gw_ref, omega_ref, alpha=0.0):
     func = func_gw_err + func_freq_err + func_egrad_norm
     redu_grad = libhopf.ReducedGradient(func, res_hopf)
 
-    breakpoint()
+    # breakpoint()
     redu_grad.set_props(props)
 
+    ## Run the optimizer
+    # Form the initial guess
     camp0 = optimize_comp_amp(func_gw_err)
+    x0 = bv.concatenate_vec([props, camp0])
+
+    opt_options = {
+        'disp': 1,
+        'maxiter': 100
+    }
+    def opt_callback(xk):
+        print("In callback")
+
+    # with h5py.File(f"out/opt_hist_{fname}.h5", mode='w') as f:
+    grad_manager = libhopf.OptGradManager(redu_grad, f)
+    opt_res = optimize.minimize(
+        grad_manager.grad, x0.to_mono_ndarray(),
+        method='L-BFGS-B',
+        jac=True,
+        options=opt_options,
+        callback=opt_callback
+    )
+
+    pprint(opt_res)
+
 
 def segment_last_period(y, dt):
     # Segment the final cycle from the glottal width and estimate an uncertainty
@@ -245,7 +269,6 @@ if __name__ == '__main__' :
     emods_cov, emods_bod = [e[0] for e in emods], [e[1] for e in emods]
 
     ## Run linear stability analysis to check if Hopf bifurcations occur or not
-
     for emod_cov, emod_bod in zip(emods_cov, emods_bod):
         fname = f'LSA_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
         fpath = f'out/stress_test/{fname}.h5'
@@ -289,11 +312,10 @@ if __name__ == '__main__' :
         SIGNALS = postproc_gw(fpath, res_lamp, emods_cov, emods_bod)
 
     ## Run the inverse analysis studies
-
     # determine cover/body combinations that self-oscillate
     emods = [
         (ecov, ebod) for ecov, ebod in itertools.product(EMODS, EMODS)
-        if ecov <= ebod
+        if ecov == ebod
         and len(SIGNALS[f'LargeAmp_ecov{ecov:.2e}_ebody{ebod:.2e}/gw']) != 0
     ]
     emods_cov = [e[0] for e in emods]
@@ -307,17 +329,22 @@ if __name__ == '__main__' :
 
         # Segment the last period
         gw_ref, omega_ref = segment_last_period(gw_ref, dt)
-        breakpoint()
+        # breakpoint()
 
-        with h5py.File('out/stress_test/test.h5', mode='w') as f:
-
-            run_inv_opt(
-                f,
-                res_hopf,
-                emod_cov, emod_bod,
-                gw_ref, omega_ref,
-                alpha=0
-            )
-
-
-
+        # Try to optimize to the target data from all starting points
+        for emod_cov, emod_bod in zip(emods_cov, emods_bod):
+            alpha = 0.0
+            fname = f'OptInv_emod{emod_cov:.2e}_ebody{emod_bod:.2e}_alpha_{alpha:.2e}_gt{_name}'
+            fpath = f'out/stress_test/{fname}.h5'
+            print(f'Optimizing case {fname}')
+            if path.isfile(fpath):
+                print(f"File {fpath} already exists")
+            else:
+                with h5py.File(fpath, mode='w') as f:
+                    run_inv_opt(
+                        f,
+                        res_hopf,
+                        emod_cov, emod_bod,
+                        gw_ref, omega_ref,
+                        alpha=alpha
+                    )

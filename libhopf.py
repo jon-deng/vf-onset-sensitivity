@@ -35,64 +35,49 @@ import blockarray.h5utils as h5utils
 import blockarray.subops as gops
 import blockarray.linalg as bla
 from blockarray import blockvec as bvec, blockmat as bmat
-# import libfunctionals as libfunc
+from blockarray.typing import (Labels)
+
+import libfunctionals as libfunc
 
 # pylint: disable=invalid-name
 ListPair = Tuple[List[float], List[float]]
 
-def _hopf_state(res):
-    """
-    Return the state vector for a Hopf system
-    """
-    X_state = res.state.copy()
-
-    _mode_real_vecs = res.state.copy().subarrays_flat
-    _mode_real_labels = [label+'_mode_real' for label in X_state.labels[0]]
-    X_mode_real = bvec.BlockVector(_mode_real_vecs, labels=[_mode_real_labels])
-
-    _mode_imag_vecs = res.state.copy().subarrays_flat
-    _mode_imag_labels = [label+'_mode_imag' for label in X_state.labels[0]]
-    X_mode_imag = bvec.BlockVector(_mode_imag_vecs, labels=[_mode_imag_labels])
-
-    X_psub = res.control[['psub']].copy()
-
-    _omega = X_psub['psub'].copy()
-    _omega_vecs = [_omega]
-    _omega_labels = [['omega']]
-    X_omega = bvec.BlockVector(_omega_vecs, labels=_omega_labels)
-
-    ret = bvec.concatenate_vec([X_state, X_mode_real, X_mode_imag, X_psub, X_omega])
-    state_labels = list(X_state.labels[0])
-    mode_real_labels = list(X_mode_real.labels[0])
-    mode_imag_labels = list(X_mode_imag.labels[0])
-    psub_labels = list(X_psub.labels[0])
-    omega_labels = list(X_omega.labels[0])
-
-    labels = [state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels]
-    return ret, labels
 
 class HopfModel:
     """
     Represents the system of equations defining a Hopf bifurcation
 
-    This sytem of equations is given by Griewank and Reddien (1983)
+    The HopfModel represents a nonlinear system of equations of the form
+        F(x, p)
+    where x is a state vector, and p are the model properties/parameters. This
+    sytem of equations is given by Griewank and Reddien (1983).
 
     Parameters
     ----------
-        res, dres: The system dynamics residual, and linearized residuals
-        e_mode: a normalization vector for the real and imaginary mode components
+        res, dres:
+            The dynamical system residual and linearized residual
+        e_mode:
+            A normalization vector for the real and imaginary Hopf mode
+            components. This BlockVector should have the same format as the
+            state for the component dynamical system.
     """
 
-    def __init__(self, res, dres, e_mode=None):
+    def __init__(
+            self,
+            res: dynbase.DynamicalSystem,
+            dres: dynbase.DynamicalSystem,
+            e_mode: Optional[bvec.BlockVector]=None
+        ):
         self.res = res
         self.dres = dres
 
-        self.state, _component_labels = _hopf_state(res)
+        self.state, _component_labels = gen_hopf_state(res)
         self.props = res.props.copy()
 
         # These labels represent the 5 sub-blocks in Griewank and Reddien's equations
         self.labels_hopf_components = _component_labels
-        (self.labels_state,
+        (
+            self.labels_fp,
             self.labels_mode_real,
             self.labels_mode_imag,
             self.labels_psub,
@@ -103,7 +88,7 @@ class HopfModel:
             dtype=np.int32)
 
         if e_mode is None:
-            e_mode = self.state[self.labels_state].copy()
+            e_mode = self.state[self.labels_fp].copy()
             e_mode.set(1.0)
         self.E_MODE = e_mode
 
@@ -115,7 +100,7 @@ class HopfModel:
     def set_state(self, xhopf):
         self.state[:] = xhopf
         for model in (self.res, self.dres):
-            model.set_state(xhopf[self.labels_state])
+            model.set_state(xhopf[self.labels_fp])
 
             _control = model.control.copy()
             _control['psub'].array[0] = xhopf['psub'].array[0]
@@ -180,7 +165,7 @@ class HopfModel:
         """Return the Hopf system jacobian"""
         # Load the needed 'local variables'
         res, dres = self.res, self.dres
-        state_labels = self.labels_state
+        state_labels = self.labels_fp
         mode_real_labels, mode_imag_labels = self.labels_mode_real, self.labels_mode_imag
         x = self.state
         ee = self.E_MODE
@@ -188,7 +173,7 @@ class HopfModel:
         # Make null matrix constants
         mats = [
             [bmat.zero_mat(row_size, col_size)
-                for col_size in x[self.labels_state].bshape[0]]
+                for col_size in x[self.labels_fp].bshape[0]]
             for row_size in x[state_labels].bshape[0]]
         NULL_MAT_STATE_STATE = bmat.BlockMatrix(mats, labels=(x[state_labels].labels[0], x[state_labels].labels[0]))
 
@@ -295,35 +280,38 @@ class HopfModel:
         return bmat.concatenate_mat(
             bmats, labels=self.state.labels+self.props.labels)
 
-
-def max_real_omega(
-        model: dynbase.DynamicalSystem,
-        psub: float
-    ) -> Tuple[float, bvec.BlockVector, bvec.BlockVector, bvec.BlockVector]:
+def gen_hopf_state(res: 'HopfModel') -> Tuple[bvec.BlockVector, List[Labels]]:
     """
-    Return the maximum real frequency component for a linearized dynamical model
-
-    Parameters
-    ----------
-    model : femvf.models.dynamical.base.DynamicalSystem
-    psub : float
+    Return the Hopf system state from the component dynamical system
     """
-    # First set the bifurcation parameter
-    control = model.control
-    control['psub'][:] = psub
-    model.set_control(control)
+    X_state = res.state.copy()
 
-    # Solve the for the fixed point
-    xfp_0 = model.state.copy()
-    xfp_0.set(0)
-    xfp, _info = solve_fixed_point(model)
+    _mode_real_vecs = res.state.copy().subarrays_flat
+    _mode_real_labels = [label+'_mode_real' for label in X_state.labels[0]]
+    X_mode_real = bvec.BlockVector(_mode_real_vecs, labels=[_mode_real_labels])
 
-    # Solve for linear stability around the fixed point
-    omegas, eigvecs_real, eigvecs_imag = solve_linear_stability(model, xfp)
+    _mode_imag_vecs = res.state.copy().subarrays_flat
+    _mode_imag_labels = [label+'_mode_imag' for label in X_state.labels[0]]
+    X_mode_imag = bvec.BlockVector(_mode_imag_vecs, labels=[_mode_imag_labels])
 
-    idx_max = np.argmax(omegas.real)
-    return omegas[idx_max], eigvecs_real[idx_max], eigvecs_imag[idx_max], xfp
+    X_psub = res.control[['psub']].copy()
 
+    _omega = X_psub['psub'].copy()
+    _omega_vecs = [_omega]
+    _omega_labels = [['omega']]
+    X_omega = bvec.BlockVector(_omega_vecs, labels=_omega_labels)
+
+    ret = bvec.concatenate_vec([X_state, X_mode_real, X_mode_imag, X_psub, X_omega])
+    state_labels = list(X_state.labels[0])
+    mode_real_labels = list(X_mode_real.labels[0])
+    mode_imag_labels = list(X_mode_imag.labels[0])
+    psub_labels = list(X_psub.labels[0])
+    omega_labels = list(X_omega.labels[0])
+
+    labels = [state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels]
+    return ret, labels
+
+## Functions for finding a Hopf bifurcation
 def bound_hopf_bifurcations(
         model: dynbase.DynamicalSystem,
         bound_pairs: ListPair,
@@ -356,8 +344,8 @@ def bound_hopf_bifurcations(
     lbs, ubs = bound_pairs
     if omega_pairs is None:
         omega_pairs = (
-            [max_real_omega(model, lb)[0].real for lb in lbs],
-            [max_real_omega(model, ub)[0].real for ub in ubs],
+            [solve_least_stable_mode(model, lb)[0].real for lb in lbs],
+            [solve_least_stable_mode(model, ub)[0].real for ub in ubs],
         )
 
     # Filter bound pairs so only pairs that contain Hopf bifurcations are present
@@ -387,7 +375,7 @@ def bound_hopf_bifurcations(
         bounds_points = [
             list(np.linspace(lb, ub, nsplit+1)[1:-1]) for lb, ub in zip(_lbs, _ubs)]
         bounds_omegas = [
-            [max_real_omega(model, psub)[0].real for psub in psubs] for psubs in bounds_points
+            [solve_least_stable_mode(model, psub)[0].real for psub in psubs] for psubs in bounds_points
         ]
 
         # Join the computed interior points for each bound into a new set of bound pairs and omega pairs
@@ -460,16 +448,16 @@ def gen_hopf_initial_guess(
     # Solve for the fixed point
     x_fp0 = res.state.copy()
     x_fp0.set(0.0)
-    x_fp, _info = solve_fixed_point(res)
+    x_fp, _info = solve_fp(res)
 
     # Solve for linear stability around the fixed point
-    omegas, eigvecs_real, eigvecs_imag = solve_linear_stability(res, x_fp)
+    omegas, eigvecs_real, eigvecs_imag = solve_modal(res, x_fp)
     idx_max = np.argmax(omegas.real)
 
     x_mode_real = eigvecs_real[idx_max]
     x_mode_imag = eigvecs_imag[idx_max]
 
-    x_mode_real, x_mode_imag = normalize_eigenvector_by_hopf_condition(
+    x_mode_real, x_mode_imag = normalize_eigenvector_by_hopf(
         x_mode_real, x_mode_imag, hopf.E_MODE)
 
     x_omega = bvec.convert_subtype_to_petsc(
@@ -488,8 +476,7 @@ def gen_hopf_initial_guess(
 
 
 ## Normalize eigenvectors
-
-def normalize_eigenvector_by_hopf_condition(
+def normalize_eigenvector_by_hopf(
         evec_real: bvec.BlockVector,
         evec_imag: bvec.BlockVector,
         evec_ref: bvec.BlockVector
@@ -514,7 +501,7 @@ def normalize_eigenvector_by_hopf_condition(
     ret_evec_imag = amp*(evec_real*float(np.sin(theta)) + evec_imag*float(np.cos(theta)))
     return ret_evec_real, ret_evec_imag
 
-def normalize_eigenvector_amplitude(
+def normalize_eigenvector_by_norm(
         evec_real: bvec.BlockVector,
         evec_imag: bvec.BlockVector
     ) -> Tuple[bvec.BlockVector, bvec.BlockVector]:
@@ -526,8 +513,7 @@ def normalize_eigenvector_amplitude(
 
 
 ## Solve the Hopf system, fixed point, etc.
-
-def solve_fixed_point(res: dynbase.DynamicalSystem, psub_load=500):
+def solve_fp(res: dynbase.DynamicalSystem, psub_load=500) -> bvec.BlockVector:
     """
     Solve for a fixed-point
 
@@ -548,12 +534,12 @@ def solve_fixed_point(res: dynbase.DynamicalSystem, psub_load=500):
         control['psub'][0] = psub
         res.set_control(control)
 
-        xfp_0, info = solve_fixed_point_newton(res, xfp_0)
+        xfp_0, info = solve_fp_newton(res, xfp_0)
 
     xfp_n = xfp_0
     return xfp_n, info
 
-def solve_fixed_point_newton(
+def solve_fp_newton(
         res: dynbase.DynamicalSystem,
         xfp_0: bvec.BlockVector,
         newton_params: Optional[Dict]=None
@@ -680,7 +666,7 @@ def solve_hopf_newton(
     out[:], info = nleq.newton_solve(xhopf_0, linear_subproblem, norm=bvec.norm, params=newton_params)
     return out, info
 
-def solve_linear_stability(
+def solve_modal(
         res: dynbase.DynamicalSystem,
         xfp: bvec.BlockVector
     ) -> Tuple[List[float], List[bvec.BlockVector], List[bvec.BlockVector]]:
@@ -760,8 +746,36 @@ def solve_linear_stability(
 
     return omegas, eigvecs_real, eigvecs_imag
 
+def solve_least_stable_mode(
+        model: dynbase.DynamicalSystem,
+        psub: float
+    ) -> Tuple[float, bvec.BlockVector, bvec.BlockVector, bvec.BlockVector]:
+    """
+    Return modal information for the least stable mode of a dynamical system
+
+    Parameters
+    ----------
+    model : femvf.models.dynamical.base.DynamicalSystem
+    psub : float
+    """
+    # First set the bifurcation parameter
+    control = model.control
+    control['psub'][:] = psub
+    model.set_control(control)
+
+    # Solve the for the fixed point
+    xfp_0 = model.state.copy()
+    xfp_0.set(0)
+    xfp, _info = solve_fp(model)
+
+    # Solve for linear stability around the fixed point
+    omegas, eigvecs_real, eigvecs_imag = solve_modal(model, xfp)
+
+    idx_max = np.argmax(omegas.real)
+    return omegas[idx_max], eigvecs_real[idx_max], eigvecs_imag[idx_max], xfp
+
 def solve_reduced_gradient(
-        functional: 'libfunctionals.GenericFunctional',
+        functional: libfunc.GenericFunctional,
         hopf: HopfModel
     ) -> bvec.BlockVector:
     """Solve for the reduced gradient of a functional"""
@@ -786,6 +800,7 @@ def solve_reduced_gradient(
     return bla.mult_mat_vec(dres_dprops.transpose(), -dg_dres) + dg_dprops
 
 
+## Functions/classes to handle high-level calculation of gradients/functional
 class ReducedGradient:
     """
     This class handles solution of reduced gradients on the Hopf model
@@ -878,7 +893,7 @@ class ReducedGradient:
                 )
                 # Arbitratrily search over the range 0 to 1500 Pa for Hopf bifurcation
                 PSUBS = 10*np.arange(0, 1500, 100)
-                omegas_max = [max_real_omega(self.res.res, psub)[0].real for psub in PSUBS]
+                omegas_max = [solve_least_stable_mode(self.res.res, psub)[0].real for psub in PSUBS]
                 has_transition = [
                     omega2 >= 0.0 and omega1 < 0.0
                     for omega1, omega2 in zip(omegas_max[:-1], omegas_max[1:])
@@ -1034,8 +1049,9 @@ class OptGradManager:
 
         if solver_failure:
             g = np.nan
-            dg_dp = bvec.concatenate_vec([self.redu_grad.props, self.redu_grad.camp]).to_mono_ndarray()
-            dg_dp[:] = np.nan
+            _dg_dp = bvec.concatenate_vec([self.redu_grad.props, self.redu_grad.camp]).copy()
+            _dg_dp.set(np.nan)
+            dg_dp[:] = _dg_dp.to_mono_ndarray()
         else:
             # Solve the objective function value
             g = self.redu_grad.assem_g()

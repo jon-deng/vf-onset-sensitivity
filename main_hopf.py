@@ -11,8 +11,7 @@ from femvf.meshutils import process_celllabel_to_dofs_from_forms
 from blockarray import h5utils
 
 from setup import setup_models, set_props
-import libhopf
-import libsignal
+import libhopf, libsignal
 
 # pylint: disable=redefined-outer-name
 # pylint: disable=no-member
@@ -73,12 +72,12 @@ if __name__ == '__main__':
         'maximum_iterations': 20
     }
     xfp_0 = res.state.copy()
-    xfp_n, info = libhopf.solve_fixed_point_newton(res, xfp_0, newton_params=newton_params)
+    xfp_n, info = libhopf.solve_fp_newton(res, xfp_0, newton_params=newton_params)
 
     ## Test solving for stabilty (modal analysis of the jacobian)
     print("\n-- Test modal analysis of system linearized dynamics --")
 
-    omegas, eigvecs_real, eigvecs_imag = libhopf.solve_linear_stability(res, xfp_n)
+    omegas, eigvecs_real, eigvecs_imag = libhopf.solve_modal(res, xfp_n)
     print(omegas)
 
     idx_hopf = 3
@@ -95,7 +94,7 @@ if __name__ == '__main__':
     xhopf_0[psub_labels[0]].array[:] = PSUB
     xhopf_0[omega_labels[0]].array[:] = omega_hopf
 
-    xmode_real, xmode_imag = libhopf.normalize_eigenvector_by_hopf_condition(
+    xmode_real, xmode_imag = libhopf.normalize_eigenvector_by_hopf(
         mode_real_hopf, mode_imag_hopf, EREF)
     xhopf_0[mode_real_labels] = xmode_real
     xhopf_0[mode_imag_labels] = xmode_imag
@@ -120,7 +119,7 @@ if __name__ == '__main__':
     omega = xhopf_n['omega'][0]
 
     proc_glottal_width = libsignal.make_glottal_width(hopf, 100)
-    unit_xmode_real, unit_xmode_imag = libhopf.normalize_eigenvector_amplitude(xmode_real, xmode_imag)
+    unit_xmode_real, unit_xmode_imag = libhopf.normalize_eigenvector_by_norm(xmode_real, xmode_imag)
 
     fig, ax = plt.subplots(1, 1)
 
