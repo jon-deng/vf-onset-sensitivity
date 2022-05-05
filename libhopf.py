@@ -527,7 +527,7 @@ def normalize_eigenvector_amplitude(
 
 ## Solve the Hopf system, fixed point, etc.
 
-def solve_fixed_point(res: dynbase.DynamicalSystem, n_load=5):
+def solve_fixed_point(res: dynbase.DynamicalSystem, psub_load=500):
     """
     Solve for a fixed-point
 
@@ -542,6 +542,7 @@ def solve_fixed_point(res: dynbase.DynamicalSystem, n_load=5):
     xfp_0 = res.state.copy()
     xfp_0.set(0.0)
 
+    n_load = max(int(np.ceil(psub_n/psub_load)), 1)
     for psub in np.linspace(0, psub_n, n_load+1)[1:]:
         control = res.control
         control['psub'][0] = psub
@@ -865,12 +866,14 @@ class ReducedGradient:
             if n_iter > 1:
                 if info['status'] != 0:
                     warnings.warn(
-                        "Hopf system could not be solved with initial guess!"
+                        "Hopf system could not be solved with Newton with initial guess!"
                     )
                 break
             elif info['status'] != 0:
                 warnings.warn(
-                    "Hopf system could not be solved with initial guess."
+                    "Hopf system could not be with Newton from last used Hopf state."
+                    f" Newton solver exited with message {info['solver_message']} after"
+                    f" {info['num_iterations']} iterations"
                     " Attemping to find a better initial guess."
                 )
                 # Arbitratrily search over the range 0 to 1500 Pa for Hopf bifurcation
