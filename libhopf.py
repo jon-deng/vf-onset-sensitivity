@@ -872,7 +872,7 @@ class ReducedGradient:
             elif info['status'] != 0:
                 warnings.warn(
                     "Hopf system could not be with Newton from last used Hopf state."
-                    f" Newton solver exited with message {info['message']} after"
+                    f" Newton solver exited with message '{info['message']}' after"
                     f" {info['num_iter']} iterations"
                     " Attemping to find a better initial guess."
                 )
