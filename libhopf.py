@@ -1051,7 +1051,7 @@ class OptGradManager:
             g = np.nan
             _dg_dp = bvec.concatenate_vec([self.redu_grad.props, self.redu_grad.camp]).copy()
             _dg_dp.set(np.nan)
-            dg_dp[:] = _dg_dp.to_mono_ndarray()
+            dg_dp = _dg_dp.to_mono_ndarray()
         else:
             # Solve the objective function value
             g = self.redu_grad.assem_g()
