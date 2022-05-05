@@ -1042,7 +1042,7 @@ class OptGradManager:
 
             # Solve the gradient of the objective function
             _dg_dp = bvec.concatenate_vec([self.redu_grad.assem_dg_dprops(), self.redu_grad.assem_dg_dcamp()])
-            dg_dp = dg_dp.to_mono_ndarray()
+            dg_dp = _dg_dp.to_mono_ndarray()
 
         # Record the current objective function and gradient
         h5utils.append_block_vector_to_group(self.f['grad'], _dg_dp)
