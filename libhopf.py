@@ -881,15 +881,18 @@ class ReducedGradient:
             if n_iter > 1:
                 if info['status'] != 0:
                     warnings.warn(
-                        "Hopf system could not be solved with Newton with initial guess!"
+                        "Couldn't solve for Hopf bifurcation at the current "
+                        "parameter set.",
+                        category=RuntimeWarning
                     )
-                break
             elif info['status'] != 0:
                 warnings.warn(
-                    "Hopf system could not be with Newton from last used Hopf state."
-                    f" Newton solver exited with message '{info['message']}' after"
-                    f" {info['num_iter']} iterations"
-                    " Attemping to find a better initial guess."
+                    "Couldn't solve Hopf system with Newton method from last "
+                    "used Hopf state. "
+                    f"Newton solver exited with message '{info['message']}' "
+                    f"after {info['num_iter']} iterations. "
+                    "Attemping to find a better initial guess.",
+                    category=RuntimeWarning
                 )
                 # Arbitratrily search over the range 0 to 1500 Pa for Hopf bifurcation
                 PSUBS = 10*np.arange(0, 1500, 100)
@@ -902,7 +905,10 @@ class ReducedGradient:
                 if idxs_bif.size == 0:
                     raise RuntimeError("No Hopf bifurcations detected")
                 elif idxs_bif.size > 1:
-                    warnings.warn("Found more than one Hopf bifurcation pressure; using the smallest one")
+                    warnings.warn(
+                        "Found more than one Hopf bifurcation pressure; using the smallest one",
+                        category=RuntimeWarning
+                    )
 
                 idx_bif = idxs_bif[0]
                 lbs = [PSUBS[idx_bif]]
@@ -1043,8 +1049,10 @@ class OptGradManager:
             solver_failure = False
         except RuntimeError as err:
             warnings.warn(
-                "ReduceGradient could not solve for Hopf bifurcation due to"
-                f" error {err}")
+                "ReducedGradient couldn't solve/find a Hopf bifurcation for the "
+                f"current parameter set due to error '{err}'",
+                category=RuntimeWarning
+            )
             solver_failure = True
 
         if solver_failure:
