@@ -1023,16 +1023,29 @@ class OptGradManager:
         self._update_h5(hopf_state, info, bvec.concatenate_vec([_p_hopf, _p_camp]))
 
     def grad(self, p):
-        self.set_props(p)
+        try:
+            self.set_props(p)
+            solver_failure = False
+        except RuntimeError as err:
+            warnings.warn(
+                "ReduceGradient could not solve for Hopf bifurcation due to"
+                f" error {err}")
+            solver_failure = True
 
-        # Solve the objective function value
-        g = self.redu_grad.assem_g()
+        if solver_failure:
+            g = np.nan
+            dg_dp = bvec.concatenate_vec([self.redu_grad.props, self.redu_grad.camp]).to_mono_ndarray()
+            dg_dp[:] = np.nan
+        else:
+            # Solve the objective function value
+            g = self.redu_grad.assem_g()
 
-        # Solve the gradient of the objective function
-        _dg_dp = bvec.concatenate_vec([self.redu_grad.assem_dg_dprops(), self.redu_grad.assem_dg_dcamp()])
+            # Solve the gradient of the objective function
+            _dg_dp = bvec.concatenate_vec([self.redu_grad.assem_dg_dprops(), self.redu_grad.assem_dg_dcamp()])
+            dg_dp = dg_dp.to_mono_ndarray()
 
         # Record the current objective function and gradient
         h5utils.append_block_vector_to_group(self.f['grad'], _dg_dp)
         self.f['objective'].resize(self.f['objective'].size+1, axis=0)
         self.f['objective'][-1] = g
-        return g, _dg_dp.to_mono_ndarray()
+        return g, dg_dp
