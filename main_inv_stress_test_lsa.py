@@ -16,21 +16,29 @@ import h5py
 from femvf import meshutils, forward, statefile as sf
 from femvf.signals import solid as sigsl
 from vfsig import modal as modalsig
-from blockarray import h5utils, blockvec as bv
+from blockarray import h5utils as bh5utils, blockvec as bv
 
 import setup
 import libhopf, libfunctionals as libfuncs
 import postprocutils
-import h5utils
+# import h5utils
 
 # pylint: disable=redefined-outer-name
 
 # Range of psub to test for Hopf bifurcation
 PSUBS = np.arange(100, 1500, 100)*10
+EMODS = np.arange(2.5, 12.5+2.5, 2.5) * 1e3*10
+
+## The models are not pickalble so have to be outside for multi-processing
+mesh_name = 'BC-dcov5.00e-02-cl1.00'
+mesh_path = path.join('./mesh', mesh_name+'.xml')
+RES_LAMP = setup.setup_transient_model(mesh_path)
+RES_DYN, DRES_DYN = setup.setup_models(mesh_path)
+RES_HOPF = libhopf.HopfModel(RES_DYN, DRES_DYN)
 
 def set_props(props, celllabel_to_dofs, emod_cov, emod_bod):
     # Set any constant properties
-    props = setup.set_constant_props(props, celllabel_to_dofs, res_dyn)
+    props = setup.set_constant_props(props, celllabel_to_dofs, RES_DYN)
 
     # Set cover and body layer properties
 
@@ -49,19 +57,19 @@ def set_props(props, celllabel_to_dofs, emod_cov, emod_bod):
         props['emod'][dofs_share] = 1/2*(emod_cov + emod_bod)
     return props
 
-def run_lsa(f, res_dyn, emod_cov, emod_bod):
+def run_lsa(f, emod_cov, emod_bod):
     # Get the cover/body layer DOFs
-    _forms = res_dyn.solid.forms
+    _forms = RES_DYN.solid.forms
     celllabel_to_dofs = meshutils.process_celllabel_to_dofs_from_forms(_forms, _forms['fspace.scalar'])
-    props = set_props(res_dyn.props, celllabel_to_dofs, emod_cov, emod_bod)
-    res_dyn.set_props(props)
+    props = set_props(RES_DYN.props, celllabel_to_dofs, emod_cov, emod_bod)
+    RES_DYN.set_props(props)
 
     for group_name in ['eigvec_real', 'eigvec_imag', 'fixedpoint']:
-        h5utils.create_resizable_block_vector_group(
-            f.require_group(group_name), res_dyn.state.labels, res_dyn.state.bshape
+        bh5utils.create_resizable_block_vector_group(
+            f.require_group(group_name), RES_DYN.state.labels, RES_DYN.state.bshape
         )
 
-    eigs_info = [libhopf.solve_least_stable_mode(res_dyn, psub) for psub in PSUBS]
+    eigs_info = [libhopf.solve_least_stable_mode(RES_DYN, psub) for psub in PSUBS]
 
     omegas_real = [eiginfo[0].real for eiginfo in eigs_info]
     omegas_imag = [eiginfo[0].imag for eiginfo in eigs_info]
@@ -77,14 +85,14 @@ def run_lsa(f, res_dyn, emod_cov, emod_bod):
             [eigvecs_real, eigvecs_imag, xfps]
         ):
         for eigvec in eigvecs:
-            h5utils.append_block_vector_to_group(f[group_name], eigvec)
+            bh5utils.append_block_vector_to_group(f[group_name], eigvec)
 
-def run_solve_hopf(f, res_hopf, emod_cov, emod_bod):
+def run_solve_hopf(f, emod_cov, emod_bod):
     # Set the cover/body layer properties
-    _forms = res_hopf.res.solid.forms
+    _forms = RES_HOPF.res.solid.forms
     celllabel_to_dofs = meshutils.process_celllabel_to_dofs_from_forms(_forms, _forms['fspace.scalar'])
-    props = set_props(res_hopf.props, celllabel_to_dofs, emod_cov, emod_bod)
-    res_hopf.set_props(props)
+    props = set_props(RES_HOPF.props, celllabel_to_dofs, emod_cov, emod_bod)
+    RES_HOPF.set_props(props)
 
     # Read the max real eigenvalue information from the LSA to determine if Hopf
     # bifurcations occur and a good starting point
@@ -105,34 +113,34 @@ def run_solve_hopf(f, res_hopf, emod_cov, emod_bod):
         print(f"Real eigenvalue components are {omegas_real}")
 
         xhopf_0 = libhopf.gen_hopf_initial_guess(
-            res_hopf,
+            RES_HOPF,
             ([PSUBS[idx_hopf]], [PSUBS[idx_hopf+1]]),
             ([omegas_real[idx_hopf]], [omegas_real[idx_hopf+1]])
         )
-        xhopf_n, info = libhopf.solve_hopf_newton(res_hopf, xhopf_0)
+        xhopf_n, info = libhopf.solve_hopf_newton(RES_HOPF, xhopf_0)
 
-        h5utils.create_resizable_block_vector_group(f.require_group('state'), xhopf_n.labels, xhopf_n.bshape)
-        h5utils.append_block_vector_to_group(f['state'], xhopf_n)
+        bh5utils.create_resizable_block_vector_group(f.require_group('state'), xhopf_n.labels, xhopf_n.bshape)
+        bh5utils.append_block_vector_to_group(f['state'], xhopf_n)
 
-        h5utils.create_resizable_block_vector_group(f.require_group('props'), props.labels, props.bshape)
-        h5utils.append_block_vector_to_group(f['props'], props)
+        bh5utils.create_resizable_block_vector_group(f.require_group('props'), props.labels, props.bshape)
+        bh5utils.append_block_vector_to_group(f['props'], props)
 
-def run_large_amp_model(f, res, emod_cov, emod_bod):
+def run_large_amp_model(f, emod_cov, emod_bod):
     """
     Run a non-linear/large amplitude (transient) oscillation model
     """
     # Set the cover/body layer properties
-    _forms = res.solid.forms
+    _forms = RES_LAMP.solid.forms
     celllabel_to_dofs = meshutils.process_celllabel_to_dofs_from_forms(_forms, _forms['fspace.scalar'])
-    props = set_props(res.props, celllabel_to_dofs, emod_cov, emod_bod)
-    res.set_props(props)
+    props = set_props(RES_LAMP.props, celllabel_to_dofs, emod_cov, emod_bod)
+    RES_LAMP.set_props(props)
 
     # Load the onset pressure from the Hopf simulation
     fname = f'Hopf_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
     fpath = f'out/stress_test/{fname}.h5'
     with h5py.File(fpath, mode='r') as f_hopf:
         if 'state' in f_hopf:
-            xhopf = h5utils.read_block_vector_from_group(f_hopf['state'])
+            xhopf = bh5utils.read_block_vector_from_group(f_hopf['state'])
             ponset = xhopf['psub'][0]
             xfp = xhopf[:4]
             # apriori known that the fixed point has 4 blocks (u, v, q, p)
@@ -143,7 +151,7 @@ def run_large_amp_model(f, res, emod_cov, emod_bod):
     # Run a large amp. simulation at 100 Pa above the onset pressure, if applicable
     if ponset is not None:
         # Integrate the forward model in time
-        ini_state = res.state0.copy()
+        ini_state = RES_LAMP.state0.copy()
         ini_state[['u', 'v', 'q', 'p']] = xfp
         ini_state['a'][:] = 0.0
 
@@ -151,18 +159,18 @@ def run_large_amp_model(f, res, emod_cov, emod_bod):
         _times = dt*np.arange(0, int(round(0.5/dt))+1)
         times = bv.BlockVector([_times], labels=(('times',),))
 
-        control = res.control.copy()
+        control = RES_LAMP.control.copy()
         control['psub'][:] = ponset + 100.0*10
 
-        forward.integrate(res, f, ini_state, [control], res.props, times, use_tqdm=True)
+        forward.integrate(RES_LAMP, f, ini_state, [control], RES_LAMP.props, times, use_tqdm=True)
     else:
         print(f"Skipping large amplitude simulation of {fname} because no Hopf bifurcation is detected")
 
-def postproc_gw(f, res, emods_cov, emods_bod):
+def postproc_gw(f, emods_cov, emods_bod):
     """
     Compute glottal width and time data from large amp. simulations
     """
-    proc_gw = sigsl.make_sig_glottal_width_sharp(res)
+    proc_gw = sigsl.make_sig_glottal_width_sharp(RES_LAMP)
     def proc_time(f):
         return f.get_times()
 
@@ -176,15 +184,15 @@ def postproc_gw(f, res, emods_cov, emods_bod):
     ]
     in_paths = [f'out/stress_test/{name}.h5' for name in in_names]
 
-    return postprocutils.postprocess_case_to_signal(f, in_paths, res, signal_to_proc)
+    return postprocutils.postprocess_case_to_signal(f, in_paths, RES_LAMP, signal_to_proc)
 
-def run_inv_opt(f, res_hopf, emod_cov, emod_bod, gw_ref, omega_ref, alpha=0.0):
+def run_inv_opt(f, emod_cov, emod_bod, gw_ref, omega_ref, alpha=0.0, opt_options=None):
 
     ## Set the Hopf system properties
-    _forms = res_hopf.res.solid.forms
+    _forms = RES_HOPF.res.solid.forms
     celllabel_to_dofs = meshutils.process_celllabel_to_dofs_from_forms(_forms, _forms['fspace.scalar'])
-    props = set_props(res_hopf.props, celllabel_to_dofs, emod_cov, emod_bod)
-    res_hopf.set_props(props)
+    props = set_props(RES_HOPF.props, celllabel_to_dofs, emod_cov, emod_bod)
+    RES_HOPF.set_props(props)
 
     ## Form the log posterior functional
     std_omega = 10.0
@@ -193,13 +201,13 @@ def run_inv_opt(f, res_hopf, emod_cov, emod_bod, gw_ref, omega_ref, alpha=0.0):
     # has infinite uncertainty
     std_gw = (0.1/5) / (np.maximum(gw_ref, 0.0) / gw_ref.max())
 
-    func_omega = libfuncs.AbsOnsetFrequencyFunctional(res_hopf)
-    func_gw_err = libfuncs.GlottalWidthErrorFunctional(res_hopf, gw_ref=gw_ref, weights=1/std_gw)
-    func_egrad_norm = alpha * libfuncs.ModulusGradientNormSqr(res_hopf)
+    func_omega = libfuncs.AbsOnsetFrequencyFunctional(RES_HOPF)
+    func_gw_err = libfuncs.GlottalWidthErrorFunctional(RES_HOPF, gw_ref=gw_ref, weights=1/std_gw)
+    func_egrad_norm = alpha * libfuncs.ModulusGradientNormSqr(RES_HOPF)
 
     func_freq_err = 1/std_omega * (func_omega - 2*np.pi*omega_ref) ** 2
     func = func_gw_err + func_freq_err + func_egrad_norm
-    redu_grad = libhopf.ReducedGradient(func, res_hopf)
+    redu_grad = libhopf.ReducedGradient(func, RES_HOPF)
 
     # breakpoint()
     redu_grad.set_props(props)
@@ -209,10 +217,6 @@ def run_inv_opt(f, res_hopf, emod_cov, emod_bod, gw_ref, omega_ref, alpha=0.0):
     camp0 = optimize_comp_amp(func_gw_err)
     x0 = bv.concatenate_vec([props, camp0])
 
-    opt_options = {
-        'disp': 1,
-        'maxiter': 100
-    }
     def opt_callback(xk):
         print("In callback")
 
@@ -254,14 +258,8 @@ def optimize_comp_amp(func_gw_err):
     camp0.set_vec(opt_res['x'])
     return camp0
 
-if __name__ == '__main__' :
-    mesh_name = 'BC-dcov5.00e-02-cl1.00'
-    mesh_path = path.join('./mesh', mesh_name+'.xml')
-    res_lamp = setup.setup_transient_model(mesh_path)
-    res_dyn, dres_dyn = setup.setup_models(mesh_path)
-    res_hopf = libhopf.HopfModel(res_dyn, dres_dyn)
 
-    EMODS = np.arange(2.5, 12.5+2.5, 2.5) * 1e3*10
+if __name__ == '__main__' :
     emods = [
         (ecov, ebod) for ecov, ebod in itertools.product(EMODS, EMODS)
         if ecov <= ebod
@@ -277,7 +275,7 @@ if __name__ == '__main__' :
             with h5py.File(fpath, mode='w') as f:
                 with warnings.catch_warnings():
                     warnings.simplefilter('error')
-                    run_lsa(f, res_dyn, emod_cov, emod_bod)
+                    run_lsa(f, emod_cov, emod_bod)
         else:
             print(f"File {fpath} already exists")
 
@@ -288,7 +286,7 @@ if __name__ == '__main__' :
 
         if not path.isfile(fpath):
             with h5py.File(fpath, mode='w') as f:
-                run_solve_hopf(f, res_hopf, emod_cov, emod_bod)
+                run_solve_hopf(f, emod_cov, emod_bod)
         else:
             print(f"File {fpath} already exists")
 
@@ -298,8 +296,8 @@ if __name__ == '__main__' :
         fpath = f'out/stress_test/{fname}.h5'
 
         if not path.isfile(fpath):
-            with sf.StateFile(res_lamp, fpath, mode='w') as f:
-                run_large_amp_model(f, res_lamp, emod_cov, emod_bod)
+            with sf.StateFile(RES_LAMP, fpath, mode='w') as f:
+                run_large_amp_model(f, emod_cov, emod_bod)
         else:
             print(f"File {fpath} already exists")
 
@@ -309,7 +307,7 @@ if __name__ == '__main__' :
     emods_cov = [e[0] for e in emods]
     emods_bod = [e[1] for e in emods]
     with h5py.File(fpath, mode='a') as f:
-        SIGNALS = postproc_gw(fpath, res_lamp, emods_cov, emods_bod)
+        SIGNALS = postproc_gw(fpath, emods_cov, emods_bod)
 
     ## Run the inverse analysis studies
     # determine cover/body combinations that self-oscillate
@@ -332,6 +330,10 @@ if __name__ == '__main__' :
         # breakpoint()
 
         # Try to optimize to the target data from all starting points
+        opt_options = {
+            'disp': 99,
+            'maxiter': 50
+        }
         for emod_cov, emod_bod in zip(emods_cov, emods_bod):
             alpha = 0.0
             fname = f'OptInv_emod{emod_cov:.2e}_ebody{emod_bod:.2e}_alpha_{alpha:.2e}_gt{_name}'
@@ -343,8 +345,8 @@ if __name__ == '__main__' :
                 with h5py.File(fpath, mode='w') as f:
                     run_inv_opt(
                         f,
-                        res_hopf,
                         emod_cov, emod_bod,
                         gw_ref, omega_ref,
-                        alpha=alpha
+                        alpha=alpha,
+                        opt_options=opt_options
                     )
