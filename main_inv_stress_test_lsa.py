@@ -55,6 +55,7 @@ def set_props(props, celllabel_to_dofs, emod_cov, emod_bod):
         props['emod'][dofs_cov] = emod_cov
         props['emod'][dofs_bod] = emod_bod
         props['emod'][dofs_share] = 1/2*(emod_cov + emod_bod)
+
     return props
 
 def run_lsa(f, emod_cov, emod_bod):
