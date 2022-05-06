@@ -337,17 +337,18 @@ if __name__ == '__main__' :
         }
         for emod_cov, emod_bod in zip(emods_cov, emods_bod):
             alpha = 0.0
-            fname = f'OptInv_emod{emod_cov:.2e}_ebody{emod_bod:.2e}_alpha_{alpha:.2e}_gt{_name}'
-            fpath = f'out/stress_test/{fname}.h5'
-            print(f'Optimizing case {fname}')
-            if path.isfile(fpath):
-                print(f"File {fpath} already exists")
-            else:
-                with h5py.File(fpath, mode='w') as f:
-                    run_inv_opt(
-                        f,
-                        emod_cov, emod_bod,
-                        gw_ref, omega_ref,
-                        alpha=alpha,
-                        opt_options=opt_options
-                    )
+            for alpha in 10**np.array([-np.inf] + [-6, -4, -2]):
+                fname = f'OptInv_emod{emod_cov:.2e}_ebody{emod_bod:.2e}_alpha_{alpha:.2e}_gt{_name}'
+                fpath = f'out/stress_test/{fname}.h5'
+                print(f'Optimizing case {fname}')
+                if path.isfile(fpath):
+                    print(f"File {fpath} already exists")
+                else:
+                    with h5py.File(fpath, mode='w') as f:
+                        run_inv_opt(
+                            f,
+                            emod_cov, emod_bod,
+                            gw_ref, omega_ref,
+                            alpha=alpha,
+                            opt_options=opt_options
+                        )
