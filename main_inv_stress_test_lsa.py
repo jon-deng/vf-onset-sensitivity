@@ -10,6 +10,7 @@ import itertools
 import warnings
 from pprint import pprint
 
+import petsc4py
 import numpy as np
 from scipy import optimize
 import h5py
@@ -344,11 +345,15 @@ if __name__ == '__main__' :
                 if path.isfile(fpath):
                     print(f"File {fpath} already exists")
                 else:
-                    with h5py.File(fpath, mode='w') as f:
-                        run_inv_opt(
-                            f,
-                            emod_cov, emod_bod,
-                            gw_ref, omega_ref,
-                            alpha=alpha,
-                            opt_options=opt_options
-                        )
+                    try:
+                        with h5py.File(fpath, mode='w') as f:
+                            run_inv_opt(
+                                f,
+                                emod_cov, emod_bod,
+                                gw_ref, omega_ref,
+                                alpha=alpha,
+                                opt_options=opt_options
+                            )
+                    except petsc4py.PETSc.Error as err:
+                        print(f"Case failed with error {err}")
+
