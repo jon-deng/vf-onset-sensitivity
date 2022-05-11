@@ -512,8 +512,15 @@ def normalize_eigenvector_by_norm(
     return ampl*evec_real, ampl*evec_imag
 
 
-## Solve the Hopf system, fixed point, etc.
-def solve_fp(res: dynbase.DynamicalSystem, psub_incr=5000) -> bvec.BlockVector:
+## Fixed point system functions
+# The fixed point system views functions primarily as a function of
+# (x_fp, p_sub) + parameters of the model
+
+def solve_fp(
+        res: dynbase.DynamicalSystem,
+        psub: float,
+        psub_incr: float=5000
+    ) -> bvec.BlockVector:
     """
     Solve for a fixed-point
 
@@ -521,7 +528,7 @@ def solve_fp(res: dynbase.DynamicalSystem, psub_incr=5000) -> bvec.BlockVector:
     Newton method to find the fixed-point for target subglottal pressure.
     """
     # The target final subglottal pressure
-    psub_n = float(res.control['psub'][0])
+    psub_final = psub
 
     # Use a sequence of intermediate loading steps to generate good initial
     # guesses for the next fixed-point newton solve
@@ -529,31 +536,50 @@ def solve_fp(res: dynbase.DynamicalSystem, psub_incr=5000) -> bvec.BlockVector:
     xfp_0.set(0.0)
 
     n = 0
-    psub = 0.0
-    while psub < psub_n:
+    psub_n = 0.0
+    info = {}
+    while psub_n < psub_final:
         n += 1
 
-        _psub = psub + min(psub_incr, psub_n-psub)
+        _psub = psub_n + min(psub_incr, psub_final-psub_n)
 
-        control = res.control
-        control['psub'][0] = _psub
-        res.set_control(control)
-
-        xfp_0, info = solve_fp_newton(res, xfp_0)
+        xfp_0, info = solve_fp_newton(res, xfp_0, _psub)
 
         if info['status'] != 0:
             psub_incr = psub_incr/2
         else:
-            psub = _psub
+            psub_n = _psub
 
     xfp_n = xfp_0
 
     info['load_steps.num_iter'] = n
     return xfp_n, info
 
+def solve_least_stable_mode(
+        model: dynbase.DynamicalSystem,
+        psub: float
+    ) -> Tuple[float, bvec.BlockVector, bvec.BlockVector, bvec.BlockVector]:
+    """
+    Return modal information for the least stable mode of a dynamical system
+
+    Parameters
+    ----------
+    model : femvf.models.dynamical.base.DynamicalSystem
+    psub : float
+    """
+    # Solve the for the fixed point
+    xfp, _info = solve_fp(model, psub)
+
+    # Solve for linear stability around the fixed point
+    omegas, eigvecs_real, eigvecs_imag = solve_modal(model, xfp, psub)
+
+    idx_max = np.argmax(omegas.real)
+    return omegas[idx_max], eigvecs_real[idx_max], eigvecs_imag[idx_max], xfp
+
 def solve_fp_newton(
         res: dynbase.DynamicalSystem,
         xfp_0: bvec.BlockVector,
+        psub: float,
         newton_params: Optional[Dict]=None
     ) -> Tuple[bvec.BlockVector, Dict]:
     """
@@ -570,6 +596,8 @@ def solve_fp_newton(
     newton_params :
         parameters for the newton solver
     """
+    res.control['psub'][:] = psub
+    res.set_control(res.control)
 
     ZERO_STATET = res.statet.copy()
     ZERO_STATET.set(0.0)
@@ -635,52 +663,10 @@ def solve_fp_newton(
     xfp_n, info = nleq.newton_solve(xfp_0, linear_subproblem_fp, norm=bvec.norm, params=newton_params)
     return xfp_n, info
 
-def solve_hopf_newton(
-        hopf: HopfModel,
-        xhopf_0: bvec.BlockVector,
-        out=None, newton_params=None
-    ) -> Tuple[bvec.BlockVector, Dict]:
-    """Solve the nonlinear Hopf problem using a newton method"""
-    if out is None:
-        out = xhopf_0.copy()
-
-    def linear_subproblem(xhopf_n):
-        """Linear subproblem of a Newton solver"""
-        hopf.set_state(xhopf_n)
-
-        res_n = hopf.assem_res()
-        jac_n = hopf.assem_dres_dstate()
-        hopf.apply_dirichlet_bvec(res_n)
-        hopf.apply_dirichlet_bmat(jac_n)
-
-        def assem_res():
-            """Return residual"""
-            return res_n
-
-        def solve(rhs_n):
-            """Return jac^-1 res"""
-            _rhs_n = rhs_n.to_mono_petsc()
-            _jac_n = jac_n.to_mono_petsc()
-            _dx_n = _jac_n.getVecRight()
-
-            _dx_n, _ = gops.solve_petsc_lu(_jac_n, _rhs_n, out=_dx_n)
-
-            dx_n = xhopf_n.copy()
-            dx_n.set_vec(_dx_n)
-            return dx_n
-        return assem_res, solve
-
-    if newton_params is None:
-        newton_params = {
-            'maximum_iterations': 10
-        }
-
-    out[:], info = nleq.newton_solve(xhopf_0, linear_subproblem, norm=bvec.norm, params=newton_params)
-    return out, info
-
 def solve_modal(
         res: dynbase.DynamicalSystem,
-        xfp: bvec.BlockVector
+        xfp: bvec.BlockVector,
+        psub: float,
     ) -> Tuple[List[float], List[bvec.BlockVector], List[bvec.BlockVector]]:
     """
     Return a set of modes for the linear stability problem (ls)
@@ -699,6 +685,9 @@ def solve_modal(
         The fixed point to solve the LS problem at
     """
     res.set_state(xfp)
+
+    res.control['psub'][:] = psub
+    res.set_control(res.control)
 
     ZERO_STATET = res.statet.copy()
     ZERO_STATET.set(0.0)
@@ -758,34 +747,50 @@ def solve_modal(
 
     return omegas, eigvecs_real, eigvecs_imag
 
-def solve_least_stable_mode(
-        model: dynbase.DynamicalSystem,
-        psub: float
-    ) -> Tuple[float, bvec.BlockVector, bvec.BlockVector, bvec.BlockVector]:
-    """
-    Return modal information for the least stable mode of a dynamical system
+## Hopf system functions, fixed point, etc.
 
-    Parameters
-    ----------
-    model : femvf.models.dynamical.base.DynamicalSystem
-    psub : float
-    """
-    # First set the bifurcation parameter
-    control = model.control
-    control['psub'][:] = psub
-    model.set_control(control)
+def solve_hopf_newton(
+        hopf: HopfModel,
+        xhopf_0: bvec.BlockVector,
+        out=None, newton_params=None
+    ) -> Tuple[bvec.BlockVector, Dict]:
+    """Solve the nonlinear Hopf problem using a newton method"""
+    if out is None:
+        out = xhopf_0.copy()
 
-    # Solve the for the fixed point
-    xfp_0 = model.state.copy()
-    xfp_0.set(0)
-    xfp, _info = solve_fp(model)
-    # breakpoint()
+    def linear_subproblem(xhopf_n):
+        """Linear subproblem of a Newton solver"""
+        hopf.set_state(xhopf_n)
 
-    # Solve for linear stability around the fixed point
-    omegas, eigvecs_real, eigvecs_imag = solve_modal(model, xfp)
+        res_n = hopf.assem_res()
+        jac_n = hopf.assem_dres_dstate()
+        hopf.apply_dirichlet_bvec(res_n)
+        hopf.apply_dirichlet_bmat(jac_n)
 
-    idx_max = np.argmax(omegas.real)
-    return omegas[idx_max], eigvecs_real[idx_max], eigvecs_imag[idx_max], xfp
+        def assem_res():
+            """Return residual"""
+            return res_n
+
+        def solve(rhs_n):
+            """Return jac^-1 res"""
+            _rhs_n = rhs_n.to_mono_petsc()
+            _jac_n = jac_n.to_mono_petsc()
+            _dx_n = _jac_n.getVecRight()
+
+            _dx_n, _ = gops.solve_petsc_lu(_jac_n, _rhs_n, out=_dx_n)
+
+            dx_n = xhopf_n.copy()
+            dx_n.set_vec(_dx_n)
+            return dx_n
+        return assem_res, solve
+
+    if newton_params is None:
+        newton_params = {
+            'maximum_iterations': 10
+        }
+
+    out[:], info = nleq.newton_solve(xhopf_0, linear_subproblem, norm=bvec.norm, params=newton_params)
+    return out, info
 
 def solve_reduced_gradient(
         functional: libfunc.GenericFunctional,
