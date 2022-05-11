@@ -513,7 +513,7 @@ def normalize_eigenvector_by_norm(
 
 
 ## Solve the Hopf system, fixed point, etc.
-def solve_fp(res: dynbase.DynamicalSystem, psub_load=500) -> bvec.BlockVector:
+def solve_fp(res: dynbase.DynamicalSystem, psub_incr=5000) -> bvec.BlockVector:
     """
     Solve for a fixed-point
 
@@ -528,15 +528,27 @@ def solve_fp(res: dynbase.DynamicalSystem, psub_load=500) -> bvec.BlockVector:
     xfp_0 = res.state.copy()
     xfp_0.set(0.0)
 
-    n_load = max(int(np.ceil(psub_n/psub_load)), 1)
-    for psub in np.linspace(0, psub_n, n_load+1)[1:]:
+    n = 0
+    psub = 0.0
+    while psub < psub_n:
+        n += 1
+
+        _psub = psub + min(psub_incr, psub_n-psub)
+
         control = res.control
-        control['psub'][0] = psub
+        control['psub'][0] = _psub
         res.set_control(control)
 
         xfp_0, info = solve_fp_newton(res, xfp_0)
 
+        if info['status'] != 0:
+            psub_incr = psub_incr/2
+        else:
+            psub = _psub
+
     xfp_n = xfp_0
+
+    info['load_steps.num_iter'] = n
     return xfp_n, info
 
 def solve_fp_newton(
@@ -767,6 +779,7 @@ def solve_least_stable_mode(
     xfp_0 = model.state.copy()
     xfp_0.set(0)
     xfp, _info = solve_fp(model)
+    # breakpoint()
 
     # Solve for linear stability around the fixed point
     omegas, eigvecs_real, eigvecs_imag = solve_modal(model, xfp)
