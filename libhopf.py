@@ -519,7 +519,8 @@ def normalize_eigenvector_by_norm(
 def solve_fp(
         res: dynbase.DynamicalSystem,
         psub: float,
-        psub_incr: float=5000
+        psub_incr: float=5000,
+        n_max: int=10
     ) -> bvec.BlockVector:
     """
     Solve for a fixed-point
@@ -536,6 +537,7 @@ def solve_fp(
     xfp_0.set(0.0)
 
     n = 0
+    status = -1
     psub_n = 0.0
     info = {}
     while psub_n < psub_final:
@@ -547,6 +549,8 @@ def solve_fp(
 
         if info['status'] != 0:
             psub_incr = psub_incr/2
+            if n > n_max:
+                break
         else:
             psub_n = _psub
 
