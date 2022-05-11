@@ -110,7 +110,6 @@ def run_solve_hopf(f, emod_cov, emod_bod):
         omegas_real = f_lsa['omega_real'][:]
 
     is_hopf_bif = [(w2 > 0 and w1 <=0) for w1, w2 in zip(omegas_real[:-1], omegas_real[1:])]
-    # breakpoint()
     if is_hopf_bif.count(True) == 0:
         print(f"Case {lsa_fname} has no Hopf bifurcations")
         print(f"Real eigenvalue components are {omegas_real}")
@@ -216,7 +215,10 @@ def run_inv_opt(f, emod_cov, emod_bod, gw_ref, omega_ref, alpha=0.0, opt_options
     func = func_gw_err + func_freq_err + func_egrad_norm
     redu_grad = libhopf.ReducedGradient(func, RES_HOPF)
 
-    # breakpoint()
+    ## Record the reference gw and freq
+    f['gw_ref'] = gw_ref
+    f['omega_ref'] = omega_ref
+
     redu_grad.set_props(props)
 
     ## Run the optimizer
@@ -227,10 +229,21 @@ def run_inv_opt(f, emod_cov, emod_bod, gw_ref, omega_ref, alpha=0.0, opt_options
     def opt_callback(xk):
         print("In callback")
 
+    scale = 1e3
+    def assem_sc_grad(sc_x, scale, assem_grad):
+        x = sc_x * scale
+        obj, grad = assem_grad(x)
+
+        sc_obj = obj
+        sc_grad = scale * grad
+        return sc_obj, sc_grad
+
     # with h5py.File(f"out/opt_hist_{fname}.h5", mode='w') as f:
     grad_manager = libhopf.OptGradManager(redu_grad, f)
     opt_res = optimize.minimize(
-        grad_manager.grad, x0.to_mono_ndarray(),
+        assem_sc_grad,
+        x0.to_mono_ndarray()/scale,
+        args=(scale, grad_manager.grad),
         method='L-BFGS-B',
         jac=True,
         options=opt_options,
@@ -339,7 +352,6 @@ if __name__ == '__main__' :
 
         # Segment the last period
         gw_ref, omega_ref = segment_last_period(gw_ref, dt)
-        # breakpoint()
 
         # Try to optimize to the target data from all starting points
         opt_options = {
