@@ -446,12 +446,12 @@ def gen_hopf_initial_guess(
     res.set_control(control)
 
     # Solve for the fixed point
-    x_fp0 = res.state.copy()
-    x_fp0.set(0.0)
-    x_fp, _info = solve_fp(res)
+    # x_fp0 = res.state.copy()
+    # x_fp0.set(0.0)
+    x_fp, _info = solve_fp(res, psub)
 
     # Solve for linear stability around the fixed point
-    omegas, eigvecs_real, eigvecs_imag = solve_modal(res, x_fp)
+    omegas, eigvecs_real, eigvecs_imag = solve_modal(res, x_fp, psub)
     idx_max = np.argmax(omegas.real)
 
     x_mode_real = eigvecs_real[idx_max]
