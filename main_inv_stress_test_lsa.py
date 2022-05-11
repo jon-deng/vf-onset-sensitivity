@@ -30,6 +30,10 @@ import postprocutils
 PSUBS = np.arange(100, 1500, 100)*10
 EMODS = np.arange(2.5, 12.5+2.5, 2.5) * 1e3*10
 
+# EMODS = np.array([2.0, 2.5, 4.5, 5.0, 7.0, 7.5,]) * 1e3*10
+
+EMODS = np.arange(2.5, 10.5+0.5, 0.5) * 1e3*10
+
 ## The models are not pickalble so have to be outside for multi-processing
 mesh_name = 'BC-dcov5.00e-02-cl1.00'
 mesh_path = path.join('./mesh', mesh_name+'.xml')
@@ -88,6 +92,7 @@ def run_lsa(f, emod_cov, emod_bod):
         ):
         for eigvec in eigvecs:
             bh5utils.append_block_vector_to_group(f[group_name], eigvec)
+    return PSUBS, omegas_real
 
 def run_solve_hopf(f, emod_cov, emod_bod):
     # Set the cover/body layer properties
@@ -275,9 +280,14 @@ if __name__ == '__main__' :
 
         if not path.isfile(fpath):
             with h5py.File(fpath, mode='w') as f:
-                with warnings.catch_warnings():
-                    warnings.simplefilter('error')
-                    run_lsa(f, emod_cov, emod_bod)
+                psubs, omegas_real = run_lsa(f, emod_cov, emod_bod)
+
+                if max(omegas_real) >= 0.0 and min(omegas_real) < 0.0:
+                    is_hopf = [a < 0 and b >=0 for a, b in zip(omegas_real[:-1], omegas_real[1:])]
+                    ii = is_hopf.index(True)
+                    print(f"{fname} has a Hopf bifurcation between {psubs[ii]:.2f} Ba and {psubs[ii+1]:.2f} Ba")
+                else:
+                    print(f"{fname} does not have a Hopf bifurcation between {psubs[0]:.2f} Ba and {psubs[-1]:.2f} Ba")
         else:
             print(f"File {fpath} already exists")
 
