@@ -112,11 +112,11 @@ def setup_hopf_state(mesh_path, hopf_state_path=None):
         'maximum_iterations': 20
     }
     xfp_0 = res.state.copy()
-    xfp_n, _ = libhopf.solve_fp_newton(res, xfp_0, newton_params=newton_params)
+    xfp_n, _ = libhopf.solve_fp_newton(res, xfp_0, PSUB, newton_params=newton_params)
 
     ## Solve for linear stabilty at the fixed point
     # this is used to get the initial guess for the Hopf system
-    omegas, eigvecs_real, eigvecs_imag = libhopf.solve_modal(res, xfp_n)
+    omegas, eigvecs_real, eigvecs_imag = libhopf.solve_modal(res, xfp_n, PSUB)
 
     # The unstable mode is apriori known to be the 3rd one for the current test case
     # In the future, you should make this more general/automatic
