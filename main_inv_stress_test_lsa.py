@@ -33,6 +33,7 @@ EMODS = np.arange(2.5, 12.5+2.5, 2.5) * 1e3*10
 # EMODS = np.array([2.0, 2.5, 4.5, 5.0, 7.0, 7.5,]) * 1e3*10
 
 EMODS = np.arange(2.5, 10.5+0.5, 0.5) * 1e3*10
+EMODS = np.arange(5.0, 7.0, 0.5) * 1e3 * 10
 
 ## The models are not pickalble so have to be outside for multi-processing
 mesh_name = 'BC-dcov5.00e-02-cl1.00'
@@ -229,7 +230,8 @@ def run_inv_opt(f, emod_cov, emod_bod, gw_ref, omega_ref, alpha=0.0, opt_options
     def opt_callback(xk):
         print("In callback")
 
-    scale = 1e3
+    scale = 1e3*np.ones((x0.msize,))
+    scale[-1] = 1.0 # make sure the phase argument has no scaling
     def assem_sc_grad(sc_x, scale, assem_grad):
         x = sc_x * scale
         obj, grad = assem_grad(x)
@@ -338,8 +340,7 @@ if __name__ == '__main__' :
     # determine cover/body combinations that self-oscillate
     emods = [
         (ecov, ebod) for ecov, ebod in itertools.product(EMODS, EMODS)
-        if ecov == ebod
-        and len(SIGNALS[f'LargeAmp_ecov{ecov:.2e}_ebody{ebod:.2e}/gw']) != 0
+        if len(SIGNALS[f'LargeAmp_ecov{ecov:.2e}_ebody{ebod:.2e}/gw']) != 0
     ]
     emods_cov = [e[0] for e in emods]
     emods_bod = [e[1] for e in emods]
@@ -356,7 +357,7 @@ if __name__ == '__main__' :
         # Try to optimize to the target data from all starting points
         opt_options = {
             'disp': 99,
-            'maxiter': 50
+            'maxiter': 150
         }
         for emod_cov, emod_bod in zip(emods_cov, emods_bod):
             alpha = 0.0
