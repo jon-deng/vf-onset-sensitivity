@@ -405,5 +405,5 @@ if __name__ == '__main__' :
         def _run(ecov, ebod, alpha):
             return _run_inv_opt(ecov, ebod, alpha, gt_fname)
 
-        with multiprocessing.Pool(args.numproc, chunksize=1) as p:
-            p.starmap(_run, _args)
+        with multiprocessing.Pool(args.numproc) as p:
+            p.starmap(_run, _args, chunksize=1)
