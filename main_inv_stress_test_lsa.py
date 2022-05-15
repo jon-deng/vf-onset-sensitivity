@@ -330,20 +330,18 @@ if __name__ == '__main__' :
 
     ## Post process the glottal width and time from each transient simulation
     fpath = 'out/stress_test/signals.h5'
-    emods = [(ecov, ebod) for ecov, ebod in itertools.product(EMODS, EMODS) if ecov <= ebod]
-    emods_cov = [e[0] for e in emods]
-    emods_bod = [e[1] for e in emods]
+    # emods = [(ecov, ebod) for ecov, ebod in itertools.product(EMODS, EMODS) if ecov <= ebod]
+    # emods_cov = [e[0] for e in emods]
+    # emods_bod = [e[1] for e in emods]
     with h5py.File(fpath, mode='a') as f:
         SIGNALS = postproc_gw(fpath, emods_cov, emods_bod)
 
     ## Run the inverse analysis studies
     # determine cover/body combinations that self-oscillate
     emods = [
-        (ecov, ebod) for ecov, ebod in itertools.product(EMODS, EMODS)
+        (ecov, ebod) for ecov, ebod in zip(emods_cov, emods_bod)
         if len(SIGNALS[f'LargeAmp_ecov{ecov:.2e}_ebody{ebod:.2e}/gw']) != 0
     ]
-    emods_cov = [e[0] for e in emods]
-    emods_bod = [e[1] for e in emods]
     for emod_cov, emod_bod in zip(emods_cov, emods_bod):
         # Load the reference glottal width and omega
         _name = f'LargeAmp_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
