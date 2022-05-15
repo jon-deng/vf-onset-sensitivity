@@ -29,6 +29,8 @@ import postprocutils
 
 # Range of psub to test for Hopf bifurcation
 PSUBS = np.arange(100, 1500, 100)*10
+
+# Range of moduli to test
 EMODS = np.arange(2.5, 12.5+2.5, 2.5) * 1e3*10
 
 # EMODS = np.array([2.0, 2.5, 4.5, 5.0, 7.0, 7.5,]) * 1e3*10
@@ -36,6 +38,12 @@ EMODS = np.arange(2.5, 12.5+2.5, 2.5) * 1e3*10
 EMODS = np.arange(2.5, 10.5+0.5, 0.5) * 1e3*10
 EMODS = np.arange(5.0, 7.0, 0.5) * 1e3 * 10
 EMODS = np.array([2.5]) * 1e3*10
+
+emods_covbod_gt = [
+    (ecov, ebod) for ecov, ebod in itertools.product(EMODS, EMODS)
+    if ecov <= ebod
+]
+EMODS_COV, EMODS_BOD = [e[0] for e in emods_covbod_gt], [e[1] for e in emods_covbod_gt]
 
 ## The models are not pickalble so have to be outside for multi-processing
 mesh_name = 'BC-dcov5.00e-02-cl1.00'
@@ -311,20 +319,15 @@ def optimize_comp_amp(func_gw_err):
     return camp0
 
 
-
 if __name__ == '__main__' :
     parser = argparse.ArgumentParser()
     parser.add_argument('--numproc', type=int, default=1)
     args = parser.parse_args()
 
-    emods = [
-        (ecov, ebod) for ecov, ebod in itertools.product(EMODS, EMODS)
-        if ecov <= ebod
-    ]
-    emods_cov, emods_bod = [e[0] for e in emods], [e[1] for e in emods]
+    print(args.numproc)
 
     ## Run linear stability analysis to check if Hopf bifurcations occur or not
-    for emod_cov, emod_bod in zip(emods_cov, emods_bod):
+    for emod_cov, emod_bod in zip(EMODS_COV, EMODS_BOD):
         fname = f'LSA_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
         fpath = f'out/stress_test/{fname}.h5'
         ans = run_lsa(fpath, emod_cov, emod_bod)
@@ -339,31 +342,31 @@ if __name__ == '__main__' :
                 print(f"{fname} does not have a Hopf bifurcation between {psubs[0]:.2f} Ba and {psubs[-1]:.2f} Ba")
 
     ## Solve the Hopf bifurcation system for each case
-    for emod_cov, emod_bod in zip(emods_cov, emods_bod):
+    for emod_cov, emod_bod in zip(EMODS_COV, EMODS_BOD):
         fname = f'Hopf_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
         fpath = f'out/stress_test/{fname}.h5'
         run_solve_hopf(fpath, emod_cov, emod_bod)
 
     ## Run a transient simulation for each Hopf bifurcation
-    for emod_cov, emod_bod in zip(emods_cov, emods_bod):
+    for emod_cov, emod_bod in zip(EMODS_COV, EMODS_BOD):
         fname = f'LargeAmp_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
         fpath = f'out/stress_test/{fname}.h5'
         run_large_amp_model(fpath, emod_cov, emod_bod)
 
     ## Post process the glottal width and time from each transient simulation
     fpath = 'out/stress_test/signals.h5'
-    SIGNALS = postproc_gw(fpath, emods_cov, emods_bod)
+    SIGNALS = postproc_gw(fpath, EMODS_COV, EMODS_BOD)
 
     ## Run the inverse analysis studies
-    # determine cover/body combinations that self-oscillate
-    _emods = [
-        (ecov, ebod) for ecov, ebod in zip(emods_cov, emods_bod)
+    # only use cover/body combinations that self-oscillate
+    emods_covbod_gt = [
+        (ecov, ebod) for ecov, ebod in zip(EMODS_COV, EMODS_BOD)
         if len(SIGNALS[f'LargeAmp_ecov{ecov:.2e}_ebody{ebod:.2e}/gw']) != 0
     ]
-    _emods_cov = [x[0] for x in _emods]
-    _emods_bod = [x[1] for x in _emods]
+    emods_cov_gt = [x[0] for x in emods_covbod_gt]
+    emods_bod_gt = [x[1] for x in emods_covbod_gt]
     ## Load the reference glottal width and omega
-    for emod_cov, emod_bod in zip(_emods_cov, _emods_bod):
+    for emod_cov, emod_bod in zip(emods_cov_gt, emods_bod_gt):
         gt_fname = f'LargeAmp_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
         gw_ref = SIGNALS[f'{gt_fname}/gw']
         t_ref = SIGNALS[f'{gt_fname}/time']
@@ -397,10 +400,10 @@ if __name__ == '__main__' :
         #             print(f"Case failed with error {err}")
 
 
-        _args = [(emod[0], emod[1], alpha) for emod, alpha in itertools.product(_emods, alphas)]
+        _args = [(emod[0], emod[1], alpha) for emod, alpha in itertools.product(emods_covbod_gt, alphas)]
 
         def _run(ecov, ebod, alpha):
             return _run_inv_opt(ecov, ebod, alpha, gt_fname)
 
-        with multiprocessing.Pool(args.numproc) as p:
+        with multiprocessing.Pool(args.numproc, chunksize=1) as p:
             p.starmap(_run, _args)
