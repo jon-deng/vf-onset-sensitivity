@@ -842,16 +842,28 @@ class ReducedGradient:
 
     Parameters
     ----------
-    res : HopfModel
     functional : libfunctionals.GenericFunctional
+    res : HopfModel
     newton_params :
         dictionary specifying newton solver parameters for solving the Hopf
         system
+    hopf_psub_intervals :
+        Intervals of subglottal pressure to search for Hopf bifurcations.
     """
 
-    def __init__(self, func, res, newton_params=None):
+    def __init__(
+            self,
+            func: libfunc.GenericFunctional,
+            res: HopfModel,
+            newton_params: Optional[dict]=None,
+            hopf_psub_intervals: Optional[np.ndarray]=None
+        ):
         self.func = func
         self.res = res
+        if hopf_psub_intervals is None:
+            self.PSUB_INTERVALS = np.arange(0, 2600, 100) * 10
+        else:
+            self.PSUB_INTERVALS = np.array(hopf_psub_intervals)
 
         self._hist_state = [self.res.state.copy()]
         self._hist_props = [self.props.copy()]
@@ -908,13 +920,16 @@ class ReducedGradient:
                 category=RuntimeWarning
             )
             # Arbitratrily search over the range 0 to 1500 Pa for Hopf bifurcation
-            PSUBS = 10*np.arange(0, 1500, 100)
-            omegas_max = [solve_least_stable_mode(self.res.res, psub)[0].real for psub in PSUBS]
+            # PSUBS = 10*np.arange(0, 2600, 100)
+            omegas_max = [
+                solve_least_stable_mode(self.res.res, psub)[0].real
+                for psub in self.PSUB_INTERVALS
+            ]
             has_transition = [
                 omega2 >= 0.0 and omega1 < 0.0
                 for omega1, omega2 in zip(omegas_max[:-1], omegas_max[1:])
             ]
-            idxs_bif = np.arange(PSUBS.size-1)[has_transition]
+            idxs_bif = np.arange(self.PSUB_INTERVALS.size-1)[has_transition]
             if idxs_bif.size == 0:
                 raise RuntimeError("No Hopf bifurcations detected")
             elif idxs_bif.size > 1:
@@ -924,8 +939,8 @@ class ReducedGradient:
                 )
 
             idx_bif = idxs_bif[0]
-            lbs = [PSUBS[idx_bif]]
-            ubs = [PSUBS[idx_bif+1]]
+            lbs = [self.PSUB_INTERVALS[idx_bif]]
+            ubs = [self.PSUB_INTERVALS[idx_bif+1]]
             bounds = (lbs, ubs)
             omega_lbs = [omegas_max[idx_bif]]
             omega_ubs = [omegas_max[idx_bif+1]]
