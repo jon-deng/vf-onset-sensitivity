@@ -28,7 +28,7 @@ import postprocutils
 # pylint: disable=redefined-outer-name
 
 # Range of psub to test for Hopf bifurcation
-PSUBS = np.arange(100, 1500, 100)*10
+PSUBS = np.arange(100, 2500+100, 100)*10
 
 # Range of moduli to test
 EMODS = np.arange(2.5, 12.5+2.5, 2.5) * 1e3*10
