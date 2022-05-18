@@ -380,7 +380,7 @@ if __name__ == '__main__' :
             'disp': 99,
             'maxiter': 150
         }
-        alphas = 10**np.array([-np.inf] + [-6, -4, -2])
+        alphas = 10**np.array([-np.inf] + [-12, -10, -8, -6, -4, -2])
 
         # for emod_cov, emod_bod in zip(_emods_cov, _emods_bod):
         #     alpha = 0.0
