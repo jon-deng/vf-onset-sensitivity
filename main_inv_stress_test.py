@@ -220,7 +220,7 @@ def postproc_gw(fpath, emods_cov, emods_bod):
         for emod_cov, emod_bod in zip(emods_cov, emods_bod)
     ]
     in_paths = [f'out/stress_test/{name}.h5' for name in in_names]
-    in_paths = [x for x in in_paths is path.isfile(x)]
+    in_paths = [x for x in in_paths if path.isfile(x)]
 
     with h5py.File(fpath, mode='a') as f:
         return postprocutils.postprocess_case_to_signal(f, in_paths, RES_LAMP, signal_to_proc)
