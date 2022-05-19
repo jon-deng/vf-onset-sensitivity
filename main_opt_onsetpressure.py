@@ -13,7 +13,7 @@ from blockarray import blockvec  as bvec
 
 import libhopf
 import libfunctionals as libfuncs
-from test_libhopf import setup_hopf_state
+from libsetup import setup_hopf_state
 
 if __name__ == '__main__':
     # Load the Hopf system

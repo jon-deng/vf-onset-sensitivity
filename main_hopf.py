@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from femvf.meshutils import process_celllabel_to_dofs_from_forms
 from blockarray import h5utils
 
-from setup import setup_models, set_props
+from libsetup import setup_models, set_props
 import libhopf, libsignal
 
 # pylint: disable=redefined-outer-name

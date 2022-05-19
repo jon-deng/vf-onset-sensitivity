@@ -17,7 +17,7 @@ from blockarray import linalg
 
 from lib_main_transient import case_config
 # from main_hopf import set_props
-from setup import set_props, setup_transient_model
+from libsetup import set_props, setup_transient_model
 # warnings.filterwarnings('error')
 
 parser = argparse.ArgumentParser()

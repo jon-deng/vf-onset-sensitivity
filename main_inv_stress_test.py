@@ -20,7 +20,7 @@ from femvf.signals import solid as sigsl
 from vfsig import modal as modalsig
 from blockarray import h5utils as bh5utils, blockvec as bv
 
-import setup
+import libsetup
 import libhopf, libfunctionals as libfuncs
 import postprocutils
 # import h5utils
@@ -48,13 +48,13 @@ EMODS_COV, EMODS_BOD = [e[0] for e in emods_covbod_gt], [e[1] for e in emods_cov
 ## The models are not pickalble so have to be outside for multi-processing
 mesh_name = 'BC-dcov5.00e-02-cl1.00'
 mesh_path = path.join('./mesh', mesh_name+'.xml')
-RES_LAMP = setup.setup_transient_model(mesh_path)
-RES_DYN, DRES_DYN = setup.setup_models(mesh_path)
+RES_LAMP = libsetup.setup_transient_model(mesh_path)
+RES_DYN, DRES_DYN = libsetup.setup_models(mesh_path)
 RES_HOPF = libhopf.HopfModel(RES_DYN, DRES_DYN)
 
 def set_props(props, celllabel_to_dofs, emod_cov, emod_bod):
     # Set any constant properties
-    props = setup.set_constant_props(props, celllabel_to_dofs, RES_DYN)
+    props = libsetup.set_constant_props(props, celllabel_to_dofs, RES_DYN)
 
     # Set cover and body layer properties
 

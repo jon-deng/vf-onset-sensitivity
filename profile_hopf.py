@@ -11,7 +11,7 @@ import pandas
 from blockarray import subops as gops
 
 # import libhopf
-from setup import setup_hopf_state
+from libsetup import setup_hopf_state
 
 # pylint: disable=redefined-outer-name
 # pylint: disable=no-member

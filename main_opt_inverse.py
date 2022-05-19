@@ -16,7 +16,7 @@ from vfsig import modal as modalsig
 
 from lib_main_transient import case_config
 import libhopf, libsignal, libfunctionals as libfuncs
-import setup
+import libsetup
 
 # This code specifies the type of non-linear transient simulation to use as
 # a simulated measurement
@@ -36,11 +36,11 @@ if __name__ == '__main__':
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
     mesh_path = path.join('./mesh', mesh_name+'.xml')
 
-    hopf, xhopf, props0 = setup.setup_hopf_state(mesh_path)
+    hopf, xhopf, props0 = libsetup.setup_hopf_state(mesh_path)
     hopf.set_state(xhopf)
 
     ## Load the synthetic measured glottal width + frequency
-    model_trans = setup.setup_transient_model(mesh_path)
+    model_trans = libsetup.setup_transient_model(mesh_path)
 
     proc_gw = solidsig.make_sig_glottal_width_sharp(model_trans)
     psub = 5.7e2 * 10

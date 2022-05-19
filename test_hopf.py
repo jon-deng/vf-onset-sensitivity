@@ -8,7 +8,7 @@ from femvf.meshutils import process_celllabel_to_dofs_from_forms
 import blockarray.linalg as bla
 
 from libhopf import HopfModel
-from setup import setup_models, set_props
+from libsetup import setup_models, set_props
 
 # slepc4py.init(sys.argv)
 
