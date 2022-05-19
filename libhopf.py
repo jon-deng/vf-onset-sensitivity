@@ -400,7 +400,7 @@ def bound_hopf_bifurcations(
             model, (ret_lbs, ret_ubs), (ret_lomegas, ret_uomegas),
             nsplit=nsplit, tol=tol)
 
-def gen_hopf_initial_guess(
+def gen_hopf_initial_guess_from_bounds(
         hopf: HopfModel,
         bound_pairs: ListPair,
         omega_pairs: Optional[ListPair]=None,
@@ -474,6 +474,57 @@ def gen_hopf_initial_guess(
 
     return x_hopf
 
+def gen_hopf_initial_guess(
+        hopf: HopfModel,
+        psubs: np.ndarray,
+        tol: float=100.0
+    ) -> bvec.BlockVector:
+    """
+    Generate an initial guess for the Hopf problem over a range of pressures
+
+    Parameters
+    ----------
+    hopf :
+        The hopf system model
+    psubs :
+        The range of pressures to check for Hopf bifurcations. The system will
+        try to find hopf bifurcations between `psubs[0]` and `psubs[1]`,
+        `psubs[1]` and `psubs[2]`, etc.
+    tol :
+        The tolerance to determine the subglottal pressure to
+    """
+    # Determine the least stable mode growth rate for each psub
+    omegas_max = [
+        solve_least_stable_mode(hopf.res, psub)[0].real
+        for psub in psubs
+    ]
+
+    # Determine if an interval has a bifurcation by checking the growth rate
+    # flips from negative to positive
+    has_transition = [
+        omega2 >= 0.0 and omega1 < 0.0
+        for omega1, omega2 in zip(omegas_max[:-1], omegas_max[1:])
+    ]
+    idxs_bif = np.arange(psubs.size-1)[has_transition]
+    if idxs_bif.size == 0:
+        raise RuntimeError("No Hopf bifurcations detected")
+    elif idxs_bif.size > 1:
+        warnings.warn(
+            "Found more than one Hopf bifurcation pressure; using the smallest one",
+            category=RuntimeWarning
+        )
+
+    # Use the bounding/bisection approach to locate a refined initial guess
+    # in the interval containing a Hopf bifurcation
+    idx_bif = idxs_bif[0]
+    lbs = [psubs[idx_bif]]
+    ubs = [psubs[idx_bif+1]]
+    bounds = (lbs, ubs)
+    omega_lbs = [omegas_max[idx_bif]]
+    omega_ubs = [omegas_max[idx_bif+1]]
+    omega_pairs = (omega_lbs, omega_ubs)
+    xhopf_0 = gen_hopf_initial_guess_from_bounds(hopf, bounds, omega_pairs, tol=tol)
+    return xhopf_0
 
 ## Normalize eigenvectors
 def normalize_eigenvector_by_hopf(
@@ -919,35 +970,9 @@ class ReducedGradient:
                 "Attemping to retry with a better initial guess.",
                 category=RuntimeWarning
             )
-            # Arbitratrily search over the range 0 to 1500 Pa for Hopf bifurcation
-            # PSUBS = 10*np.arange(0, 2600, 100)
-            omegas_max = [
-                solve_least_stable_mode(self.res.res, psub)[0].real
-                for psub in self.PSUB_INTERVALS
-            ]
-            has_transition = [
-                omega2 >= 0.0 and omega1 < 0.0
-                for omega1, omega2 in zip(omegas_max[:-1], omegas_max[1:])
-            ]
-            idxs_bif = np.arange(self.PSUB_INTERVALS.size-1)[has_transition]
-            if idxs_bif.size == 0:
-                raise RuntimeError("No Hopf bifurcations detected")
-            elif idxs_bif.size > 1:
-                warnings.warn(
-                    "Found more than one Hopf bifurcation pressure; using the smallest one",
-                    category=RuntimeWarning
-                )
+            xhopf_0 = gen_hopf_initial_guess(self.res, self.PSUB_INTERVALS, tol=5.0)
 
-            idx_bif = idxs_bif[0]
-            lbs = [self.PSUB_INTERVALS[idx_bif]]
-            ubs = [self.PSUB_INTERVALS[idx_bif+1]]
-            bounds = (lbs, ubs)
-            omega_lbs = [omegas_max[idx_bif]]
-            omega_ubs = [omegas_max[idx_bif+1]]
-            omega_pairs = (omega_lbs, omega_ubs)
-            xhopf_0 = gen_hopf_initial_guess(self.res, bounds, omega_pairs, tol=5.0)
-
-            # Retry the Newton solver with manual initial guess
+            # Retry the Newton solver with the better initial guess
             xhopf_n, info = solve_hopf_newton(
                 self.res, xhopf_0, newton_params=self._newton_params)
 

@@ -93,11 +93,11 @@ def test_bound_hopf_bifurcation(hopf, bound_pairs):
     print(f"Hopf bifurcations between {bounds[0]} and {bounds[1]}")
     print(f"with growth rates between {omegas[0]} and {omegas[1]}")
 
-def test_gen_hopf_initial_guess(hopf, bound_pairs):
+def test_gen_hopf_initial_guess_from_bounds(hopf, bound_pairs):
     eref = hopf.res.state.copy()
     eref.set(1.0)
 
-    xhopf_0 = libhopf.gen_hopf_initial_guess(hopf, eref, bound_pairs)
+    xhopf_0 = libhopf.gen_hopf_initial_guess_from_bounds(hopf, bound_pairs)
 
     xhopf_n, info = libhopf.solve_hopf_newton(hopf, xhopf_0)
     print(f"Solved Hopf system from automatic initial guess with info {info}")
@@ -132,7 +132,7 @@ if __name__ == '__main__':
         ubs = [600.0*10]
         test_bound_hopf_bifurcation(hopf.res, (lbs, ubs))
 
-        test_gen_hopf_initial_guess(hopf, (lbs, ubs))
+        test_gen_hopf_initial_guess_from_bounds(hopf, (lbs, ubs))
 
         test_solve_reduced_gradient(func, hopf, props_0, dprops, xhopf)
 
