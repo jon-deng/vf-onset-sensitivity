@@ -35,8 +35,8 @@ EMODS = np.arange(2.5, 12.5+2.5, 2.5) * 1e3*10
 
 # EMODS = np.array([2.0, 2.5, 4.5, 5.0, 7.0, 7.5,]) * 1e3*10
 
-EMODS = np.arange(2.5, 10.5+0.5, 0.5) * 1e3*10
-EMODS = np.arange(5.0, 7.0, 0.5) * 1e3 * 10
+# EMODS = np.arange(2.5, 10.5+0.5, 0.5) * 1e3*10
+# EMODS = np.arange(5.0, 7.0, 0.5) * 1e3 * 10
 # EMODS = np.array([2.5]) * 1e3*10
 
 emods_covbod_gt = [
