@@ -84,6 +84,9 @@ def _ignore_existing_path(func):
 
 @_ignore_existing_path
 def run_lsa(fpath, emod_cov, emod_bod):
+    """
+    Solve for the eigenvalues/stability of the model over varying subglottal pressures
+    """
     # Get the cover/body layer DOFs
     _forms = RES_DYN.solid.forms
     celllabel_to_dofs = meshutils.process_celllabel_to_dofs_from_forms(_forms, _forms['fspace.scalar'])
@@ -116,6 +119,9 @@ def run_lsa(fpath, emod_cov, emod_bod):
 
 @_ignore_existing_path
 def run_solve_hopf(fpath, emod_cov, emod_bod):
+    """
+    Solve for the Hopf bifurcation condition
+    """
     # Set the cover/body layer properties
     _forms = RES_HOPF.res.solid.forms
     celllabel_to_dofs = meshutils.process_celllabel_to_dofs_from_forms(_forms, _forms['fspace.scalar'])
@@ -131,22 +137,24 @@ def run_solve_hopf(fpath, emod_cov, emod_bod):
         omegas_real = f_lsa['omega_real'][:]
 
     is_hopf_bif = [(w2 > 0 and w1 <=0) for w1, w2 in zip(omegas_real[:-1], omegas_real[1:])]
-    if is_hopf_bif.count(True) == 0:
-        print(f"Case {lsa_fname} has no Hopf bifurcations")
-        print(f"Real eigenvalue components are {omegas_real}")
-    else:
-        idx_hopf = is_hopf_bif.index(True)
-        print(f"Case {lsa_fname} has a Hopf bifurcation between {PSUBS[idx_hopf]} {PSUBS[idx_hopf+1]} dPa")
-        print(f"Real eigenvalue components are {omegas_real}")
+    with h5py.File(fpath, mode='a') as f:
+        # create the Hopf bifurcation output file even if turns out there are no
+        # Hopf bifurcations
+        if is_hopf_bif.count(True) == 0:
+            print(f"Case {lsa_fname} has no Hopf bifurcations")
+            print(f"Real eigenvalue components are {omegas_real}")
+        else:
+            idx_hopf = is_hopf_bif.index(True)
+            print(f"Case {lsa_fname} has a Hopf bifurcation between {PSUBS[idx_hopf]} {PSUBS[idx_hopf+1]} dPa")
+            print(f"Real eigenvalue components are {omegas_real}")
 
-        xhopf_0 = libhopf.gen_hopf_initial_guess(
-            RES_HOPF,
-            ([PSUBS[idx_hopf]], [PSUBS[idx_hopf+1]]),
-            ([omegas_real[idx_hopf]], [omegas_real[idx_hopf+1]])
-        )
-        xhopf_n, info = libhopf.solve_hopf_newton(RES_HOPF, xhopf_0)
+            xhopf_0 = libhopf.gen_hopf_initial_guess(
+                RES_HOPF,
+                ([PSUBS[idx_hopf]], [PSUBS[idx_hopf+1]]),
+                ([omegas_real[idx_hopf]], [omegas_real[idx_hopf+1]])
+            )
+            xhopf_n, info = libhopf.solve_hopf_newton(RES_HOPF, xhopf_0)
 
-        with h5py.File(fpath, mode='a') as f:
             bh5utils.create_resizable_block_vector_group(f.require_group('state'), xhopf_n.labels, xhopf_n.bshape)
             bh5utils.append_block_vector_to_group(f['state'], xhopf_n)
 
@@ -218,7 +226,9 @@ def postproc_gw(fpath, emods_cov, emods_bod):
 
 @_ignore_existing_path
 def run_inv_opt(fpath, emod_cov, emod_bod, gw_ref, omega_ref, alpha=0.0, opt_options=None):
-
+    """
+    Solve for the small-amplitude model parameters to best fit reference measurements
+    """
     ## Set the Hopf system properties
     _forms = RES_HOPF.res.solid.forms
     celllabel_to_dofs = meshutils.process_celllabel_to_dofs_from_forms(_forms, _forms['fspace.scalar'])
@@ -278,6 +288,7 @@ def run_inv_opt(fpath, emod_cov, emod_bod, gw_ref, omega_ref, alpha=0.0, opt_opt
 
         pprint(opt_res)
 
+# wrapper for run_inv_opt needed for multiprocessing
 def _run_inv_opt(emod_cov, emod_bod, alpha, gt_fname):
     fname = f'OptInv_emod{emod_cov:.2e}_ebody{emod_bod:.2e}_alpha_{alpha:.2e}_gt{gt_fname}'
     fpath = f'out/stress_test/{fname}.h5'
@@ -294,6 +305,9 @@ def _run_inv_opt(emod_cov, emod_bod, alpha, gt_fname):
         print(f"Case failed with error {err}")
 
 def segment_last_period(y, dt):
+    """
+    Segment the last period of a periodic signal
+    """
     # Segment the final cycle from the glottal width and estimate an uncertainty
     fund_freq, *_ = modalsig.estimate_fundamental_mode(y)
     n_period = int(round(1/fund_freq)) # the number of samples in a period
@@ -304,6 +318,9 @@ def segment_last_period(y, dt):
     return ret_y, ret_omega
 
 def optimize_comp_amp(func_gw_err):
+    """
+    Compute the complex amplitude that minimizes a glottal width difference
+    """
     ## Compute an initial guess for the complex amplitude
     # Note that the initial guess for amplitude might be negative; this is fine
     # as a negative amplitude is equivalent to pi radian phase shift
