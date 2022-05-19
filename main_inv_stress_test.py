@@ -28,7 +28,7 @@ import postprocutils
 # pylint: disable=redefined-outer-name
 
 # Range of psub to test for Hopf bifurcation
-PSUBS = np.arange(100, 2500+100, 100)*10
+PSUBS = np.arange(100, 5100+100, 100)*10
 
 # Range of moduli to test
 EMODS = np.arange(2.5, 12.5+2.5, 2.5) * 1e3*10
@@ -74,7 +74,7 @@ def set_props(props, celllabel_to_dofs, emod_cov, emod_bod):
 
     return props
 
-def _ignore_existing_path(func):
+def _skip_existing_path(func):
     def dec_func(fpath, *args, **kwargs):
         if not path.isfile(fpath):
             return func(fpath, *args, **kwargs)
@@ -82,7 +82,7 @@ def _ignore_existing_path(func):
             print(f"File {fpath} already exists.")
     return dec_func
 
-@_ignore_existing_path
+@_skip_existing_path
 def run_lsa(fpath, emod_cov, emod_bod):
     """
     Solve for the eigenvalues/stability of the model over varying subglottal pressures
@@ -117,7 +117,7 @@ def run_lsa(fpath, emod_cov, emod_bod):
                 bh5utils.append_block_vector_to_group(f[group_name], eigvec)
     return PSUBS, omegas_real
 
-@_ignore_existing_path
+@_skip_existing_path
 def run_solve_hopf(fpath, emod_cov, emod_bod):
     """
     Solve for the Hopf bifurcation condition
@@ -161,7 +161,7 @@ def run_solve_hopf(fpath, emod_cov, emod_bod):
             bh5utils.create_resizable_block_vector_group(f.require_group('props'), props.labels, props.bshape)
             bh5utils.append_block_vector_to_group(f['props'], props)
 
-@_ignore_existing_path
+@_skip_existing_path
 def run_large_amp_model(fpath, emod_cov, emod_bod):
     """
     Run a non-linear/large amplitude (transient) oscillation model
@@ -224,7 +224,7 @@ def postproc_gw(fpath, emods_cov, emods_bod):
     with h5py.File(fpath, mode='a') as f:
         return postprocutils.postprocess_case_to_signal(f, in_paths, RES_LAMP, signal_to_proc)
 
-@_ignore_existing_path
+@_skip_existing_path
 def run_inv_opt(fpath, emod_cov, emod_bod, gw_ref, omega_ref, alpha=0.0, opt_options=None):
     """
     Solve for the small-amplitude model parameters to best fit reference measurements
@@ -248,7 +248,9 @@ def run_inv_opt(fpath, emod_cov, emod_bod, gw_ref, omega_ref, alpha=0.0, opt_opt
 
     func_freq_err = 1/std_omega * (func_omega - 2*np.pi*omega_ref) ** 2
     func = func_gw_err + func_freq_err + func_egrad_norm
-    redu_grad = libhopf.ReducedGradient(func, RES_HOPF)
+    redu_grad = libhopf.ReducedGradient(
+        func, RES_HOPF, hopf_psub_intervals=PSUBS
+    )
 
     redu_grad.set_props(props)
 
