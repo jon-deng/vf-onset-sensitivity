@@ -381,7 +381,7 @@ if __name__ == '__main__' :
     # only use cover/body combinations that self-oscillate
     emods_covbod_gt = [
         (ecov, ebod) for ecov, ebod in zip(EMODS_COV, EMODS_BOD)
-        if len(SIGNALS[f'LargeAmp_ecov{ecov:.2e}_ebody{ebod:.2e}/gw']) != 0
+        if f'LargeAmp_ecov{ecov:.2e}_ebody{ebod:.2e}/gw' in SIGNALS
     ]
     emods_cov_gt = [x[0] for x in emods_covbod_gt]
     emods_bod_gt = [x[1] for x in emods_covbod_gt]
