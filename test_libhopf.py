@@ -9,7 +9,8 @@ import numpy as np
 
 from blockarray import linalg as bla, blockvec as bvec
 
-import libhopf, libfunctionals as libfuncs
+import libhopf
+import libfunctionals as libfuncs
 from libsetup import setup_hopf_state
 from test_hopf import _test_taylor
 
