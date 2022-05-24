@@ -133,6 +133,14 @@ class HopfModel:
             else:
                 submat.zeroRows(self.IDX_DIRICHLET, diag=0.0)
 
+    def zero_rows_dirichlet_bmat(self, mat):
+        """Zeros rows associated with dirichlet indices"""
+        row_labels = ['u', 'v', 'u_mode_real', 'v_mode_real', 'u_mode_imag', 'v_mode_imag']
+        col_labels = mat.labels[1]
+        for row, col in itertools.product(row_labels, col_labels):
+            submat = mat[row, col]
+            submat.zeroRows(self.IDX_DIRICHLET, diag=0.0)
+
     def assem_res(self):
         """Return the Hopf system residual"""
         # Load the needed 'local variables'
