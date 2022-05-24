@@ -74,7 +74,7 @@ class HopfModel:
         self.state, _component_labels = gen_hopf_state(res)
         self.props = res.props.copy()
 
-        # These labels represent the 5 sub-blocks in Griewank and Reddien's equations
+        # These labels represent the 5 blocks in Griewank and Reddien's equations
         self.labels_hopf_components = _component_labels
         (
             self.labels_fp,
@@ -93,18 +93,26 @@ class HopfModel:
         self.E_MODE = e_mode
 
     def set_props(self, props):
+        """
+        Set the model properties
+        """
         self.props[:] = props
         for model in (self.res, self.dres):
             model.set_props(props)
 
     def set_state(self, xhopf):
+        """
+        Set the model state
+        """
         self.state[:] = xhopf
+
+        # The fixed-point and subglottal pressure also have to be set to the
+        # contained models
         for model in (self.res, self.dres):
             model.set_state(xhopf[self.labels_fp])
 
-            _control = model.control.copy()
-            _control['psub'].array[0] = xhopf['psub'].array[0]
-            model.set_control(_control)
+            model.control['psub'].array[0] = xhopf['psub'].array[0]
+            model.set_control(model.control)
 
     def apply_dirichlet_bvec(self, vec):
         """Zeros dirichlet associated indices on the Hopf state"""
@@ -248,6 +256,7 @@ class HopfModel:
         return ret_bmat
 
     def assem_dres_dprops(self):
+        """Return the Hopf system jacobian wrt. model properties"""
         res, dres = self.res, self.dres
         (state_labels,
             mode_real_labels,
