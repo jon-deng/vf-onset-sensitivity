@@ -8,7 +8,7 @@ import jax
 import dolfin as dfn
 import ufl
 
-import libhopf, libsignal
+import libsignal
 
 from blockarray import blockvec  as bvec
 
