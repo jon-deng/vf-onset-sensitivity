@@ -61,7 +61,9 @@ def test_assem_dres_dstate(hopf, state0, dstate):
 
     def hopf_jac(x):
         hopf.set_state(x)
-        return hopf.assem_dres_dstate()
+        dres_dstate = hopf.assem_dres_dstate()
+        hopf.apply_dirichlet_bmat(dres_dstate)
+        return dres_dstate
 
     _test_taylor(state0, dstate, hopf_res, hopf_jac)
 
@@ -72,7 +74,9 @@ def test_assem_dres_dprops(hopf, props0, dprops):
 
     def hopf_jac(x):
         hopf.set_props(x)
-        return hopf.assem_dres_dprops()
+        dres_dprops = hopf.assem_dres_dprops()
+        hopf.zero_rows_dirichlet_bmat(dres_dprops)
+        return dres_dprops
 
     _test_taylor(props0, dprops, hopf_res, hopf_jac)
 
@@ -102,9 +106,10 @@ if __name__ == '__main__':
     x0 = model.state.copy()
     x0[mode_real_labels].set(1.0)
     x0[mode_imag_labels].set(1.0)
-    x0[psub_labels[0]].array[:] = PSUB
-    x0[omega_labels[0]].array[:] = 1.0
+    x0[psub_labels[0]].set(PSUB)
+    x0[omega_labels[0]].set(1.0)
     model.apply_dirichlet_bvec(x0)
+    model.set_state(x0)
 
     for label in model.state.labels[0]:
         print(f"\n -- Checking Hopf jacobian along {label} --")
