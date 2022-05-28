@@ -32,7 +32,7 @@ import h5py
 import nonlineq as nleq
 from femvf.models.dynamical import base as dynbase
 import blockarray.h5utils as h5utils
-import blockarray.subops as gops
+import blockarray.subops as subops
 import blockarray.linalg as bla
 from blockarray import blockvec as bvec, blockmat as bmat
 from blockarray.typing import (Labels)
@@ -188,18 +188,18 @@ class HopfModel:
 
         # Make null matrix constants
         mats = [
-            [bmat.zero_mat(row_size, col_size)
+            [subops.zero_mat(row_size, col_size)
                 for col_size in x[self.labels_fp].bshape[0]]
             for row_size in x[state_labels].bshape[0]]
         NULL_MAT_STATE_STATE = bmat.BlockMatrix(mats, labels=(x[state_labels].labels[0], x[state_labels].labels[0]))
 
         mats = [
-            [bmat.zero_mat(row_size, col_size) for col_size in [1]]
+            [subops.zero_mat(row_size, col_size) for col_size in [1]]
             for row_size in x[state_labels].bshape[0]]
         NULL_MAT_STATE_SCALAR = bmat.BlockMatrix(mats, labels=(x[state_labels].labels[0], ('1',)))
 
         mats = [
-            [bmat.zero_mat(row_size, col_size) for col_size in x[state_labels].bshape[0]]
+            [subops.zero_mat(row_size, col_size) for col_size in x[state_labels].bshape[0]]
             for row_size in [1]]
         NULL_MAT_SCALAR_STATE = bmat.BlockMatrix(mats, labels=(('1',), x[state_labels].labels[0]))
 
@@ -285,7 +285,7 @@ class HopfModel:
         dres.set_dstatet(float(omega)*self.state[mode_real_labels])
         row2 = [dres.assem_dres_dprops()]
 
-        _mats = [bmat.zero_mat(1, m) for m in self.props.bshape[0]]
+        _mats = [subops.zero_mat(1, m) for m in self.props.bshape[0]]
         row3 = [
             bmat.BlockMatrix(_mats, (1, len(_mats)), (psub_labels,)+self.props.labels)
             ]
@@ -849,7 +849,7 @@ def solve_hopf_newton(
             _jac_n = jac_n.to_mono_petsc()
             _dx_n = _jac_n.getVecRight()
 
-            _dx_n, _ = gops.solve_petsc_lu(_jac_n, _rhs_n, out=_dx_n)
+            _dx_n, _ = subops.solve_petsc_lu(_jac_n, _rhs_n, out=_dx_n)
 
             dx_n = xhopf_n.copy()
             dx_n.set_vec(_dx_n)
@@ -882,7 +882,7 @@ def solve_reduced_gradient(
     _dg_dres = _dres_dx_adj.getVecRight()
 
     # Solve the adjoint problem for the 'adjoint state'
-    _dg_dres, _ = gops.solve_petsc_lu(_dres_dx_adj, _dg_dx, out=_dg_dres)
+    _dg_dres, _ = subops.solve_petsc_lu(_dres_dx_adj, _dg_dx, out=_dg_dres)
     dg_dres.set_vec(_dg_dres)
 
     # Compute the reduced gradient
