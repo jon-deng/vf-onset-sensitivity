@@ -203,7 +203,7 @@ class HopfModel:
             for row_size in [1]]
         NULL_MAT_SCALAR_STATE = bmat.BlockMatrix(mats, labels=(('1',), x[state_labels].labels[0]))
 
-        mats = [[bmat.diag_mat(1, 0.0)]]
+        mats = [[subops.diag_mat(1, 0.0)]]
         NULL_MAT_SCALAR_SCALAR = bmat.BlockMatrix(mats, labels=(('1',), ('1',)))
 
         ## Build the Jacobian row by row
