@@ -27,12 +27,12 @@ def setup_models(mesh_path):
     """
     res = load.load_dynamical_fsi_model(
         mesh_path, None, SolidType = sldm.KelvinVoigt,
-        FluidType = fldm.Bernoulli1DDynamicalSystem,
+        FluidType = fldm.BernoulliSmoothMinSep,
         fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
 
     dres = load.load_dynamical_fsi_model(
         mesh_path, None, SolidType = sldm.LinearizedKelvinVoigt,
-        FluidType = fldm.LinearizedBernoulli1DDynamicalSystem,
+        FluidType = fldm.LinearizedBernoulliSmoothMinSep,
         fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
 
     return res, dres
