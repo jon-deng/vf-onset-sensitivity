@@ -16,7 +16,7 @@ import libhopf
 def setup_transient_model(mesh_path):
     model = load.load_transient_fsi_model(
         mesh_path, None,
-        SolidType=smd.KelvinVoigt, FluidType=fmd.BernoulliMinimumSeparation,
+        SolidType=smd.KelvinVoigt, FluidType=fmd.BernoulliSmoothMinSep,
         coupling='explicit'
         )
     return model
