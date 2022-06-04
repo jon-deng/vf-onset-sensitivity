@@ -59,8 +59,9 @@ def set_constant_props(props, region_to_dofs, res):
     gops.set_vec(props['nu'], 0.45)
 
     # Fluid separation smoothing props
-    gops.set_vec(props['zeta_min'], 1.0e-4)
-    gops.set_vec(props['zeta_sep'], 1.0e-4)
+    if all(key in props for key in ['zeta_min', 'zeta_sep']):
+        gops.set_vec(props['zeta_min'], 1.0e-4)
+        gops.set_vec(props['zeta_sep'], 1.0e-4)
 
     # Contact and midline symmetry properties
     # y_gap = 0.5 / 10 # Set y gap to 0.5 mm
