@@ -91,7 +91,9 @@ if __name__ == '__main__':
     ## Set model properties
     # get the scalar DOFs associated with the cover/body layers
     region_to_dofs = process_celllabel_to_dofs_from_forms(
-        res.solid.forms, res.solid.forms['fspace.scalar'])
+        res.solid.forms,
+        res.solid.forms['fspace.scalar']
+    )
 
     props = model.props.copy()
     props = set_props(props, region_to_dofs, res)

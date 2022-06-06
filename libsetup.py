@@ -4,19 +4,81 @@ This modules sets up a 'standard' Hopf model to test
 
 import h5py
 
-from femvf.models.transient import solid as smd, fluid as fmd
-from femvf.models.dynamical import solid as sldm, fluid as fldm
+from femvf.models.transient import solid as tsmd, fluid as tfmd
+from femvf.models.dynamical import solid as dsmd, fluid as dfmd
 from femvf import load
 from femvf.meshutils import process_celllabel_to_dofs_from_forms
+
 import blockarray.subops as gops
 from blockarray import h5utils
 
 import libhopf
 
+def transient_fluidtype_from_sep_method(sep_method):
+    if sep_method == 'fixed':
+        return tfmd.BernoulliFixedSep
+    elif sep_method == 'smoothmin':
+        return tfmd.BernoulliSmoothMinSep
+    else:
+        raise ValueError("Something dun goofed")
+
+def dynamical_fluidtype_from_sep_method(sep_method):
+    if sep_method == 'fixed':
+        return dfmd.BernoulliFixedSep, dfmd.LinearizedBernoulliFixedSep
+    elif sep_method == 'smoothmin':
+        return dfmd.BernoulliSmoothMinSep, dfmd.LinearizedBernoulliSmoothMinSep
+    else:
+        raise ValueError("Something dun goofed")
+
+def load_hopf(mesh_path, sep_method='fixed', sep_vert_label='separation'):
+    FluidType, LinFluidType = dynamical_fluidtype_from_sep_method(sep_method)
+
+    kwargs = {
+        'fsi_facet_labels': ('pressure',),
+        'fixed_facet_labels': ('fixed',),
+        'separation_vertex_label': sep_vert_label
+    }
+    res = load.load_dynamical_fsi_model(
+        mesh_path,
+        None,
+        SolidType=dsmd.KelvinVoigt,
+        FluidType=FluidType,
+        **kwargs
+    )
+
+    dres = load.load_dynamical_fsi_model(
+        mesh_path,
+        None,
+        SolidType=dsmd.LinearizedKelvinVoigt,
+        FluidType=LinFluidType,
+        **kwargs
+    )
+
+    _region_to_dofs = process_celllabel_to_dofs_from_forms(
+        res.solid.forms, res.solid.forms['fspace.scalar'])
+    _props = set_props(res.props.copy(), _region_to_dofs, res)
+    res.set_props(_props)
+    dres.set_props(_props)
+
+    res_hopf = libhopf.HopfModel(res, dres)
+    return res_hopf, res, dres
+
+def load_tran(mesh_path, sep_method='fixed', sep_vert_label='separation'):
+    FluidType = transient_fluidtype_from_sep_method(sep_method)
+
+    return load.load_transient_fsi_model(
+        mesh_path, None,
+        SolidType=tsmd.KelvinVoigt,
+        FluidType=FluidType,
+        coupling='explicit',
+        separation_vertex_label=sep_vert_label
+    )
+
+
 def setup_transient_model(mesh_path):
     model = load.load_transient_fsi_model(
         mesh_path, None,
-        SolidType=smd.KelvinVoigt, FluidType=fmd.BernoulliSmoothMinSep,
+        SolidType=tsmd.KelvinVoigt, FluidType=tfmd.BernoulliSmoothMinSep,
         coupling='explicit'
         )
     return model
@@ -26,13 +88,13 @@ def setup_models(mesh_path):
     Return residual + linear residual needed to model the Hopf system
     """
     res = load.load_dynamical_fsi_model(
-        mesh_path, None, SolidType = sldm.KelvinVoigt,
-        FluidType = fldm.BernoulliSmoothMinSep,
+        mesh_path, None, SolidType = dsmd.KelvinVoigt,
+        FluidType = dfmd.BernoulliSmoothMinSep,
         fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
 
     dres = load.load_dynamical_fsi_model(
-        mesh_path, None, SolidType = sldm.LinearizedKelvinVoigt,
-        FluidType = fldm.LinearizedBernoulliSmoothMinSep,
+        mesh_path, None, SolidType = dsmd.LinearizedKelvinVoigt,
+        FluidType = dfmd.LinearizedBernoulliSmoothMinSep,
         fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
 
     return res, dres
