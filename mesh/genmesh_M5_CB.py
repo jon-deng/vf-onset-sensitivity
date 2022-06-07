@@ -1,7 +1,8 @@
 
+import sys
 import gmsh
 
-gmsh.initialize()
+gmsh.initialize(sys.argv)
 
 MSH_VER = 2.0
 SIZE_FACTOR = 8
@@ -25,8 +26,8 @@ def proc_M5(medial_angle):
     gmsh.model.add_physical_group(0, [10], name='separation-inf')
     gmsh.model.add_physical_group(0, [9], name='separation-sup')
 
-    gmsh.option.set_number('Mesh.MshFileVersion', MSH_VER)
-    gmsh.option.set_number('Mesh.MeshSizeFactor', SIZE_FACTOR)
+    # gmsh.option.set_number('Mesh.MshFileVersion', MSH_VER)
+    # gmsh.option.set_number('Mesh.MeshSizeFactor', SIZE_FACTOR)
 
     gmsh.model.mesh.generate(2)
     gmsh.write(f'M5_CB_GA{medial_angle:d}.msh')
@@ -51,8 +52,8 @@ def proc_M5_split(medial_angle):
     gmsh.model.add_physical_group(0, [3], name='separation-mid')
     gmsh.model.add_physical_group(0, [14], name='separation-sup')
 
-    gmsh.option.set_number('Mesh.MshFileVersion', MSH_VER)
-    gmsh.option.set_number('Mesh.MeshSizeFactor', SIZE_FACTOR)
+    # gmsh.option.set_number('Mesh.MshFileVersion', MSH_VER)
+    # gmsh.option.set_number('Mesh.MeshSizeFactor', SIZE_FACTOR)
 
     gmsh.model.mesh.generate(2)
     gmsh.write(f'M5_CB_GA{medial_angle:d}_split.msh')
