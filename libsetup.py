@@ -137,6 +137,8 @@ def set_constant_props(props, region_to_dofs, res):
     gops.set_vec(props['kcontact'], 1e16)
     gops.set_vec(props['ymid'], y_mid)
 
+    gops.set_vec(props['rho_air'], 1.293e-3)
+
     return props
 
 def setup_hopf_state(mesh_path, hopf_state_path=None):
