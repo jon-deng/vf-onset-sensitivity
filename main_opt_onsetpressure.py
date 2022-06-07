@@ -18,7 +18,7 @@ import libhopf
 import libfunctionals as libfuncs
 from test_libhopf import setup_hopf_state
 
-PSUBS = np.arange(100, 3100, 100) * 10
+PSUBS = np.arange(0, 1500, 50) * 10
 
 def set_props(props, hopf, celllabel_to_dofs, emod_cov, emod_bod):
     # Set any constant properties
@@ -53,7 +53,7 @@ def run_opt(fpath, hopf, emod, alpha):
     hopf.set_props(hopf.props)
 
     # Solve for the Hopf bifurcation
-    xhopf_0 = libhopf.gen_hopf_initial_guess(hopf, PSUBS, tol=5.0)
+    xhopf_0 = libhopf.gen_hopf_initial_guess(hopf, PSUBS, tol=100.0)
     xhopf_n, info = libhopf.solve_hopf_newton(hopf, xhopf_0)
     hopf.set_state(xhopf_n)
 
@@ -102,17 +102,22 @@ def run_opt(fpath, hopf, emod, alpha):
 if __name__ == '__main__':
     # Load the Hopf system
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
-    mesh_path = path.join('./mesh', mesh_name+'.xml')
+    mesh_name = 'M5_CB_GA1'
+    mesh_path = path.join('./mesh', mesh_name+'.msh')
 
     res, dres = libsetup.setup_models(mesh_path)
     hopf = libhopf.HopfModel(res, dres)
+    hopf, res, dres = libsetup.load_hopf(mesh_path, sep_method='fixed', sep_vert_label='separation-inf')
 
     alphas = 10**np.array([-np.inf]+[-10, -8, -6, -4])
     emods = np.arange(2.5, 20+2.5)*10*1e3
 
+    alphas = 10**np.array([-np.inf])
+    emods = np.array([5.0]) * 10 * 1e3
+
     for emod, alpha in itertools.product(emods, alphas):
 
-        fpath = f"out/optimize_onset_pressure/opt_hist_emod{emod:.2e}_alpha{alpha:.2e}.h5"
+        fpath = f"out/minimize_onset_pressure/opt_hist_emod{emod:.2e}_alpha{alpha:.2e}.h5"
 
         run_opt(fpath, hopf, emod, alpha)
 
