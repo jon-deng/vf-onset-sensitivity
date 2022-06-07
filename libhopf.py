@@ -987,7 +987,7 @@ class ReducedGradient:
                 "Attemping to retry with a better initial guess.",
                 category=RuntimeWarning
             )
-            xhopf_0 = gen_hopf_initial_guess(self.res, self.PSUB_INTERVALS, tol=5.0)
+            xhopf_0 = gen_hopf_initial_guess(self.res, self.PSUB_INTERVALS, tol=100.0)
 
             # Retry the Newton solver with the better initial guess
             xhopf_n, info = solve_hopf_newton(
