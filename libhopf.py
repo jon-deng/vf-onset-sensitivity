@@ -1,5 +1,5 @@
 """
-Contains code to create the Hopf system
+Contains code to create and solve Hopf system
 
 The hopf system represents the conditions satisified at a Hopf bifurcation. Consider a nonlinear
 dynamical system (the `res` model) defined by
@@ -328,7 +328,7 @@ def gen_hopf_state(res: 'HopfModel') -> Tuple[bvec.BlockVector, List[Labels]]:
     labels = [state_labels, mode_real_labels, mode_imag_labels, psub_labels, omega_labels]
     return ret, labels
 
-## Functions for finding a Hopf bifurcation
+## Functions for finding/bracketing Hopf bifurcations
 def bound_hopf_bifurcations(
         model: dynbase.DynamicalSystem,
         bound_pairs: ListPair,
@@ -543,7 +543,7 @@ def gen_hopf_initial_guess(
     xhopf_0 = gen_hopf_initial_guess_from_bounds(hopf, bounds, omega_pairs, tol=tol)
     return xhopf_0
 
-## Normalize eigenvectors
+## Functions for normalizing eigenvectors
 def normalize_eigenvector_by_hopf(
         evec_real: bvec.BlockVector,
         evec_imag: bvec.BlockVector,
@@ -579,11 +579,9 @@ def normalize_eigenvector_by_norm(
     ampl = 1/(evec_real.norm()**2 + evec_imag.norm()**2)**0.5
     return ampl*evec_real, ampl*evec_imag
 
-
-## Fixed point system functions
+## Functions for solving fixed points
 # The fixed point system views functions primarily as a function of
 # (x_fp, p_sub) + parameters of the model
-
 def solve_fp(
         res: dynbase.DynamicalSystem,
         psub: float,
@@ -819,8 +817,7 @@ def solve_modal(
 
     return omegas, eigvecs_real, eigvecs_imag
 
-## Hopf system functions, fixed point, etc.
-
+## Functions for solving the Hopf system
 def solve_hopf_newton(
         hopf: HopfModel,
         xhopf_0: bvec.BlockVector,
@@ -864,33 +861,7 @@ def solve_hopf_newton(
     out[:], info = nleq.newton_solve(xhopf_0, linear_subproblem, norm=bvec.norm, params=newton_params)
     return out, info
 
-def solve_reduced_gradient(
-        functional: libfunc.GenericFunctional,
-        hopf: HopfModel
-    ) -> bvec.BlockVector:
-    """Solve for the reduced gradient of a functional"""
-
-    dg_dprops = functional.assem_dg_dprops()
-    dg_dx = functional.assem_dg_dstate()
-    _dg_dx = dg_dx.to_mono_petsc()
-
-    dres_dx_adj = hopf.assem_dres_dstate().transpose()
-    hopf.apply_dirichlet_bmat(dres_dx_adj)
-    _dres_dx_adj = dres_dx_adj.to_mono_petsc()
-
-    dg_dres = dg_dx.copy()
-    _dg_dres = _dres_dx_adj.getVecRight()
-
-    # Solve the adjoint problem for the 'adjoint state'
-    _dg_dres, _ = subops.solve_petsc_lu(_dres_dx_adj, _dg_dx, out=_dg_dres)
-    dg_dres.set_vec(_dg_dres)
-
-    # Compute the reduced gradient
-    dres_dprops = hopf.assem_dres_dprops()
-    return bla.mult_mat_vec(dres_dprops.transpose(), -dg_dres) + dg_dprops
-
-
-## Functions/classes to handle high-level calculation of gradients/functional
+## Functions/classes to handle solving gradients of functionals over the Hopf state
 class ReducedGradient:
     """
     This class handles solution of reduced gradients on the Hopf model
@@ -1029,6 +1000,31 @@ class ReducedGradient:
 
     def assem_dg_dcamp(self):
         return self.func.assem_dg_dcamp()
+
+def solve_reduced_gradient(
+        functional: libfunc.GenericFunctional,
+        hopf: HopfModel
+    ) -> bvec.BlockVector:
+    """Solve for the reduced gradient of a functional"""
+
+    dg_dprops = functional.assem_dg_dprops()
+    dg_dx = functional.assem_dg_dstate()
+    _dg_dx = dg_dx.to_mono_petsc()
+
+    dres_dx_adj = hopf.assem_dres_dstate().transpose()
+    hopf.apply_dirichlet_bmat(dres_dx_adj)
+    _dres_dx_adj = dres_dx_adj.to_mono_petsc()
+
+    dg_dres = dg_dx.copy()
+    _dg_dres = _dres_dx_adj.getVecRight()
+
+    # Solve the adjoint problem for the 'adjoint state'
+    _dg_dres, _ = subops.solve_petsc_lu(_dres_dx_adj, _dg_dx, out=_dg_dres)
+    dg_dres.set_vec(_dg_dres)
+
+    # Compute the reduced gradient
+    dres_dprops = hopf.assem_dres_dprops()
+    return bla.mult_mat_vec(dres_dprops.transpose(), -dg_dres) + dg_dprops
 
 
 class OptGradManager:
