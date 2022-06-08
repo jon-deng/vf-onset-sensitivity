@@ -102,7 +102,7 @@ def run_opt(fpath, hopf, emod, alpha):
 if __name__ == '__main__':
     # Load the Hopf system
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
-    mesh_name = 'M5_CB_GA1'
+    mesh_name = 'M5_CB_GA3'
     mesh_path = path.join('./mesh', mesh_name+'.msh')
 
     res, dres = libsetup.setup_models(mesh_path)
