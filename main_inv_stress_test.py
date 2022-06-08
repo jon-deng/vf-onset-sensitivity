@@ -48,7 +48,7 @@ EMODS_COV_GT, EMODS_BOD_GT = [e[0] for e in emods_covbod_gt], [e[1] for e in emo
 
 ## The models are not pickalble so have to be outside for multi-processing
 mesh_name = 'BC-dcov5.00e-02-cl1.00'
-mesh_name = 'M5_CB_GA1'
+mesh_name = 'M5_CB_GA3'
 mesh_path = path.join('./mesh', mesh_name+'.msh')
 RES_LAMP = libsetup.load_tran(mesh_path, sep_method='arearatio', sep_vert_label='separation-inf')
 RES_HOPF, RES_DYN, DRES_DYN = libsetup.load_hopf(mesh_path, sep_method='fixed', sep_vert_label='separation-inf')
@@ -301,7 +301,7 @@ def _run_inv_opt(emod_cov, emod_bod, alpha, gt_fname):
         run_inv_opt(
             fpath,
             emod_cov, emod_bod,
-            gw_ref, omega_ref,
+            gw_gt, omega_gt,
             alpha=alpha,
             opt_options=opt_options
         )
@@ -347,11 +347,12 @@ if __name__ == '__main__' :
 
     print(args.numproc)
 
-    ## Run linear stability analysis to check if Hopf bifurcations occur or not
-    for emod_cov, emod_bod in zip(EMODS_COV_GT, EMODS_BOD_GT):
-        fname = f'LSA_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
+    ## Generate ground truth (GT) data
+    # Run linear stability analysis to check if Hopf bifurcations occur or not
+    for emod_cov_gt, emod_bod_gt in zip(EMODS_COV_GT, EMODS_BOD_GT):
+        fname = f'LSA_ecov{emod_cov_gt:.2e}_ebody{emod_bod_gt:.2e}'
         fpath = f'out/stress_test/{fname}.h5'
-        ans = run_lsa(fpath, emod_cov, emod_bod)
+        ans = run_lsa(fpath, emod_cov_gt, emod_bod_gt)
 
         if ans is not None:
             psubs, omegas_real = ans
@@ -362,40 +363,41 @@ if __name__ == '__main__' :
             else:
                 print(f"{fname} does not have a Hopf bifurcation between {psubs[0]:.2f} Ba and {psubs[-1]:.2f} Ba")
 
-    ## Solve the Hopf bifurcation system for each case for each case that has a Hopf bifurcation
-    for emod_cov, emod_bod in zip(EMODS_COV_GT, EMODS_BOD_GT):
-        fname = f'Hopf_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
+    # Solve the Hopf bifurcation system for each case that has a Hopf bifurcation
+    for emod_cov_gt, emod_bod_gt in zip(EMODS_COV_GT, EMODS_BOD_GT):
+        fname = f'Hopf_ecov{emod_cov_gt:.2e}_ebody{emod_bod_gt:.2e}'
         fpath = f'out/stress_test/{fname}.h5'
-        run_solve_hopf(fpath, emod_cov, emod_bod)
+        run_solve_hopf(fpath, emod_cov_gt, emod_bod_gt)
 
-    ## Run a transient simulation for each case that has a Hopf bifurcation
-    for emod_cov, emod_bod in zip(EMODS_COV_GT, EMODS_BOD_GT):
-        fname = f'LargeAmp_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
+    # Run a transient simulation for each case that has a Hopf bifurcation
+    for emod_cov_gt, emod_bod_gt in zip(EMODS_COV_GT, EMODS_BOD_GT):
+        fname = f'LargeAmp_ecov{emod_cov_gt:.2e}_ebody{emod_bod_gt:.2e}'
         fpath = f'out/stress_test/{fname}.h5'
-        run_large_amp_model(fpath, emod_cov, emod_bod)
+        run_large_amp_model(fpath, emod_cov_gt, emod_bod_gt)
 
-    ## Post process the glottal width and time from each transient simulation
+    # Post process the glottal width and time from each transient simulation
     fpath = 'out/stress_test/signals.h5'
     SIGNALS = postproc_gw(fpath, EMODS_COV_GT, EMODS_BOD_GT)
 
-    # breakpoint()
-    ## Run the inverse analysis studies
+    ## Run the inverse analysis studies for GT data
     # only use cover/body combinations that self-oscillate
-    emods_covbod_gt = [
-        (ecov, ebod) for ecov, ebod in zip(EMODS_COV_GT, EMODS_BOD_GT)
+    EMODS_COV_INI = np.array([(2.5+5)/2, (5+7.5)/2, (7.5+10)/2, (10+12.5)/2, (12.5+15)/2])
+    EMODS_BOD_INI = EMODS_COV_INI
+    emods_covbod_ini = [
+        (ecov, ebod) for ecov, ebod in zip(EMODS_COV_INI, EMODS_BOD_INI)
         if f'LargeAmp_ecov{ecov:.2e}_ebody{ebod:.2e}/gw' in SIGNALS
     ]
-    emods_cov_gt = [x[0] for x in emods_covbod_gt]
-    emods_bod_gt = [x[1] for x in emods_covbod_gt]
+    emods_cov_ini = [x[0] for x in emods_covbod_ini]
+    emods_bod_ini = [x[1] for x in emods_covbod_ini]
     ## Load the reference glottal width and omega
-    for emod_cov, emod_bod in zip(emods_cov_gt, emods_bod_gt):
-        gt_fname = f'LargeAmp_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
-        gw_ref = SIGNALS[f'{gt_fname}/gw']
+    for emod_cov_gt, emod_bod_gt in zip(EMODS_COV_GT, EMODS_BOD_GT):
+        gt_fname = f'LargeAmp_ecov{emod_cov_gt:.2e}_ebody{emod_bod_gt:.2e}'
+        gw_gt = SIGNALS[f'{gt_fname}/gw']
         t_ref = SIGNALS[f'{gt_fname}/time']
         dt = t_ref[1]-t_ref[0]
 
         # Segment the last period
-        gw_ref, omega_ref = segment_last_period(gw_ref, dt)
+        gw_gt, omega_gt = segment_last_period(gw_gt, dt)
 
         ## Try to optimize to the target data from all starting points
         opt_options = {
@@ -404,25 +406,27 @@ if __name__ == '__main__' :
         }
         alphas = 10**np.array([-np.inf] + [-12, -10, -8, -6, -4, -2])
 
-        # for emod_cov, emod_bod in zip(_emods_cov, _emods_bod):
+        # for emod_cov_ini, emod_bod_ini in zip(emods_cov_ini, emods_bod_ini):
         #     alpha = 0.0
         #     for alpha in alphas:
-        #         fname = f'OptInv_emod{emod_cov:.2e}_ebody{emod_bod:.2e}_alpha_{alpha:.2e}_gt{_name}'
+        #         fname = f'OptInv_emod{emod_cov_ini:.2e}_ebody{emod_bod_ini:.2e}_alpha_{alpha:.2e}_gt{gt_fname}'
         #         fpath = f'out/stress_test/{fname}.h5'
         #         print(f'Optimizing case {fname}')
         #         try:
         #             run_inv_opt(
         #                 fpath,
-        #                 emod_cov, emod_bod,
-        #                 gw_ref, omega_ref,
+        #                 emod_cov_ini, emod_bod_ini,
+        #                 gw_gt, omega_gt,
         #                 alpha=alpha,
         #                 opt_options=opt_options
         #             )
         #         except petsc4py.PETSc.Error as err:
         #             print(f"Case failed with error {err}")
 
-
-        _args = [(emod[0], emod[1], alpha) for emod, alpha in itertools.product(emods_covbod_gt, alphas)]
+        _args = [
+            (emod[0], emod[1], alpha)
+            for emod, alpha in itertools.product(emods_covbod_ini, alphas)
+        ]
 
         def _run(ecov, ebod, alpha):
             return _run_inv_opt(ecov, ebod, alpha, gt_fname)
