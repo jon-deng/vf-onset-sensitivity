@@ -19,6 +19,8 @@ def transient_fluidtype_from_sep_method(sep_method):
         return tfmd.BernoulliFixedSep
     elif sep_method == 'smoothmin':
         return tfmd.BernoulliSmoothMinSep
+    elif sep_method == 'arearatio':
+        return tfmd.BernoulliAreaRatioSep
     else:
         raise ValueError("Something dun goofed")
 
@@ -27,6 +29,8 @@ def dynamical_fluidtype_from_sep_method(sep_method):
         return dfmd.BernoulliFixedSep, dfmd.LinearizedBernoulliFixedSep
     elif sep_method == 'smoothmin':
         return dfmd.BernoulliSmoothMinSep, dfmd.LinearizedBernoulliSmoothMinSep
+    elif sep_method == 'arearatio':
+        return dfmd.BernoulliAreaRatioSep, dfmd.LinearizedBernoulliAreaRatioSep
     else:
         raise ValueError("Something dun goofed")
 
@@ -124,6 +128,9 @@ def set_constant_props(props, region_to_dofs, res):
     if all(key in props for key in ['zeta_min', 'zeta_sep']):
         gops.set_vec(props['zeta_min'], 1.0e-4)
         gops.set_vec(props['zeta_sep'], 1.0e-4)
+
+    if 'r_sep' in props:
+        gops.set_vec(props['r_sep'], 1.0)
 
     # Contact and midline symmetry properties
     # y_gap = 0.5 / 10 # Set y gap to 0.5 mm
