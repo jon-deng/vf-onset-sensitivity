@@ -28,10 +28,11 @@ import postprocutils
 # pylint: disable=redefined-outer-name
 
 # Range of psub to test for Hopf bifurcation
-PSUBS = np.arange(100, 5100+100, 100)*10
+DPSUB = 100
+PSUBS = np.arange(0, 1000+DPSUB, DPSUB)*10
 
 # Range of moduli to test
-EMODS = np.arange(2.5, 12.5+2.5, 2.5) * 1e3*10
+EMODS_GT = np.arange(2.5, 12.5+2.5, 2.5)*1e3 * 10
 
 # EMODS = np.array([2.0, 2.5, 4.5, 5.0, 7.0, 7.5,]) * 1e3*10
 
@@ -40,17 +41,17 @@ EMODS = np.arange(2.5, 12.5+2.5, 2.5) * 1e3*10
 # EMODS = np.array([2.5]) * 1e3*10
 
 emods_covbod_gt = [
-    (ecov, ebod) for ecov, ebod in itertools.product(EMODS, EMODS)
-    if ecov <= ebod
+    (ecov, ebod) for ecov, ebod in itertools.product(EMODS_GT, EMODS_GT)
+    if ecov < ebod
 ]
-EMODS_COV, EMODS_BOD = [e[0] for e in emods_covbod_gt], [e[1] for e in emods_covbod_gt]
+EMODS_COV_GT, EMODS_BOD_GT = [e[0] for e in emods_covbod_gt], [e[1] for e in emods_covbod_gt]
 
 ## The models are not pickalble so have to be outside for multi-processing
 mesh_name = 'BC-dcov5.00e-02-cl1.00'
-mesh_path = path.join('./mesh', mesh_name+'.xml')
-RES_LAMP = libsetup.setup_transient_model(mesh_path)
-RES_DYN, DRES_DYN = libsetup.setup_models(mesh_path)
-RES_HOPF = libhopf.HopfModel(RES_DYN, DRES_DYN)
+mesh_name = 'M5_CB_GA1'
+mesh_path = path.join('./mesh', mesh_name+'.msh')
+RES_LAMP = libsetup.load_tran(mesh_path, sep_method='arearatio', sep_vert_label='separation-inf')
+RES_HOPF, RES_DYN, DRES_DYN = libsetup.load_hopf(mesh_path, sep_method='fixed', sep_vert_label='separation-inf')
 
 def set_props(props, celllabel_to_dofs, emod_cov, emod_bod):
     # Set any constant properties
@@ -150,8 +151,8 @@ def run_solve_hopf(fpath, emod_cov, emod_bod):
 
             xhopf_0 = libhopf.gen_hopf_initial_guess(
                 RES_HOPF,
-                ([PSUBS[idx_hopf]], [PSUBS[idx_hopf+1]]),
-                ([omegas_real[idx_hopf]], [omegas_real[idx_hopf+1]])
+                PSUBS[idx_hopf:idx_hopf+2],
+                tol=100
             )
             xhopf_n, info = libhopf.solve_hopf_newton(RES_HOPF, xhopf_0)
 
@@ -197,7 +198,7 @@ def run_large_amp_model(fpath, emod_cov, emod_bod):
         times = bv.BlockVector([_times], labels=(('times',),))
 
         control = RES_LAMP.control.copy()
-        control['psub'][:] = ponset + 100.0*10
+        control['psub'][:] = ponset + 200.0*10
         with sf.StateFile(RES_LAMP, fpath, mode='a') as f:
             forward.integrate(RES_LAMP, f, ini_state, [control], RES_LAMP.props, times, use_tqdm=True)
     else:
@@ -347,7 +348,7 @@ if __name__ == '__main__' :
     print(args.numproc)
 
     ## Run linear stability analysis to check if Hopf bifurcations occur or not
-    for emod_cov, emod_bod in zip(EMODS_COV, EMODS_BOD):
+    for emod_cov, emod_bod in zip(EMODS_COV_GT, EMODS_BOD_GT):
         fname = f'LSA_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
         fpath = f'out/stress_test/{fname}.h5'
         ans = run_lsa(fpath, emod_cov, emod_bod)
@@ -361,26 +362,27 @@ if __name__ == '__main__' :
             else:
                 print(f"{fname} does not have a Hopf bifurcation between {psubs[0]:.2f} Ba and {psubs[-1]:.2f} Ba")
 
-    ## Solve the Hopf bifurcation system for each case
-    for emod_cov, emod_bod in zip(EMODS_COV, EMODS_BOD):
+    ## Solve the Hopf bifurcation system for each case for each case that has a Hopf bifurcation
+    for emod_cov, emod_bod in zip(EMODS_COV_GT, EMODS_BOD_GT):
         fname = f'Hopf_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
         fpath = f'out/stress_test/{fname}.h5'
         run_solve_hopf(fpath, emod_cov, emod_bod)
 
-    ## Run a transient simulation for each Hopf bifurcation
-    for emod_cov, emod_bod in zip(EMODS_COV, EMODS_BOD):
+    ## Run a transient simulation for each case that has a Hopf bifurcation
+    for emod_cov, emod_bod in zip(EMODS_COV_GT, EMODS_BOD_GT):
         fname = f'LargeAmp_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
         fpath = f'out/stress_test/{fname}.h5'
         run_large_amp_model(fpath, emod_cov, emod_bod)
 
     ## Post process the glottal width and time from each transient simulation
     fpath = 'out/stress_test/signals.h5'
-    SIGNALS = postproc_gw(fpath, EMODS_COV, EMODS_BOD)
+    SIGNALS = postproc_gw(fpath, EMODS_COV_GT, EMODS_BOD_GT)
 
+    # breakpoint()
     ## Run the inverse analysis studies
     # only use cover/body combinations that self-oscillate
     emods_covbod_gt = [
-        (ecov, ebod) for ecov, ebod in zip(EMODS_COV, EMODS_BOD)
+        (ecov, ebod) for ecov, ebod in zip(EMODS_COV_GT, EMODS_BOD_GT)
         if f'LargeAmp_ecov{ecov:.2e}_ebody{ebod:.2e}/gw' in SIGNALS
     ]
     emods_cov_gt = [x[0] for x in emods_covbod_gt]
