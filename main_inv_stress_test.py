@@ -28,7 +28,7 @@ import postprocutils
 # pylint: disable=redefined-outer-name
 
 # Range of psub to test for Hopf bifurcation
-DPSUB = 100
+DPSUB = 50
 PSUBS = np.arange(0, 1000+DPSUB, DPSUB)*10
 
 # Range of moduli to test
@@ -308,6 +308,9 @@ def _run_inv_opt(emod_cov, emod_bod, alpha, gt_fname):
     except petsc4py.PETSc.Error as err:
         print(f"Case failed with error {err}")
 
+def _run(ecov, ebod, alpha):
+    return _run_inv_opt(ecov, ebod, alpha, gt_fname)
+
 def segment_last_period(y, dt):
     """
     Segment the last period of a periodic signal
@@ -381,14 +384,14 @@ if __name__ == '__main__' :
 
     ## Run the inverse analysis studies for GT data
     # only use cover/body combinations that self-oscillate
-    EMODS_COV_INI = np.array([(2.5+5)/2, (5+7.5)/2, (7.5+10)/2, (10+12.5)/2, (12.5+15)/2])
+    EMODS_COV_INI = np.array([(2.5+5)/2, (5+7.5)/2, (7.5+10)/2, (10+12.5)/2, (12.5+15)/2])*1e3*10
     EMODS_BOD_INI = EMODS_COV_INI
     emods_covbod_ini = [
         (ecov, ebod) for ecov, ebod in zip(EMODS_COV_INI, EMODS_BOD_INI)
-        if f'LargeAmp_ecov{ecov:.2e}_ebody{ebod:.2e}/gw' in SIGNALS
     ]
     emods_cov_ini = [x[0] for x in emods_covbod_ini]
     emods_bod_ini = [x[1] for x in emods_covbod_ini]
+
     ## Load the reference glottal width and omega
     for emod_cov_gt, emod_bod_gt in zip(EMODS_COV_GT, EMODS_BOD_GT):
         gt_fname = f'LargeAmp_ecov{emod_cov_gt:.2e}_ebody{emod_bod_gt:.2e}'
@@ -398,7 +401,6 @@ if __name__ == '__main__' :
 
         # Segment the last period
         gw_gt, omega_gt = segment_last_period(gw_gt, dt)
-
         ## Try to optimize to the target data from all starting points
         opt_options = {
             'disp': 99,
@@ -406,6 +408,7 @@ if __name__ == '__main__' :
         }
         alphas = 10**np.array([-np.inf] + [-12, -10, -8, -6, -4, -2])
 
+        # Serial version
         # for emod_cov_ini, emod_bod_ini in zip(emods_cov_ini, emods_bod_ini):
         #     alpha = 0.0
         #     for alpha in alphas:
@@ -423,13 +426,11 @@ if __name__ == '__main__' :
         #         except petsc4py.PETSc.Error as err:
         #             print(f"Case failed with error {err}")
 
+        # Parallel version
         _args = [
             (emod[0], emod[1], alpha)
             for emod, alpha in itertools.product(emods_covbod_ini, alphas)
         ]
-
-        def _run(ecov, ebod, alpha):
-            return _run_inv_opt(ecov, ebod, alpha, gt_fname)
 
         with multiprocessing.Pool(args.numproc) as p:
             p.starmap(_run, _args, chunksize=1)
