@@ -40,7 +40,10 @@ def make_glottal_width(hopf, num_points=100):
     IDX_MEDIAL = hopf.res.fsimap.dofs_solid
 
     YMID = float(hopf.res.props['ymid'][0])
-    ZETA = float(hopf.res.props['zeta_min'][0])
+    if 'zeta_min' in hopf.res.props:
+        ZETA = float(hopf.res.props['zeta_min'][0])
+    else:
+        ZETA = 1e-4
 
     S = np.array(hopf.dres.fluid.s) # can also be res
 
