@@ -406,7 +406,7 @@ if __name__ == '__main__' :
             'disp': 99,
             'maxiter': 150
         }
-        alphas = 10**np.array([-np.inf] + [-12, -10, -8, -6, -4, -2])
+        alphas = 10**np.array([-np.inf] + [-12, -10, -8, -6])
 
         # Serial version
         # for emod_cov_ini, emod_bod_ini in zip(emods_cov_ini, emods_bod_ini):
