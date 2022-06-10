@@ -112,8 +112,8 @@ if __name__ == '__main__':
     alphas = 10**np.array([-np.inf]+[-10, -8, -6, -4])
     emods = np.arange(2.5, 20+2.5)*10*1e3
 
-    alphas = 10**np.array([-np.inf])
-    emods = np.array([5.0]) * 10 * 1e3
+    # alphas = 10**np.array([-np.inf])
+    # emods = np.array([5.0]) * 10 * 1e3
 
     for emod, alpha in itertools.product(emods, alphas):
 
