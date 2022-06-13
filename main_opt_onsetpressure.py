@@ -110,7 +110,9 @@ if __name__ == '__main__':
     hopf, res, dres = libsetup.load_hopf(mesh_path, sep_method='fixed', sep_vert_label='separation-inf')
 
     alphas = 10**np.array([-np.inf]+[-10, -8, -6, -4])
-    emods = np.arange(2.5, 20+2.5)*10*1e3
+
+    demod = 2.5
+    emods = np.arange(2.5, 20+demod/2, demod)*10*1e3
 
     # alphas = 10**np.array([-np.inf])
     # emods = np.array([5.0]) * 10 * 1e3
