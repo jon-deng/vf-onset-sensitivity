@@ -79,7 +79,7 @@ def run_opt(fpath, hopf, emod, alpha):
         'disp': 99,
         'maxiter': 150,
         'ftol': 0.0,
-        'maxls': 100
+        # 'maxls': 100
     }
     def opt_callback(xk):
         print("In callback")
