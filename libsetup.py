@@ -122,7 +122,7 @@ def set_props(props, region_to_dofs, res):
 def set_constant_props(props, region_to_dofs, res):
     gops.set_vec(props['eta'], 5.0)
     gops.set_vec(props['rho'], 1.0)
-    gops.set_vec(props['nu'], 0.45)
+    gops.set_vec(props['nu'], 0.49)
 
     # Fluid separation smoothing props
     if all(key in props for key in ['zeta_min', 'zeta_sep']):
