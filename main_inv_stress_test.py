@@ -224,7 +224,7 @@ def postproc_gw(fpath, emods_cov, emods_bod):
     in_paths = [x for x in in_paths if path.isfile(x)]
 
     with h5py.File(fpath, mode='a') as f:
-        return postprocutils.postprocess_case_to_signal(f, in_paths, RES_LAMP, signal_to_proc)
+        return postprocutils.postprocess(f, in_paths, RES_LAMP, signal_to_proc)
 
 @_skip_existing_path
 def run_inv_opt(fpath, emod_cov, emod_bod, gw_ref, omega_ref, alpha=0.0, opt_options=None):
