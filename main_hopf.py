@@ -46,7 +46,7 @@ if __name__ == '__main__':
     EREF = res.state.copy()
     EREF['q'].set(1.0)
     EREF.set(1.0)
-    hopf = libhopf.HopfModel(res, dres, ee=EREF)
+    hopf = libhopf.HopfModel(res, dres, e_mode=EREF)
     hopf.set_props(props)
     # (
     #     xhopf, hopf_res, hopf_jac,
