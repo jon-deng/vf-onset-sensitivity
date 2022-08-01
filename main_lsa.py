@@ -15,46 +15,12 @@ if __name__ == '__main__':
     # mesh_name = 'BC-dcov5.00e-02-cl1.00'
     mesh_name = 'M5_CB_GA0'
 
-    mesh_path = f'mesh/{mesh_name}.xml'
-    _, res_xml, _ = libsetup.load_hopf(
+    mesh_path = f'mesh/{mesh_name}.msh'
+    _, res, _ = libsetup.load_hopf(
         mesh_path,
         sep_method='smoothmin',
         sep_vert_label='separation-inf'
     )
-    mf_facet_xml = res_xml.solid.forms['mesh.facet_function']
-    mf_cell_xml = res_xml.solid.forms['mesh.cell_function']
-    ds_xml = res_xml.solid.forms['measure.ds']
-
-    ds = ds_xml
-    res = res_xml
-
-    # Compare mesh functions between the two mesh formats
-    # mesh_path = f'mesh/{mesh_name}.msh'
-    # _, res_msh, _ = libsetup.load_hopf(
-    #     mesh_path,
-    #     sep_method='smoothmin',
-    #     sep_vert_label='separation-inf'
-    # )
-
-    # mf_facet_msh = res_msh.solid.forms['mesh.facet_function']
-    # mf_facet_msh.array()[mf_facet_msh.where_equal(2**64-1)] = 0
-    # mf_cell_msh = res_msh.solid.forms['mesh.cell_function']
-    # ds_msh = res_msh.solid.forms['measure.ds']
-    # ds = ds_msh
-    # res = res_msh
-
-    breakpoint()
-
-    # mesh_name = 'BC-dcov5.00e-02-cl1.00'
-    # # mesh_name = 'M5_CB_GA0'
-    # mesh_path = f'mesh/{mesh_name}.xml'
-
-    # _, res, _ = libsetup.load_hopf(
-    #     mesh_path,
-    #     sep_method='smoothmin',
-    #     sep_vert_label='separation-inf'
-    # )
-    # res, dres = libsetup.setup_models(mesh_path)
 
     psubs = np.arange(0, 1500, 100)*10
 
@@ -63,10 +29,6 @@ if __name__ == '__main__':
         for psub in psubs
     ]
     breakpoint()
-
-    print(dfn.assemble(1*ds(3)))
-    print(dfn.assemble(1*ds(4)))
-    print(dfn.assemble(1*ds))
 
     omegas = np.array([mode_info[0] for mode_info in least_stable_modes_info])
 
