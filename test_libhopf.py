@@ -96,7 +96,7 @@ def test_bound_hopf_bifurcation(hopf, bound_pairs):
 
 def test_gen_hopf_initial_guess_from_bounds(hopf, bound_pairs):
     eref = hopf.res.state.copy()
-    eref.set(1.0)
+    eref[:] = 1.0
 
     xhopf_0 = libhopf.gen_hopf_initial_guess_from_bounds(hopf, bound_pairs)
 
@@ -106,7 +106,7 @@ def test_gen_hopf_initial_guess_from_bounds(hopf, bound_pairs):
 
 if __name__ == '__main__':
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
-    mesh_path = path.join('./mesh', mesh_name+'.xml')
+    mesh_path = path.join('./mesh', mesh_name+'.msh')
 
     hopf, xhopf, props_0 = setup_hopf_state(mesh_path)
     func = libfuncs.OnsetPressureFunctional(hopf)
@@ -115,14 +115,14 @@ if __name__ == '__main__':
     # currently this required the Hopf system have state and properties that
     # initially satisfy the equations
     xhopf_0 = xhopf.copy()
-    xhopf_0.set(0.0)
+    xhopf_0[:] = 0.0
     hopf.set_state(xhopf_0)
     hopf.set_props(props_0)
     redu_grad = libhopf.ReducedGradient(func, hopf)
 
     dprops = props_0.copy()
-    dprops.set(0)
-    dprops['emod'].set(1.0)
+    dprops[:] = 0
+    dprops['emod'] = 1.0
 
     with warnings.catch_warnings():
         # warnings.filterwarnings('error', category=UserWarning)

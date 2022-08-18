@@ -31,7 +31,7 @@ def solve_hopf_newton_step(hopf, xhopf0):
 
 if __name__ == '__main__':
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
-    mesh_path = path.join('./mesh', mesh_name+'.xml')
+    mesh_path = path.join('./mesh', mesh_name+'.msh')
 
     hopf, xhopf, props0 = setup_hopf_state(mesh_path)
 

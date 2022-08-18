@@ -457,20 +457,20 @@ def gen_hopf_initial_guess_from_bounds(
         res, bound_pairs, omega_pairs=omega_pairs, nsplit=nsplit, tol=tol)
 
     if len(ubs) > 1:
-        raise UserWarning("More than one Hopf bifurcation point found")
+        warnings.warn("More than one Hopf bifurcation point found")
     if len(ubs) == 0:
-        raise UserWarning(f"No Hopf bifurcation found between bounds {bound_pairs[0]} and {bound_pairs[1]}")
+        raise RuntimeError(f"No Hopf bifurcation found between bounds {bound_pairs[0]} and {bound_pairs[1]}")
 
     # Use the upper bound to generate an initial guess for the bifurcation
     # First set the model subglottal pressure to the upper bound
     psub = ubs[0]
     control = res.control
-    control['psub'][:] = psub
+    control['psub'] = psub
     res.set_control(control)
 
     # Solve for the fixed point
     # x_fp0 = res.state.copy()
-    # x_fp0.set(0.0)
+    # x_fp0[:] = 0.0
     x_fp, _info = solve_fp(res, psub)
 
     # Solve for linear stability around the fixed point
@@ -606,7 +606,7 @@ def solve_fp(
     # Use a sequence of intermediate loading steps to generate good initial
     # guesses for the next fixed-point newton solve
     xfp_0 = res.state.copy()
-    xfp_0.set(0.0)
+    xfp_0[:] = 0.0
 
     n = 0
     status = -1
@@ -1140,7 +1140,7 @@ class OptGradManager:
         if solver_failure:
             g = np.nan
             _dg_dp = bvec.concatenate_vec([self.redu_grad.props, self.redu_grad.camp]).copy()
-            _dg_dp.set(np.nan)
+            _dg_dp[:] = np.nan
             dg_dp = _dg_dp.to_mono_ndarray()
         else:
             # Solve the objective function value
