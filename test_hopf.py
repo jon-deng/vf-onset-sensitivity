@@ -83,7 +83,7 @@ def test_assem_dres_dprops(hopf, props0, dprops):
 
 if __name__ == '__main__':
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
-    mesh_path = path.join('./mesh', mesh_name+'.xml')
+    mesh_path = path.join('./mesh', mesh_name+'.msh')
 
     res, dres = setup_models(mesh_path)
     model = HopfModel(res, dres)
@@ -106,17 +106,17 @@ if __name__ == '__main__':
 
     ## Test dF/dstate
     x0 = model.state.copy()
-    x0[mode_real_labels].set(1.0)
-    x0[mode_imag_labels].set(1.0)
-    x0[psub_labels[0]].set(PSUB)
-    x0[omega_labels[0]].set(1.0)
+    x0[mode_real_labels] = 1.0
+    x0[mode_imag_labels] = 1.0
+    x0[psub_labels[0]] = PSUB
+    x0[omega_labels[0]] = 1.0
     model.apply_dirichlet_bvec(x0)
     model.set_state(x0)
 
     for label in model.state.labels[0]:
         print(f"\n -- Checking Hopf jacobian along {label} --")
         dx = x0.copy()
-        dx.set(0)
+        dx[:] = 0
         dx[label] = 1e-5
         model.apply_dirichlet_bvec(dx)
 
@@ -125,7 +125,7 @@ if __name__ == '__main__':
     ## Test dF/dprops
     props0 = props.copy()
     dprops = props0.copy()
-    dprops.set(0.0)
+    dprops[:] = 0.0
     dprops['emod'] = 1.0
     print("\n -- Checking Hopf jacobian along emod --")
     test_assem_dres_dprops(model, props0, dprops)

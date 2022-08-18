@@ -89,7 +89,7 @@ class HopfModel:
 
         if e_mode is None:
             e_mode = self.state[self.labels_fp].copy()
-            e_mode.set(1.0)
+            e_mode[:] = 1.0
         self.E_MODE = e_mode
 
     def set_props(self, props):
@@ -111,15 +111,14 @@ class HopfModel:
         for model in (self.res, self.dres):
             model.set_state(xhopf[self.labels_fp])
 
-            model.control['psub'].array[0] = xhopf['psub'].array[0]
+            model.control['psub'] = xhopf['psub'][0]
             model.set_control(model.control)
 
     def apply_dirichlet_bvec(self, vec):
         """Zeros dirichlet associated indices on the Hopf state"""
         for label in ['u', 'v', 'u_mode_real', 'v_mode_real', 'u_mode_imag', 'v_mode_imag']:
             # zero the rows associated with each dirichlet DOF
-            subvec = vec[label]
-            subvec.array[self.IDX_DIRICHLET] = 0
+            vec[label][self.IDX_DIRICHLET] = 0
 
     def apply_dirichlet_bmat(self, mat):
         """Zeros dirichlet associated indices"""
@@ -127,7 +126,7 @@ class HopfModel:
         row_labels = ['u', 'v', 'u_mode_real', 'v_mode_real', 'u_mode_imag', 'v_mode_imag']
         col_labels = self.state.labels[0]
         for row, col in itertools.product(row_labels, col_labels):
-            submat = mat[row, col]
+            submat = mat.sub[row, col]
             if row == col:
                 submat.zeroRows(self.IDX_DIRICHLET, diag=1.0)
             else:
@@ -138,7 +137,7 @@ class HopfModel:
         row_labels = ['u', 'v', 'u_mode_real', 'v_mode_real', 'u_mode_imag', 'v_mode_imag']
         col_labels = mat.labels[1]
         for row, col in itertools.product(row_labels, col_labels):
-            submat = mat[row, col]
+            submat = mat.sub[row, col]
             submat.zeroRows(self.IDX_DIRICHLET, diag=0.0)
 
     def assem_res(self):
@@ -303,11 +302,11 @@ def gen_hopf_state(res: 'HopfModel') -> Tuple[bvec.BlockVector, List[Labels]]:
     """
     X_state = res.state.copy()
 
-    _mode_real_vecs = [x for x in res.state.copy().array.flat]
+    _mode_real_vecs = [x for x in res.state.copy().sub_blocks.flat]
     _mode_real_labels = [label+'_mode_real' for label in X_state.labels[0]]
     X_mode_real = bvec.BlockVector(_mode_real_vecs, labels=[_mode_real_labels])
 
-    _mode_imag_vecs = [x for x in res.state.copy().array.flat]
+    _mode_imag_vecs = [x for x in res.state.copy().sub_blocks.flat]
     _mode_imag_labels = [label+'_mode_imag' for label in X_state.labels[0]]
     X_mode_imag = bvec.BlockVector(_mode_imag_vecs, labels=[_mode_imag_labels])
 

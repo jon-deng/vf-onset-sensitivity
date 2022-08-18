@@ -112,25 +112,25 @@ def set_props(props, region_to_dofs, res):
     Set the model properties
     """
     # VF material props
-    gops.set_vec(props['emod'], ECOV)
-    gops.set_vec(props['emod'], EBODY)
+    props['emod'][:] =  ECOV
+    props['emod'][:] =  EBODY
 
     props = set_constant_props(props, region_to_dofs, res)
 
     return props
 
 def set_constant_props(props, region_to_dofs, res):
-    gops.set_vec(props['eta'], 5.0)
-    gops.set_vec(props['rho'], 1.0)
-    gops.set_vec(props['nu'], 0.49)
+    props['eta'][:] =  5.0
+    props['rho'][:] =  1.0
+    props['nu'][:] =  0.49
 
     # Fluid separation smoothing props
     if all(key in props for key in ['zeta_min', 'zeta_sep']):
-        gops.set_vec(props['zeta_min'], 1.0e-4)
-        gops.set_vec(props['zeta_sep'], 1.0e-4)
+        props['zeta_min'][:] =  1.0e-4
+        props['zeta_sep'][:] =  1.0e-4
 
     if 'r_sep' in props:
-        gops.set_vec(props['r_sep'], 1.0)
+        props['r_sep'][:] =  1.0
 
     # Contact and midline symmetry properties
     # y_gap = 0.5 / 10 # Set y gap to 0.5 mm
@@ -140,11 +140,11 @@ def set_constant_props(props, region_to_dofs, res):
     y_max = res.solid.forms['mesh.mesh'].coordinates()[:, 1].max()
     y_mid = y_max + y_gap
     y_contact = y_mid - y_contact_offset
-    gops.set_vec(props['ycontact'], y_contact)
-    gops.set_vec(props['kcontact'], 1e16)
-    gops.set_vec(props['ymid'], y_mid)
+    props['ycontact'][:] =  y_contact
+    props['kcontact'][:] =  1e16
+    props['ymid'][:] =  y_mid
 
-    gops.set_vec(props['rho_air'], 1.293e-3)
+    props['rho_air'][:] =  1.293e-3
 
     return props
 
