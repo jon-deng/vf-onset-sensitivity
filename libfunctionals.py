@@ -258,18 +258,18 @@ class OnsetPressureFunctional(BaseFunctional):
 
     def assem_dg_dstate(self):
         dg_dstate = self.state.copy()
-        dg_dstate.set(0.0)
+        dg_dstate[:] = 0.0
         dg_dstate['psub'][0] = 1.0
         return dg_dstate
 
     def assem_dg_dprops(self):
         dg_dprops = self.props.copy()
-        dg_dprops.set(0)
+        dg_dprops[:] = 0
         return dg_dprops
 
     def assem_dg_dcamp(self):
         dg_dcamp = self.camp.copy()
-        dg_dcamp.set(0)
+        dg_dcamp[:] = 0
         return dg_dcamp
 
 class OnsetFrequencyFunctional(BaseFunctional):
@@ -282,18 +282,18 @@ class OnsetFrequencyFunctional(BaseFunctional):
 
     def assem_dg_dstate(self):
         dg_dstate = self.state.copy()
-        dg_dstate.set(0.0)
+        dg_dstate[:] = 0.0
         dg_dstate['omega'][0] = 1.0
         return dg_dstate
 
     def assem_dg_dprops(self):
         dg_dprops = self.props.copy()
-        dg_dprops.set(0)
+        dg_dprops[:] = 0
         return dg_dprops
 
     def assem_dg_dcamp(self):
         dg_dcamp = self.camp.copy()
-        dg_dcamp.set(0)
+        dg_dcamp[:] = 0
         return dg_dcamp
 
 class AbsOnsetFrequencyFunctional(BaseFunctional):
@@ -306,18 +306,18 @@ class AbsOnsetFrequencyFunctional(BaseFunctional):
 
     def assem_dg_dstate(self):
         dg_dstate = self.state.copy()
-        dg_dstate.set(0.0)
+        dg_dstate[:] = 0.0
         dg_dstate['omega'][0] = np.sign(self.state['omega'][0])
         return dg_dstate
 
     def assem_dg_dprops(self):
         dg_dprops = self.props.copy()
-        dg_dprops.set(0)
+        dg_dprops[:] = 0
         return dg_dprops
 
     def assem_dg_dcamp(self):
         dg_dcamp = self.camp.copy()
-        dg_dcamp.set(0)
+        dg_dcamp[:] = 0
         return dg_dcamp
 
 class GlottalWidthErrorFunctional(BaseFunctional):
@@ -352,18 +352,18 @@ class GlottalWidthErrorFunctional(BaseFunctional):
     def assem_dg_dstate(self):
         _dg_dstate = self._grad_state_err(self.state.to_mono_ndarray(), self.camp.to_mono_ndarray())
         dg_dstate = self.state.copy()
-        dg_dstate.set_vec(_dg_dstate)
+        dg_dstate.set_mono(_dg_dstate)
         return dg_dstate
 
     def assem_dg_dprops(self):
         dg_dprops = self.props.copy()
-        dg_dprops.set(0)
+        dg_dprops[:] = 0
         return dg_dprops
 
     def assem_dg_dcamp(self):
         _dg_dcamp = self._grad_camp_err(self.state.to_mono_ndarray(), self.camp.to_mono_ndarray())
         dg_dcamp = self.camp.copy()
-        dg_dcamp.set_vec(_dg_dcamp)
+        dg_dcamp.set_mono(_dg_dcamp)
         return dg_dcamp
 
 class ModulusGradientNormSqr(BaseFunctional):
@@ -386,12 +386,12 @@ class ModulusGradientNormSqr(BaseFunctional):
 
     def assem_dg_dstate(self):
         dg_dstate = self.state.copy()
-        dg_dstate.set(0.0)
+        dg_dstate[:] = 0.0
         return dg_dstate
 
     def assem_dg_dprops(self):
         dg_dprops = self.props.copy()
-        dg_dprops.set(0)
+        dg_dprops[:] = 0
         dg_dprops['emod'][:] = dfn.assemble(
             self._dfunctional_demod, tensor=dfn.PETScVector()
         ).vec()
@@ -399,5 +399,5 @@ class ModulusGradientNormSqr(BaseFunctional):
 
     def assem_dg_dcamp(self):
         dg_dcamp = self.camp.copy()
-        dg_dcamp.set(0)
+        dg_dcamp[:] = 0
         return dg_dcamp

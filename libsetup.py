@@ -162,8 +162,8 @@ def setup_hopf_state(mesh_path, hopf_state_path=None):
     ## Initialize the Hopf system
     # This vector normalizes the real/imag components of the unstable eigenvector
     EREF = res.state.copy()
-    EREF['q'].set(1.0)
-    EREF.set(1.0)
+    EREF['q'] = 1.0
+    EREF[:] = 1.0
     hopf = libhopf.HopfModel(res, dres, e_mode=EREF)
     hopf.set_props(props)
 
@@ -200,8 +200,8 @@ def setup_hopf_state(mesh_path, hopf_state_path=None):
     ## Solve the Hopf system for the Hopf bifurcation
     xhopf_0 = hopf.state.copy()
     xhopf_0[state_labels] = xfp_n
-    xhopf_0[psub_labels[0]].array[:] = PSUB
-    xhopf_0[omega_labels[0]].array[:] = omega_hopf
+    xhopf_0[psub_labels[0]] = PSUB
+    xhopf_0[omega_labels[0]] = omega_hopf
 
     xmode_real, xmode_imag = libhopf.normalize_eigenvector_by_hopf(
         mode_real_hopf, mode_imag_hopf, EREF)

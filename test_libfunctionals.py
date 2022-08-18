@@ -72,7 +72,7 @@ def test_op(op, *funcs):
 
 if __name__ == '__main__':
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
-    mesh_path = path.join('./mesh', mesh_name+'.xml')
+    mesh_path = path.join('./mesh', mesh_name+'.msh')
 
     hopf, xhopf, props0 = setup_hopf_state(mesh_path)
     funca = libfuncs.OnsetPressureFunctional(hopf)
@@ -82,21 +82,21 @@ if __name__ == '__main__':
     func = funcb
     state0 = xhopf.copy()
     dstate = state0.copy()
-    dstate.set(0)
-    dstate['u'].array[:] = 1.0e-5
+    dstate[:] = 0
+    dstate['u'] = 1.0e-5
     # dstate.set(1.0e-5)
     hopf.apply_dirichlet_bvec(dstate)
     test_assem_dg_dstate(func, state0, dstate)
 
     dprops = props0.copy()
-    dprops.set(0)
-    dprops['emod'].array[:] = 1.0
+    dprops[:] = 0
+    dprops['emod'] = 1.0
     test_assem_dg_dprops(func, props0, dprops)
 
     camp0 = func.camp.copy()
     dcamp = camp0.copy()
-    dcamp['amp'].set(1e-4)
-    dcamp['phase'].set(np.pi*1e-5)
+    dcamp['amp'] = 1e-4
+    dcamp['phase'] = np.pi*1e-5
     test_assem_dg_dcamp(func, camp0, dcamp)
 
     test_op(operator.add, func, func)

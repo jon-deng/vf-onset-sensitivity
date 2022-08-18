@@ -34,7 +34,7 @@ def make_glottal_width(hopf, num_points=100):
     """
     Return a glottal width signal
     """
-    XREF = np.array(hopf.res.solid.XREF.vector())
+    XREF = np.array(hopf.res.solid.XREF)
 
     IDX_U = slice(0, hopf.res.state['u'].size)
     IDX_MEDIAL = hopf.res.fsimap.dofs_solid

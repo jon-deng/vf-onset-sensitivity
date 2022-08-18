@@ -186,11 +186,18 @@ class HopfModel:
         ee = self.E_MODE
 
         # Make null matrix constants
+        x_state = x[state_labels]
         mats = [
-            [subops.zero_mat(row_size, col_size)
-                for col_size in x[self.labels_fp].bshape[0]]
-            for row_size in x[state_labels].bshape[0]]
-        NULL_MAT_STATE_STATE = bmat.BlockMatrix(mats, labels=(x[state_labels].labels[0], x[state_labels].labels[0]))
+            subops.zero_mat(row_size, col_size) if row_size != col_size
+                else subops.diag_mat(row_size, diag=0)
+            for row_size in x_state.bshape[0]
+            for col_size in x_state.bshape[0]
+        ]
+        NULL_MAT_STATE_STATE = bmat.BlockMatrix(
+            mats,
+            shape=x_state.shape+x_state.shape,
+            labels=x_state.labels+x_state.labels
+        )
 
         mats = [
             [subops.zero_mat(row_size, col_size) for col_size in [1]]
@@ -669,7 +676,7 @@ def solve_fp_newton(
     res.set_control(res.control)
 
     ZERO_STATET = res.statet.copy()
-    ZERO_STATET.set(0.0)
+    ZERO_STATET[:] = 0.0
     res.set_statet(ZERO_STATET)
 
     IDX_DIRICHLET = np.array(
@@ -677,7 +684,7 @@ def solve_fp_newton(
         dtype=np.int32)
     def apply_dirichlet_bvec(vec):
         """Applies the dirichlet BC to a vector"""
-        for label, subvec in vec.items():
+        for label, subvec in vec.sub_items():
             if label in ['u', 'v']:
                 subvec.setValues(IDX_DIRICHLET, np.zeros(IDX_DIRICHLET.size))
 
@@ -685,7 +692,7 @@ def solve_fp_newton(
         """Applies the dirichlet BC to a matrix"""
         for row_label in ['u', 'v']:
             for col_label in mat.labels[1]:
-                submat = mat[row_label, col_label]
+                submat = mat.sub[row_label, col_label]
                 if row_label == col_label:
                     submat.zeroRows(IDX_DIRICHLET, diag=diag)
                 else:
@@ -721,7 +728,7 @@ def solve_fp_newton(
             ksp.solve(_rhs_n, _dx_n)
 
             dx_n = xfp_n.copy()
-            dx_n.set_vec(_dx_n)
+            dx_n.set_mono(_dx_n)
             return dx_n
         return assem_res, solve
 
@@ -759,7 +766,7 @@ def solve_modal(
     res.set_control(res.control)
 
     ZERO_STATET = res.statet.copy()
-    ZERO_STATET.set(0.0)
+    ZERO_STATET[:] = 0.0
     res.set_statet(ZERO_STATET)
 
     IDX_DIRICHLET = np.array(
@@ -770,7 +777,7 @@ def solve_modal(
         """Applies the dirichlet BC to a matrix"""
         for row_label in ['u', 'v']:
             for col_label in mat.labels[1]:
-                submat = mat[row_label, col_label]
+                submat = mat.sub[row_label, col_label]
                 if row_label == col_label:
                     submat.zeroRows(IDX_DIRICHLET, diag=diag)
                 else:
@@ -811,8 +818,8 @@ def solve_modal(
         eigvec_imag = _df_dx.getVecRight()
         eps.getEigenvector(jj, eigvec_real, eigvec_imag)
 
-        eigvecs_real[jj].set_vec(eigvec_real)
-        eigvecs_imag[jj].set_vec(eigvec_imag)
+        eigvecs_real[jj].set_mono(eigvec_real)
+        eigvecs_imag[jj].set_mono(eigvec_imag)
 
     return omegas, eigvecs_real, eigvecs_imag
 
@@ -848,7 +855,7 @@ def solve_hopf_newton(
             _dx_n, _ = subops.solve_petsc_lu(_jac_n, _rhs_n, out=_dx_n)
 
             dx_n = xhopf_n.copy()
-            dx_n.set_vec(_dx_n)
+            dx_n.set_mono(_dx_n)
             return dx_n
         return assem_res, solve
 
