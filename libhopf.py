@@ -23,6 +23,7 @@ so the Hopf equations below are slightly different.
 
 from typing import Tuple, List, Dict, Optional
 import itertools
+import functools
 import warnings
 import numpy as np
 from petsc4py import PETSc
@@ -142,75 +143,110 @@ class HopfModel:
 
     def assem_res(self):
         """Return the Hopf system residual"""
-        # Load the needed 'local variables'
+        ## Bind common required local variables
         res, dres = self.res, self.dres
         mode_real_labels, mode_imag_labels = self.labels_mode_real, self.labels_mode_imag
         x = self.state
         ee = self.E_MODE
 
-        # Set the model state and subglottal pressure (bifurcation parameter)
+        mode_real = x[mode_real_labels]
+        mode_imag = x[mode_imag_labels]
         omega = x['omega'][0]
 
+        ## Set appropriate linearization directions
         res_state = res.assem_res()
 
-        # Set appropriate linearization directions
-        dres.set_dstate(x[mode_real_labels])
-        dres.set_dstatet(-float(omega)*x[mode_imag_labels])
+        dres.set_dstate(mode_real)
+        dres.set_dstatet(-float(omega)*mode_imag)
         res_mode_real = dres.assem_res()
 
-        # Set appropriate linearization directions
-        dres.set_dstate(x[mode_imag_labels])
-        dres.set_dstatet(float(omega)*x[mode_real_labels])
+        dres.set_dstate(mode_imag)
+        dres.set_dstatet(float(omega)*mode_real)
         res_mode_imag = dres.assem_res()
 
         res_psub = x[['psub']].copy()
-        res_psub['psub'][0] = bla.dot(ee, x[mode_real_labels])
+        res_psub['psub'][0] = bla.dot(ee, mode_real)
 
         res_omega = x[['omega']].copy()
-        res_omega['omega'][0] = bla.dot(ee, x[mode_imag_labels]) - 1.0
+        res_omega['omega'][0] = bla.dot(ee, mode_real) - 1.0
 
         ret_bvec = bvec.concatenate_vec(
-            [res_state, res_mode_real, res_mode_imag, res_psub, res_omega],
-            labels=self.state.labels)
+            (res_state, res_mode_real, res_mode_imag, res_psub, res_omega),
+            labels=self.state.labels
+        )
 
         self.apply_dirichlet_bvec(ret_bvec)
         return ret_bvec
 
-    def assem_dres_dstate(self):
-        """Return the Hopf system jacobian"""
-        # Load the needed 'local variables'
-        res, dres = self.res, self.dres
-        state_labels = self.labels_fp
-        mode_real_labels, mode_imag_labels = self.labels_mode_real, self.labels_mode_imag
-        x = self.state
-        ee = self.E_MODE
-
-        # Make null matrix constants
-        x_state = x[state_labels]
+    ## The below are commonly used NULL block matrices
+    @functools.cached_property
+    def _NULL_MAT_STATE_STATE(self):
+        x_state = self.state[self.labels_fp]
         mats = [
             subops.zero_mat(row_size, col_size) if row_size != col_size
                 else subops.diag_mat(row_size, diag=0)
             for row_size in x_state.bshape[0]
             for col_size in x_state.bshape[0]
         ]
-        NULL_MAT_STATE_STATE = bmat.BlockMatrix(
+        return bmat.BlockMatrix(
             mats,
             shape=x_state.shape+x_state.shape,
             labels=x_state.labels+x_state.labels
         )
 
+    @functools.cached_property
+    def _NULL_MAT_STATE_SCALAR(self):
+        x_state = self.state[self.labels_fp]
         mats = [
-            [subops.zero_mat(row_size, col_size) for col_size in [1]]
-            for row_size in x[state_labels].bshape[0]]
-        NULL_MAT_STATE_SCALAR = bmat.BlockMatrix(mats, labels=(x[state_labels].labels[0], ('1',)))
+            subops.zero_mat(row_size, col_size)
+            for row_size in x_state.bshape[0]
+            for col_size in [1]
+        ]
+        return bmat.BlockMatrix(
+            mats,
+            shape=x_state.shape+(1,),
+            labels=x_state.labels+((),)
+        )
 
+    @functools.cached_property
+    def _NULL_MAT_SCALAR_STATE(self):
+        x_state = self.state[self.labels_fp]
         mats = [
-            [subops.zero_mat(row_size, col_size) for col_size in x[state_labels].bshape[0]]
-            for row_size in [1]]
-        NULL_MAT_SCALAR_STATE = bmat.BlockMatrix(mats, labels=(('1',), x[state_labels].labels[0]))
+            subops.zero_mat(row_size, col_size)
+            for row_size in [1]
+            for col_size in x_state.bshape[0]
+        ]
+        return bmat.BlockMatrix(
+            mats,
+            shape=(1,)+x_state.shape,
+            labels=((),)+x_state.labels
+        )
 
-        mats = [[subops.diag_mat(1, 0.0)]]
-        NULL_MAT_SCALAR_SCALAR = bmat.BlockMatrix(mats, labels=(('1',), ('1',)))
+    @functools.cached_property
+    def _NULL_MAT_SCALAR_SCALAR(self):
+        mats = [subops.diag_mat(1, diag=0.0)]
+        return bmat.BlockMatrix(
+            mats,
+            shape=(1, 1),
+            labels=((), ())
+        )
+
+    def assem_dres_dstate(self):
+        """Return the Hopf system jacobian"""
+        # Bind commonly used local vars
+        res, dres = self.res, self.dres
+        mode_real_labels, mode_imag_labels = self.labels_mode_real, self.labels_mode_imag
+        x = self.state
+        ee = self.E_MODE
+
+        mode_real = x[mode_real_labels]
+        mode_imag = x[mode_imag_labels]
+
+        # Bind null matrix constants
+        NULL_MAT_STATE_STATE = self._NULL_MAT_STATE_STATE.copy()
+        NULL_MAT_STATE_SCALAR = self._NULL_MAT_STATE_SCALAR.copy()
+        NULL_MAT_SCALAR_STATE = self._NULL_MAT_SCALAR_STATE.copy()
+        NULL_MAT_SCALAR_SCALAR = self._NULL_MAT_SCALAR_SCALAR.copy()
 
         ## Build the Jacobian row by row
         dres_dstate = res.assem_dres_dstate()
@@ -227,26 +263,28 @@ class HopfModel:
 
         omega = x['omega'][0]
         # Set appropriate linearization directions
-        dres.set_dstate(x[mode_real_labels])
-        dres.set_dstatet(float(omega)*x[mode_imag_labels])
+        dres.set_dstate(mode_real)
+        dres.set_dstatet(float(omega)*mode_imag)
         jac_row1 = [
             dres.assem_dres_dstate(),
             dres_dstate.copy(),
             -float(omega)*dres_dstatet.copy(),
             dres.assem_dres_dcontrol()[:, ['psub']],
             bvec.to_block_colmat(
-                bla.mult_mat_vec(-dres_dstatet, x[mode_imag_labels]))]
+                bla.mult_mat_vec(-dres_dstatet, mode_imag))]
 
         # Set appropriate linearization directions
-        dres.set_dstate(x[mode_imag_labels])
-        dres.set_dstatet(-float(omega)*x[mode_real_labels])
+        dres.set_dstate(mode_imag)
+        dres.set_dstatet(-float(omega)*mode_real)
         jac_row2 = [
             dres.assem_dres_dstate(),
             float(omega)*dres_dstatet.copy(),
             dres_dstate.copy(),
             dres.assem_dres_dcontrol()[:, ['psub']],
             bvec.to_block_colmat(
-                bla.mult_mat_vec(dres_dstatet, x[mode_real_labels]))]
+                bla.mult_mat_vec(dres_dstatet, mode_real)
+            )
+        ]
 
         jac_row3 = [
             NULL_MAT_SCALAR_STATE,
@@ -254,7 +292,7 @@ class HopfModel:
             NULL_MAT_SCALAR_STATE,
             NULL_MAT_SCALAR_SCALAR,
             NULL_MAT_SCALAR_SCALAR
-            ]
+        ]
 
         jac_row4 = [
             NULL_MAT_SCALAR_STATE,
@@ -262,7 +300,7 @@ class HopfModel:
             bvec.to_block_rowmat(ee),
             NULL_MAT_SCALAR_SCALAR,
             NULL_MAT_SCALAR_SCALAR
-            ]
+        ]
 
         ret_mats = [jac_row0, jac_row1, jac_row2, jac_row3, jac_row4]
         ret_labels = self.state.labels+self.state.labels
@@ -271,6 +309,7 @@ class HopfModel:
 
     def assem_dres_dprops(self):
         """Return the Hopf system jacobian wrt. model properties"""
+        # Bind commonly used local vars
         res, dres = self.res, self.dres
         (state_labels,
             mode_real_labels,
@@ -278,30 +317,38 @@ class HopfModel:
             psub_labels,
             omega_labels) = self.labels_hopf_components
 
+        mode_real = self.state[mode_real_labels]
+        mode_imag = self.state[mode_imag_labels]
+
         # Assemble the matrix by rows
         omega = self.state['omega'][0]
 
         row0 = [res.assem_dres_dprops()]
 
-        dres.set_dstate(self.state[mode_real_labels])
-        dres.set_dstatet(-float(omega)*self.state[mode_imag_labels])
+        dres.set_dstate(mode_real)
+        dres.set_dstatet(-float(omega)*mode_imag)
         row1 = [dres.assem_dres_dprops()]
 
-        dres.set_dstate(self.state[mode_imag_labels])
-        dres.set_dstatet(float(omega)*self.state[mode_real_labels])
+        dres.set_dstate(mode_imag)
+        dres.set_dstatet(float(omega)*mode_real)
         row2 = [dres.assem_dres_dprops()]
 
         _mats = [subops.zero_mat(1, m) for m in self.props.bshape[0]]
         row3 = [
-            bmat.BlockMatrix(_mats, (1, len(_mats)), (psub_labels,)+self.props.labels)
-            ]
+            bmat.BlockMatrix(
+                _mats, (1, len(_mats)), (psub_labels,)+self.props.labels
+            )
+        ]
         row4 = [
-            bmat.BlockMatrix(_mats, (1, len(_mats)), (omega_labels,)+self.props.labels)
-            ]
+            bmat.BlockMatrix(
+                _mats, (1, len(_mats)), (omega_labels,)+self.props.labels
+            )
+        ]
 
         bmats = [row0, row1, row2, row3, row4]
         return bmat.concatenate_mat(
-            bmats, labels=self.state.labels+self.props.labels)
+            bmats, labels=self.state.labels+self.props.labels
+        )
 
 def gen_hopf_state(res: 'HopfModel') -> Tuple[bvec.BlockVector, List[Labels]]:
     """
