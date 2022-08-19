@@ -4,7 +4,6 @@ Plot results of a linear stability analysis
 
 import numpy as np
 import matplotlib.pyplot as plt
-from setuptools import setup
 import dolfin as dfn
 
 import libsetup
@@ -18,7 +17,7 @@ if __name__ == '__main__':
     mesh_path = f'mesh/{mesh_name}.msh'
     _, res, _ = libsetup.load_hopf(
         mesh_path,
-        sep_method='smoothmin',
+        sep_method='fixed',
         sep_vert_label='separation-inf'
     )
 

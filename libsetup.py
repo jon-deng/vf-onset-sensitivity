@@ -87,22 +87,6 @@ def setup_transient_model(mesh_path):
         )
     return model
 
-def setup_models(mesh_path):
-    """
-    Return residual + linear residual needed to model the Hopf system
-    """
-    res = load.load_dynamical_fsi_model(
-        mesh_path, None, SolidType = dsmd.KelvinVoigt,
-        FluidType = dfmd.BernoulliSmoothMinSep,
-        fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
-
-    dres = load.load_dynamical_fsi_model(
-        mesh_path, None, SolidType = dsmd.LinearizedKelvinVoigt,
-        FluidType = dfmd.LinearizedBernoulliSmoothMinSep,
-        fsi_facet_labels=('pressure',), fixed_facet_labels=('fixed',))
-
-    return res, dres
-
 ECOV = 5e3*10
 EBODY = 5e3*10
 PSUB = 450 * 10

@@ -105,8 +105,6 @@ if __name__ == '__main__':
     mesh_name = 'M5_CB_GA3'
     mesh_path = path.join('./mesh', mesh_name+'.msh')
 
-    res, dres = libsetup.setup_models(mesh_path)
-    hopf = libhopf.HopfModel(res, dres)
     hopf, res, dres = libsetup.load_hopf(mesh_path, sep_method='fixed', sep_vert_label='separation-inf')
 
     alphas = 10**np.array([-np.inf]+[-10, -8, -6, -4])

@@ -8,7 +8,7 @@ from femvf.meshutils import process_celllabel_to_dofs_from_forms
 import blockarray.linalg as bla
 
 from libhopf import HopfModel
-from libsetup import setup_models, set_props
+from libsetup import set_props, load_hopf
 
 # slepc4py.init(sys.argv)
 
@@ -84,9 +84,8 @@ def test_assem_dres_dprops(hopf, props0, dprops):
 if __name__ == '__main__':
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
     mesh_path = path.join('./mesh', mesh_name+'.msh')
-
-    res, dres = setup_models(mesh_path)
-    model = HopfModel(res, dres)
+    _, res, dres = load_hopf(mesh_path, sep_method='fixed', sep_vert_label='separation-inf')
+    HopfModel(res, dres)
 
     ## Set model properties
     # get the scalar DOFs associated with the cover/body layers
