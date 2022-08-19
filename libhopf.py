@@ -21,6 +21,7 @@ delta x_t = exp(omega_r - 1j*omega_i) * zeta
 so the Hopf equations below are slightly different.
 """
 
+from multiprocessing.sharedctypes import Value
 from typing import Tuple, List, Dict, Optional
 import itertools
 import functools
@@ -31,7 +32,7 @@ from slepc4py import SLEPc
 import h5py
 
 import nonlineq as nleq
-from femvf.models.dynamical import base as dynbase
+from femvf.models.dynamical import base as dynbase, coupled as dyncoup
 import blockarray.h5utils as h5utils
 import blockarray.subops as subops
 import blockarray.linalg as bla
@@ -636,10 +637,12 @@ def normalize_eigenvector_by_norm(
 # The fixed point system views functions primarily as a function of
 # (x_fp, p_sub) + parameters of the model
 def solve_fp(
-        res: dynbase.DynamicalSystem,
+        res: dyncoup.FSIDynamicalSystem,
         psub: float,
         psub_incr: float=5000,
-        n_max: int=10
+        n_max: int=10,
+        method='newton',
+        iter_params=None
     ) -> bvec.BlockVector:
     """
     Solve for a fixed-point
@@ -664,7 +667,12 @@ def solve_fp(
 
         _psub = psub_n + min(psub_incr, psub_final-psub_n)
 
-        xfp_0, info = solve_fp_newton(res, xfp_0, _psub)
+        if method == 'newton':
+            xfp_0, info = solve_fp_newton(res, xfp_0, _psub, newton_params=iter_params)
+        elif method == 'picard':
+            xfp_0, info = solve_fp_picard(res, xfp_0, _psub, iter_params=iter_params)
+        else:
+            raise ValueError(f"Unknown `method` {method}")
 
         if info['status'] != 0:
             psub_incr = psub_incr/2
@@ -680,7 +688,9 @@ def solve_fp(
 
 def solve_least_stable_mode(
         model: dynbase.DynamicalSystem,
-        psub: float
+        psub: float,
+        fp_method='newton',
+        fp_iter_params=None
     ) -> Tuple[float, bvec.BlockVector, bvec.BlockVector, bvec.BlockVector]:
     """
     Return modal information for the least stable mode of a dynamical system
@@ -691,7 +701,7 @@ def solve_least_stable_mode(
     psub : float
     """
     # Solve the for the fixed point
-    xfp, _info = solve_fp(model, psub)
+    xfp, _info = solve_fp(model, psub, method=fp_method, iter_params=fp_iter_params)
 
     # Solve for linear stability around the fixed point
     omegas, eigvecs_real, eigvecs_imag = solve_modal(model, xfp, psub)
@@ -699,8 +709,27 @@ def solve_least_stable_mode(
     idx_max = np.argmax(omegas.real)
     return omegas[idx_max], eigvecs_real[idx_max], eigvecs_imag[idx_max], xfp
 
+def _apply_dirichlet_bvec(vec, idx):
+    """Applies the dirichlet BC to a vector"""
+    # The conversion is needed for `dolfin.Vector` type block vectors
+    for subvec in vec[['u', 'v']].sub_blocks:
+        subvec.setValues(idx, np.zeros(idx.size))
+    return vec
+
+def _apply_dirichlet_bmat(mat, idx, diag=1.0):
+    """Applies the dirichlet BC to a matrix"""
+    # The conversion is needed for `dolfin.Vector` type block vectors
+    for row_label in ['u', 'v']:
+        for col_label in mat.labels[1]:
+            submat = mat.sub[row_label, col_label]
+            if row_label == col_label:
+                submat.zeroRows(idx, diag=diag)
+            else:
+                submat.zeroRows(idx, diag=0.0)
+    return mat
+
 def solve_fp_newton(
-        res: dynbase.DynamicalSystem,
+        res: dyncoup.FSIDynamicalSystem,
         xfp_0: bvec.BlockVector,
         psub: float,
         newton_params: Optional[Dict]=None
@@ -728,38 +757,24 @@ def solve_fp_newton(
 
     IDX_DIRICHLET = np.array(
         list(res.solid.forms['bc.dirichlet'].get_boundary_values().keys()),
-        dtype=np.int32)
-    def apply_dirichlet_bvec(vec):
-        """Applies the dirichlet BC to a vector"""
-        for label, subvec in vec.sub_items():
-            if label in ['u', 'v']:
-                subvec.setValues(IDX_DIRICHLET, np.zeros(IDX_DIRICHLET.size))
+        dtype=np.int32
+    )
 
-    def apply_dirichlet_bmat(mat, diag=1.0):
-        """Applies the dirichlet BC to a matrix"""
-        for row_label in ['u', 'v']:
-            for col_label in mat.labels[1]:
-                submat = mat.sub[row_label, col_label]
-                if row_label == col_label:
-                    submat.zeroRows(IDX_DIRICHLET, diag=diag)
-                else:
-                    submat.zeroRows(IDX_DIRICHLET, diag=0.0)
-
-    def linear_subproblem_fp(xfp_n):
+    def linear_subproblem_newton(xfp_n):
         """Linear subproblem of a Newton solver"""
         res.set_state(xfp_n)
 
-        res_n = res.assem_res()
-        jac_n = res.assem_dres_dstate()
-        apply_dirichlet_bvec(res_n)
-        apply_dirichlet_bmat(jac_n)
-
         def assem_res():
             """Return residual"""
+            res_n = res.assem_res()
+            _apply_dirichlet_bvec(res_n, IDX_DIRICHLET)
             return res_n
 
         def solve(rhs_n):
             """Return jac^-1 res"""
+            jac_n = res.assem_dres_dstate()
+            _apply_dirichlet_bmat(jac_n, IDX_DIRICHLET)
+
             _rhs_n = rhs_n.to_mono_petsc()
             _jac_n = jac_n.to_mono_petsc()
             _dx_n = _jac_n.getVecRight()
@@ -783,7 +798,101 @@ def solve_fp_newton(
         newton_params = {
             'maximum_iterations': 20
         }
-    xfp_n, info = nleq.newton_solve(xfp_0, linear_subproblem_fp, norm=bvec.norm, params=newton_params)
+    xfp_n, info = nleq.newton_solve(
+        xfp_0, linear_subproblem_newton, norm=bvec.norm, params=newton_params
+    )
+    return xfp_n, info
+
+def solve_fp_picard(
+        res: dyncoup.FSIDynamicalSystem,
+        xfp_0: bvec.BlockVector,
+        psub: float,
+        iter_params: Optional[Dict]=None
+    ) -> Tuple[bvec.BlockVector, Dict]:
+    """
+    Solve for a fixed-point
+
+    Parameters
+    ----------
+    res :
+        Object representing the fixed-point residual
+    xfp_0 :
+        initial guess for the fixed-point state
+    psub :
+        the value of the bifurcation parameter (subglottal pressure)
+    iter_params :
+        parameters for the iterative solver
+    """
+    res.control['psub'] = psub
+    res.set_control(res.control)
+
+    res.statet[:] = 0
+    res.set_statet(res.statet)
+
+    IDX_DIRICHLET = np.array(
+        list(res.solid.forms['bc.dirichlet'].get_boundary_values().keys()),
+        dtype=np.int32
+    )
+
+    def linear_subproblem_solid(xsolid_n):
+        res.solid.set_state(xsolid_n)
+
+        def assem_res():
+            _ret = bvec.convert_subtype_to_petsc(res.solid.assem_res())
+            _apply_dirichlet_bvec(_ret, IDX_DIRICHLET)
+            return _ret
+
+        def solve(rhs_n):
+            jac_n = bmat.convert_subtype_to_petsc(
+                res.solid.assem_dres_dstate()
+            )
+            _apply_dirichlet_bmat(jac_n, IDX_DIRICHLET)
+
+            _jac_n = jac_n.to_mono_petsc()
+            _dx_n = _jac_n.getVecRight()
+            _rhs_n = rhs_n.to_mono_petsc()
+
+            subops.solve_petsc_lu(_jac_n, _rhs_n, _dx_n)
+
+            dx_n = rhs_n.copy()
+            dx_n.set_mono(_dx_n)
+            return dx_n
+
+        return assem_res, solve
+
+    def linear_subproblem_fp(xfp_n):
+        """Linear subproblem of a Newton solver"""
+        res.set_state(xfp_n)
+
+        def assem_res():
+            """Return residual"""
+            res_n = res.assem_res()
+            _apply_dirichlet_bvec(res_n, IDX_DIRICHLET)
+            return res_n
+
+        def solve(rhs_n):
+            """Return jac^-1 res"""
+            # Solve for the solid phase deformation from the current fluid loading
+            xsolid_0 = xfp_n[['u', 'v']]
+            xsolid_n, _ = nleq.newton_solve(xsolid_0, linear_subproblem_solid, norm=bvec.norm)
+
+            # Update solid deformation which will update the fluid loading
+            res.state[['u', 'v']] = xsolid_n
+            res.set_state(res.state)
+
+            # Solve for updated fluid state
+            # TODO: This formula works only if `res.fluid.assem_res` is an explicit formula
+            # This is currently true, but might change in the future
+            xfluid_n = res.fluid.state - res.fluid.assem_res()
+
+            return bvec.concatenate_vec([xsolid_n, xfluid_n])
+        return assem_res, solve
+
+    if iter_params is None:
+        iter_params = {
+            'maximum_iterations': 20
+        }
+    xfp_n, info = nleq.iterative_solve(xfp_0, linear_subproblem_fp, norm=bvec.norm, params=iter_params)
     return xfp_n, info
 
 def solve_modal(
