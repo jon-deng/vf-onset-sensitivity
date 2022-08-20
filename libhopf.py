@@ -168,7 +168,7 @@ class HopfModel:
         res_psub['psub'][0] = bla.dot(ee, mode_real)
 
         res_omega = x[['omega']].copy()
-        res_omega['omega'][0] = bla.dot(ee, mode_real) - 1.0
+        res_omega['omega'][0] = bla.dot(ee, mode_imag) - 1.0
 
         ret_bvec = bvec.concatenate_vec(
             (res_state, res_mode_real, res_mode_imag, res_psub, res_omega),
