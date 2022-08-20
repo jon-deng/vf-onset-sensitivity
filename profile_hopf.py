@@ -5,8 +5,7 @@ from os import path
 import cProfile
 import pstats
 import warnings
-
-import pandas
+import timeit
 
 from blockarray import subops as gops
 
@@ -38,13 +37,20 @@ if __name__ == '__main__':
     props = hopf.props.copy()
     set_default_props(props, res.solid.forms['mesh.mesh'])
 
-    hopf.set_state(xhopf)
+    # hopf.set_state(xhopf)
     hopf.set_props(props)
 
     with warnings.catch_warnings():
         warnings.filterwarnings('error', category=UserWarning)
 
-        cProfile.run('solve_hopf_newton_step(hopf, xhopf)', 'profile_hopf.prof')
+        cProfile.run(
+            'solve_hopf_newton_step(hopf, xhopf)',
+            'profile_hopf.prof'
+        )
+
+        # N = 10
+        # dur = timeit.timeit(lambda : solve_hopf_newton_step(hopf, xhopf), number=N)
+        # print(f"{dur/N:.2f} s")
 
         with open('profile_hopf.stats', 'w') as output_stream:
             p = pstats.Stats('profile_hopf.prof', stream=output_stream)
