@@ -7,7 +7,6 @@ import numpy as np
 from femvf.meshutils import process_celllabel_to_dofs_from_forms
 import blockarray.linalg as bla
 
-from libhopf import HopfModel
 from libsetup import set_default_props, load_hopf
 
 # slepc4py.init(sys.argv)
@@ -27,8 +26,8 @@ def _test_taylor(x0, dx, res, jac, action=None, norm=None):
         norm = bla.norm
 
     alphas = 2**np.arange(4)[::-1] # start with the largest step and move to original
-    res_ns = [res(x0+alpha*dx) for alpha in alphas]
-    res_0 = res(x0)
+    res_ns = [res(x0+alpha*dx).copy() for alpha in alphas]
+    res_0 = res(x0).copy()
 
     dres_exacts = [res_n-res_0 for res_n in res_ns]
     dres_linear = action(jac(x0), dx)
