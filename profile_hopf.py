@@ -39,6 +39,8 @@ if __name__ == '__main__':
 
     # hopf.set_state(xhopf)
     hopf.set_props(props)
+    hopf.assem_res()
+    hopf.assem_dres_dstate()
 
     with warnings.catch_warnings():
         warnings.filterwarnings('error', category=UserWarning)
