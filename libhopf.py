@@ -21,7 +21,6 @@ delta x_t = exp(omega_r - 1j*omega_i) * zeta
 so the Hopf equations below are slightly different.
 """
 
-from multiprocessing.sharedctypes import Value
 from typing import Tuple, List, Dict, Optional
 import itertools
 import functools

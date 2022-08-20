@@ -7,7 +7,8 @@ from jax import numpy as jnp
 
 # from femvf.models.dynamical.fluid import smooth_min_weight, wavg
 from femvf.models.equations.fluid.bernoulli import (
-    smooth_min_weight, wavg)
+    smooth_min_weight, wavg
+)
 
 def _split_mono_hopf_state(state, sizes):
     """

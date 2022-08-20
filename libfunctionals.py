@@ -8,9 +8,9 @@ import jax
 import dolfin as dfn
 import ufl
 
-import libsignal
-
 from blockarray import blockvec  as bvec
+
+import libsignal
 
 # pylint: disable=abstract-method
 
