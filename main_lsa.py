@@ -1,5 +1,11 @@
 """
-Plot results of a linear stability analysis
+Run a linear stability analysis (LSA) on a coupled model
+
+This script computes the least stable modes over a sequence of subglottal
+pressures for a given parameter set and dynamical model.
+
+Where the real part of the least stable mode's frequency crosses the real axis
+, a Hopf bifurcation occurs.
 """
 
 import numpy as np
@@ -27,18 +33,16 @@ if __name__ == '__main__':
 
     psubs = np.arange(0, 1500, 100)*10
 
-    least_stable_modes_info = [
+    least_stable_modes = [
         libhopf.solve_least_stable_mode(res, psub)
         for psub in psubs
     ]
-    breakpoint()
-
-    omegas = np.array([mode_info[0] for mode_info in least_stable_modes_info])
+    least_stable_omegas = np.array([mode_info[0] for mode_info in least_stable_modes])
 
     fig, axs = plt.subplots(2, 1, sharex=True)
 
-    axs[0].plot(psubs, omegas.real)
-    axs[1].plot(psubs, omegas.imag)
+    axs[0].plot(psubs, least_stable_omegas.real)
+    axs[1].plot(psubs, least_stable_omegas.imag)
 
     axs[1].set_xlabel("$\omega_{real}$")
     axs[1].set_xlabel("$\omega_{imag}$")

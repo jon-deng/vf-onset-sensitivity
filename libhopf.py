@@ -1268,11 +1268,11 @@ class OptGradManager:
         # format of the ReducedGradient object
         p_hopf = p[:-2]
         _p_hopf = self.redu_grad.props.copy()
-        _p_hopf.set_vec(p_hopf)
+        _p_hopf.set_mono(p_hopf)
 
         p_camp = p[-2:]
         _p_camp = self.redu_grad.camp.copy()
-        _p_camp.set_vec(p_camp)
+        _p_camp.set_mono(p_camp)
 
         # After setting `self.redu_grad` props, the Hopf system should be solved
         hopf_state, info = self.redu_grad.set_props(_p_hopf)
@@ -1304,9 +1304,10 @@ class OptGradManager:
             # Solve the gradient of the objective function
             _dg_dp = bvec.concatenate_vec([self.redu_grad.assem_dg_dprops(), self.redu_grad.assem_dg_dcamp()])
 
-            # TODO: Use a generic conversion method to handle optimizign subsets of parameters
-            # TODO: Remove this hard coded fix
-            _dg_dp['rho_air'][:] = 0.0
+            # TODO: Use a generic conversion method to handle optimizing subsets of parameters
+            # This is a hardcoded fix to make sure that the optimizer doesn't change 'rho_air' since
+            # the gradient w.r.t this parameter is not zero
+            _dg_dp['rho_air'] = 0.0
             dg_dp = _dg_dp.to_mono_ndarray()
 
         # Record the current objective function and gradient

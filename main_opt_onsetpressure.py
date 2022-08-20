@@ -2,7 +2,6 @@
 Solve a simple test optimization problem
 """
 
-import sys
 import os.path as path
 from pprint import pprint
 import itertools
@@ -16,30 +15,22 @@ from femvf.meshutils import process_celllabel_to_dofs_from_forms
 import libsetup
 import libhopf
 import libfunctionals as libfuncs
-from test_libhopf import setup_hopf_state
 
 PSUBS = np.arange(0, 1500, 50) * 10
 
 def set_props(props, hopf, celllabel_to_dofs, emod_cov, emod_bod):
     # Set any constant properties
-    props = libsetup.set_constant_props(props, celllabel_to_dofs, hopf.res)
+    props = libsetup.set_default_props(props, hopf.res.solid.forms['mesh.mesh'])
 
     # Set cover and body layer properties
-
     dofs_cov = np.array(celllabel_to_dofs['cover'], dtype=np.int32)
     dofs_bod = np.array(celllabel_to_dofs['body'], dtype=np.int32)
     dofs_share = set(dofs_cov) & set(dofs_bod)
     dofs_share = np.array(list(dofs_share), dtype=np.int32)
 
-    if hasattr(props['emod'], 'array'):
-        props['emod'].array[dofs_cov] = emod_cov
-        props['emod'].array[dofs_bod] = emod_bod
-        props['emod'].array[dofs_share] = 1/2*(emod_cov + emod_bod)
-    else:
-        props['emod'][dofs_cov] = emod_cov
-        props['emod'][dofs_bod] = emod_bod
-        props['emod'][dofs_share] = 1/2*(emod_cov + emod_bod)
-
+    props['emod'][dofs_cov] = emod_cov
+    props['emod'][dofs_bod] = emod_bod
+    props['emod'][dofs_share] = 1/2*(emod_cov + emod_bod)
     return props
 
 def run_opt(fpath, hopf, emod, alpha):
@@ -105,27 +96,22 @@ if __name__ == '__main__':
     mesh_name = 'M5_CB_GA3'
     mesh_path = path.join('./mesh', mesh_name+'.msh')
 
-    hopf, res, dres = libsetup.load_hopf(mesh_path, sep_method='fixed', sep_vert_label='separation-inf')
+    hopf, res, dres = libsetup.load_hopf(
+        mesh_path, sep_method='fixed', sep_vert_label='separation-inf'
+    )
 
-    alphas = 10**np.array([-np.inf]+[-10, -8, -6, -4])
-
-    demod = 2.5
-    emods = np.arange(2.5, 20+demod/2, demod)*10*1e3
-
+    # `alpha` is a weight for the first-order smoothing term of elastic modulus
     # alphas = 10**np.array([-np.inf])
-    # emods = np.array([5.0]) * 10 * 1e3
-
-    for emod, alpha in itertools.product(emods, alphas):
-
-        fpath = f"out/minimize_onset_pressure/opt_hist_emod{emod:.2e}_alpha{alpha:.2e}.h5"
-
-        run_opt(fpath, hopf, emod, alpha)
-
-    ## given emod, alpha
-
-    # `alpha` is a weight on the gradient smoothing of modulus
     # A characteristic gradient of 1kPa/1cm over a volume of 1cm^2 has a
     # functional value of 1e8 Ba^2*cm^2 (cgs unit)
     # 'unit' value of alpha should then start around 1e-8
     # for alpha in alphas:
+    alphas = 10**np.array([-np.inf]+[-10, -8, -6, -4])
 
+    demod = 2.5
+    emods = np.arange(2.5, 20+demod/2, demod)*10*1e3
+    # emods = np.array([5.0]) * 10 * 1e3
+
+    for emod, alpha in itertools.product(emods, alphas):
+        fpath = f"out/minimize_onset_pressure/opt_hist_emod{emod:.2e}_alpha{alpha:.2e}.h5"
+        run_opt(fpath, hopf, emod, alpha)

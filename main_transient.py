@@ -5,19 +5,16 @@ in main_hopf.py
 import os
 from os.path import isfile, isdir
 import argparse
-# import warnings
 from multiprocessing import Pool
 import numpy as np
 
-from femvf import forward, load, statefile as sf
-from femvf.models.transient import solid as smd, fluid as fmd
+from femvf import forward, statefile as sf
 from femvf.meshutils import process_celllabel_to_dofs_from_forms
-from femvf.static import static_configuration_coupled_picard
-from blockarray import linalg
+from femvf.static import static_coupled_configuration_picard
+from blockarray import blockvec as bv
 
 from lib_main_transient import case_config
-# from main_hopf import set_props
-from libsetup import set_default_props, setup_transient_model
+import libsetup
 # warnings.filterwarnings('error')
 
 parser = argparse.ArgumentParser()
@@ -48,18 +45,18 @@ DT = 5e-5
 T_TOTAL = 0.6
 
 mesh_name = 'BC-dcov5.00e-02-cl1.00'
-mesh_path = f'mesh/{mesh_name}.xml'
-model = setup_transient_model(mesh_path)
+mesh_path = f'mesh/{mesh_name}.msh'
+model = libsetup.load_tran(mesh_path, sep_method='smoothmin')
 
 # Get DOFs associated with layer regions
 
 region_to_dofs = process_celllabel_to_dofs_from_forms(
     model.solid.forms, model.solid.forms['fspace.scalar']
-    )
+)
 
 ## Set model properties to nominal values
-props = model.get_properties_vec()
-props = set_default_props(props, region_to_dofs, model)
+props = model.props.copy()
+props = libsetup.set_default_props(props, model.solid.forms['mesh.mesh'])
 model.set_props(props)
 
 # # geometric properties related to the symmetry/contact planes
@@ -72,34 +69,32 @@ if not isdir(OUT_DIR):
 
 def run(psub):
     # Set the initial state/properties/control needed to integrate in time
-    ini_state = model.get_state_vec()
-    ini_state.set(0)
+    ini_state = model.state0.copy()
+    ini_state[:] = 0
 
-    _control = model.get_control_vec()
-    _control['psub'][:] = psub
+    _control = model.control.copy()
+    _control['psub'] = psub
     controls = [_control]
 
     _times = DT*np.arange(int(round(T_TOTAL/DT))+1)
-    times = linalg.BlockVector((_times,), labels=[('times',)])
+    times = bv.BlockVector((_times,), labels=[('times',)])
 
     # Compute the static configuration for the initial state if needed
     if INIT_STATE_TYPE == 'static':
         model.set_control(controls[0])
-        model.set_props(props)
-        x_static, info = static_configuration_coupled_picard(model)
+        x_static, info = static_coupled_configuration_picard(model, controls[0], model.props)
         print(f"Solved for equilibrium state: {info}")
-        ini_state['u'][:] = x_static['u']
-        ini_state['q'][:] = x_static['q']
-        ini_state['p'][:] = x_static['p']
+        ini_state[['u', 'q', 'p']] = x_static[['u', 'q', 'p']]
 
-        _control1 = model.get_control_vec()
-        _control1['psub'][:] = psub + 500*10
+        _control1 = model.control.copy()
+        _control1[:] = 0
+        _control1['psub'] = psub + 500*10
 
-        _control2 = model.get_control_vec()
-        _control2['psub'][:] = psub + 500*10
+        _control2 = _control1.copy()
+        _control2['psub'] = psub + 500*10
 
-        _control3 = model.get_control_vec()
-        _control3['psub'][:] = psub
+        _control3 = _control1.copy()
+        _control3['psub'] = psub
         controls = [_control1, _control2, _control3]
 
     # Set the file and write the simulation results to it
@@ -114,9 +109,10 @@ def run(psub):
 
 if __name__ == '__main__':
     print("Running Psub variations")
-    with Pool(processes=args.num_processes) as pool:
-        pool.map(run, PSUBS)
-
-    # for loop version for easier debugging
-    # for psub in PSUBS:
-    #     run(psub)
+    if args.num_processes > 1:
+        with Pool(processes=args.num_processes) as pool:
+            pool.map(run, PSUBS)
+    else:
+        # This loop version is for easier debugging
+        for psub in PSUBS:
+            run(psub)

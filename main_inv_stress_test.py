@@ -55,7 +55,7 @@ RES_HOPF, RES_DYN, DRES_DYN = libsetup.load_hopf(mesh_path, sep_method='fixed', 
 
 def set_props(props, celllabel_to_dofs, emod_cov, emod_bod):
     # Set any constant properties
-    props = libsetup.set_constant_props(props, celllabel_to_dofs, RES_DYN)
+    props = libsetup.set_default_props(props, RES_DYN.solid.forms['mesh.mesh'])
 
     # Set cover and body layer properties
 
@@ -208,7 +208,7 @@ def postproc_gw(fpath, emods_cov, emods_bod):
     """
     Compute glottal width and time data from large amp. simulations
     """
-    proc_gw = sigsl.make_sig_glottal_width_sharp(RES_LAMP)
+    proc_gw = sigsl.MinGlottalWidth(RES_LAMP)
     def proc_time(f):
         return f.get_times()
 
@@ -224,7 +224,7 @@ def postproc_gw(fpath, emods_cov, emods_bod):
     in_paths = [x for x in in_paths if path.isfile(x)]
 
     with h5py.File(fpath, mode='a') as f:
-        return postprocutils.postprocess(f, in_paths, RES_LAMP, signal_to_proc)
+        postprocutils.postprocess(f, in_paths, RES_LAMP, signal_to_proc)
 
 @_skip_existing_path
 def run_inv_opt(fpath, emod_cov, emod_bod, gw_ref, omega_ref, alpha=0.0, opt_options=None):
@@ -380,7 +380,9 @@ if __name__ == '__main__' :
 
     # Post process the glottal width and time from each transient simulation
     fpath = 'out/stress_test/signals.h5'
-    SIGNALS = postproc_gw(fpath, EMODS_COV_GT, EMODS_BOD_GT)
+    postproc_gw(fpath, EMODS_COV_GT, EMODS_BOD_GT)
+    with h5py.File(fpath, mode='r') as f:
+        SIGNALS = h5utils.h5_to_dict(f, {})
 
     ## Run the inverse analysis studies for GT data
     # only use cover/body combinations that self-oscillate
