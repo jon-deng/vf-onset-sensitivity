@@ -12,14 +12,18 @@ import libhopf
 dfn.set_log_level(50)
 if __name__ == '__main__':
     # mesh_name = 'BC-dcov5.00e-02-cl1.00'
-    mesh_name = 'M5_CB_GA0'
-
+    mesh_name = 'M5_CB_GA3'
     mesh_path = f'mesh/{mesh_name}.msh'
-    _, res, _ = libsetup.load_hopf(
+    hopf, *_ = libsetup.load_hopf(
         mesh_path,
         sep_method='fixed',
         sep_vert_label='separation-inf'
     )
+
+    props0 = hopf.props.copy()
+    libsetup.set_default_props(props0, hopf.res.solid.forms['mesh.mesh'])
+    hopf.set_props(props0)
+    res = hopf.res
 
     psubs = np.arange(0, 1500, 100)*10
 

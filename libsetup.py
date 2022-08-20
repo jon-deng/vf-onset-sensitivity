@@ -2,15 +2,9 @@
 This modules sets up a 'standard' Hopf model to test
 """
 
-import h5py
-
 from femvf.models.transient import solid as tsmd, fluid as tfmd
 from femvf.models.dynamical import solid as dsmd, fluid as dfmd
 from femvf import load
-from femvf.meshutils import process_celllabel_to_dofs_from_forms
-
-import blockarray.subops as gops
-from blockarray import h5utils
 
 import libhopf
 
@@ -58,12 +52,6 @@ def load_hopf(mesh_path, sep_method='fixed', sep_vert_label='separation'):
         **kwargs
     )
 
-    _region_to_dofs = process_celllabel_to_dofs_from_forms(
-        res.solid.forms, res.solid.forms['fspace.scalar'])
-    _props = set_props(res.props.copy(), _region_to_dofs, res)
-    res.set_props(_props)
-    dres.set_props(_props)
-
     res_hopf = libhopf.HopfModel(res, dres)
     return res_hopf, res, dres
 
@@ -79,19 +67,11 @@ def load_tran(mesh_path, sep_method='fixed', sep_vert_label='separation'):
     )
 
 
-def setup_transient_model(mesh_path):
-    model = load.load_transient_fsi_model(
-        mesh_path, None,
-        SolidType=tsmd.KelvinVoigt, FluidType=tfmd.BernoulliSmoothMinSep,
-        coupling='explicit'
-        )
-    return model
-
 ECOV = 5e3*10
 EBODY = 5e3*10
 PSUB = 450 * 10
 
-def set_props(props, region_to_dofs, res):
+def set_default_props(props, mesh):
     """
     Set the model properties
     """
@@ -99,11 +79,11 @@ def set_props(props, region_to_dofs, res):
     props['emod'][:] =  ECOV
     props['emod'][:] =  EBODY
 
-    props = set_constant_props(props, region_to_dofs, res)
+    props = set_constant_props(props, mesh)
 
     return props
 
-def set_constant_props(props, region_to_dofs, res):
+def set_constant_props(props, mesh):
     props['eta'][:] =  5.0
     props['rho'][:] =  1.0
     props['nu'][:] =  0.49
@@ -121,7 +101,7 @@ def set_constant_props(props, region_to_dofs, res):
     # y_gap = 1.0
     y_gap = 0.01
     y_contact_offset = 1/10*y_gap
-    y_max = res.solid.forms['mesh.mesh'].coordinates()[:, 1].max()
+    y_max = mesh.coordinates()[:, 1].max()
     y_mid = y_max + y_gap
     y_contact = y_mid - y_contact_offset
     props['ycontact'][:] =  y_contact
@@ -131,75 +111,3 @@ def set_constant_props(props, region_to_dofs, res):
     props['rho_air'][:] =  1.293e-3
 
     return props
-
-def setup_hopf_state(mesh_path, hopf_state_path=None):
-    ## Load the models
-    res, dres = setup_models(mesh_path)
-
-    ## Set model properties
-    region_to_dofs = process_celllabel_to_dofs_from_forms(
-        res.solid.forms, res.solid.forms['fspace.scalar'])
-
-    props = res.props.copy()
-    props = set_props(props, region_to_dofs, res)
-
-    ## Initialize the Hopf system
-    # This vector normalizes the real/imag components of the unstable eigenvector
-    EREF = res.state.copy()
-    EREF['q'] = 1.0
-    EREF[:] = 1.0
-    hopf = libhopf.HopfModel(res, dres, e_mode=EREF)
-    hopf.set_props(props)
-
-    (state_labels,
-        mode_real_labels,
-        mode_imag_labels,
-        psub_labels,
-        omega_labels) = hopf.labels_hopf_components
-
-    ## Solve for the fixed point
-    # this is used to get the initial guess for the Hopf system
-    _control = res.control.copy()
-    _control['psub'] = PSUB
-    res.set_control(_control)
-    res.set_props(props)
-
-    newton_params = {
-        'maximum_iterations': 20
-    }
-    xfp_0 = res.state.copy()
-    xfp_n, _ = libhopf.solve_fp_newton(res, xfp_0, PSUB, newton_params=newton_params)
-
-    ## Solve for linear stabilty at the fixed point
-    # this is used to get the initial guess for the Hopf system
-    omegas, eigvecs_real, eigvecs_imag = libhopf.solve_modal(res, xfp_n, PSUB)
-
-    # The unstable mode is apriori known to be the 3rd one for the current test case
-    # In the future, you should make this more general/automatic
-    idx_hopf = 3
-    omega_hopf = abs(omegas[idx_hopf].imag)
-    mode_real_hopf = eigvecs_real[idx_hopf]
-    mode_imag_hopf = eigvecs_imag[idx_hopf]
-
-    ## Solve the Hopf system for the Hopf bifurcation
-    xhopf_0 = hopf.state.copy()
-    xhopf_0[state_labels] = xfp_n
-    xhopf_0[psub_labels[0]] = PSUB
-    xhopf_0[omega_labels[0]] = omega_hopf
-
-    xmode_real, xmode_imag = libhopf.normalize_eigenvector_by_hopf(
-        mode_real_hopf, mode_imag_hopf, EREF)
-    xhopf_0[mode_real_labels] = xmode_real
-    xhopf_0[mode_imag_labels] = xmode_imag
-
-    newton_params = {
-        'maximum_iterations': 20
-    }
-    xhopf_n, info = libhopf.solve_hopf_newton(hopf, xhopf_0)
-
-    if hopf_state_path is not None:
-        with h5py.File(hopf_state_path, mode='w') as f:
-            h5utils.create_resizable_block_vector_group(
-                f, xhopf_n.labels, xhopf_n.bshape)
-            h5utils.append_block_vector_to_group(f, xhopf_n)
-    return hopf, xhopf_n, props

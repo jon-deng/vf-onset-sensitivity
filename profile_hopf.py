@@ -11,7 +11,7 @@ import pandas
 from blockarray import subops as gops
 
 # import libhopf
-from libsetup import setup_hopf_state
+from libsetup import load_hopf, set_default_props
 
 # pylint: disable=redefined-outer-name
 # pylint: disable=no-member
@@ -32,16 +32,18 @@ def solve_hopf_newton_step(hopf, xhopf0):
 if __name__ == '__main__':
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
     mesh_path = path.join('./mesh', mesh_name+'.msh')
+    hopf, res, dres = load_hopf(mesh_path, sep_method='smoothmin', sep_vert_label='separation-inf')
 
-    hopf, xhopf, props0 = setup_hopf_state(mesh_path)
+    xhopf = hopf.state.copy()
+    props = hopf.props.copy()
+    set_default_props(props, res.solid.forms['mesh.mesh'])
 
     hopf.set_state(xhopf)
-    hopf.set_props(props0)
+    hopf.set_props(props)
 
     with warnings.catch_warnings():
         warnings.filterwarnings('error', category=UserWarning)
 
-        # test_solve_hopf_newton(hopf, xhopf)
         cProfile.run('solve_hopf_newton_step(hopf, xhopf)', 'profile_hopf.prof')
 
         with open('profile_hopf.stats', 'w') as output_stream:

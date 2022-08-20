@@ -10,7 +10,7 @@ import numpy as np
 from blockarray import linalg as bla
 
 import libfunctionals as libfuncs
-from libsetup import setup_hopf_state
+from libsetup import load_hopf, set_default_props
 from test_hopf import _test_taylor
 
 
@@ -74,17 +74,19 @@ if __name__ == '__main__':
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
     mesh_path = path.join('./mesh', mesh_name+'.msh')
 
-    hopf, xhopf, props0 = setup_hopf_state(mesh_path)
+    hopf, res, dres = load_hopf(mesh_path, sep_method='smoothmin', sep_vert_label='separation')
+    xhopf = hopf.state.copy()
+    props0 = hopf.props.copy()
+    set_default_props(props0, res.solid.forms['mesh.mesh'])
+
     funca = libfuncs.OnsetPressureFunctional(hopf)
     funcb = libfuncs.GlottalWidthErrorFunctional(hopf)
-    # print(xhopf['psub'][:])
 
     func = funcb
     state0 = xhopf.copy()
     dstate = state0.copy()
     dstate[:] = 0
     dstate['u'] = 1.0e-5
-    # dstate.set(1.0e-5)
     hopf.apply_dirichlet_bvec(dstate)
     test_assem_dg_dstate(func, state0, dstate)
 

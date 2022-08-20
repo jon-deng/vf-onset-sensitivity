@@ -17,7 +17,7 @@ from blockarray import linalg
 
 from lib_main_transient import case_config
 # from main_hopf import set_props
-from libsetup import set_props, setup_transient_model
+from libsetup import set_default_props, setup_transient_model
 # warnings.filterwarnings('error')
 
 parser = argparse.ArgumentParser()
@@ -59,7 +59,7 @@ region_to_dofs = process_celllabel_to_dofs_from_forms(
 
 ## Set model properties to nominal values
 props = model.get_properties_vec()
-props = set_props(props, region_to_dofs, model)
+props = set_default_props(props, region_to_dofs, model)
 model.set_props(props)
 
 # # geometric properties related to the symmetry/contact planes

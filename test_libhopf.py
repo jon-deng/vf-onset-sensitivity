@@ -11,7 +11,7 @@ from blockarray import linalg as bla, blockvec as bvec
 
 import libhopf
 import libfunctionals as libfuncs
-from libsetup import setup_hopf_state
+from libsetup import load_hopf, set_default_props
 from test_hopf import _test_taylor
 
 # pylint: disable=redefined-outer-name
@@ -107,8 +107,12 @@ def test_gen_hopf_initial_guess_from_bounds(hopf, bound_pairs):
 if __name__ == '__main__':
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
     mesh_path = path.join('./mesh', mesh_name+'.msh')
+    hopf, res, dres = load_hopf(mesh_path, sep_method='smoothmin', sep_vert_label='separation')
 
-    hopf, xhopf, props_0 = setup_hopf_state(mesh_path)
+    xhopf = hopf.state.copy()
+    props0 = hopf.props.copy()
+    set_default_props(props0, res.solid.forms['mesh.mesh'])
+
     func = libfuncs.OnsetPressureFunctional(hopf)
 
     # Create the ReducedGradientManager object;
@@ -117,10 +121,10 @@ if __name__ == '__main__':
     xhopf_0 = xhopf.copy()
     xhopf_0[:] = 0.0
     hopf.set_state(xhopf_0)
-    hopf.set_props(props_0)
+    hopf.set_props(props0)
     redu_grad = libhopf.ReducedGradient(func, hopf)
 
-    dprops = props_0.copy()
+    dprops = props0.copy()
     dprops[:] = 0
     dprops['emod'] = 1.0
 
@@ -135,14 +139,14 @@ if __name__ == '__main__':
 
         test_gen_hopf_initial_guess_from_bounds(hopf, (lbs, ubs))
 
-        test_solve_reduced_gradient(func, hopf, props_0, dprops, xhopf)
+        test_solve_reduced_gradient(func, hopf, props0, dprops, xhopf)
 
-        props_list = [props_0 + alpha*dprops for alpha in np.arange(0, 1000, 100)]
+        props_list = [props0 + alpha*dprops for alpha in np.arange(0, 1000, 100)]
         test_ReducedGradient(redu_grad, props_list)
 
         camp = func.camp.copy()
         props_list = [
-            bvec.concatenate_vec([props_0 + alpha*dprops, camp])
+            bvec.concatenate_vec([props0 + alpha*dprops, camp])
             for alpha in np.linspace(0, 100, 3)
             ]
         test_OptGradManager(redu_grad, props_list)
