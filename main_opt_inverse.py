@@ -11,7 +11,7 @@ import h5py
 from scipy import optimize
 from blockarray import blockvec  as bvec
 from femvf import statefile as sf
-from femvf.signals import solid as solidsig
+from femvf.postprocess import solid as solidsig
 from vfsig import modal as modalsig
 
 from lib_main_transient import case_config

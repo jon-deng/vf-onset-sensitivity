@@ -16,7 +16,7 @@ import numpy as np
 from scipy import optimize
 import h5py
 from femvf import meshutils, forward, statefile as sf
-from femvf.signals import solid as sigsl
+from femvf.postprocess import solid as sigsl
 from vfsig import modal as modalsig
 from blockarray import h5utils as bh5utils, blockvec as bv
 
