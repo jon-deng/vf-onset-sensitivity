@@ -66,8 +66,8 @@ class HopfModel:
 
     def __init__(
             self,
-            res: dynbase.DynamicalSystem,
-            dres: dynbase.DynamicalSystem,
+            res: dynbase.BaseDynamicalModel,
+            dres: dynbase.BaseDynamicalModel,
             e_mode: Optional[bvec.BlockVector]=None
         ):
         self.res = res
@@ -384,7 +384,7 @@ def gen_hopf_state(res: 'HopfModel') -> Tuple[bvec.BlockVector, List[Labels]]:
 
 ## Functions for finding/bracketing Hopf bifurcations
 def bound_hopf_bifurcations(
-        model: dynbase.DynamicalSystem,
+        model: dynbase.BaseDynamicalModel,
         bound_pairs: ListPair,
         omega_pairs: ListPair=None,
         nsplit: int=2,
@@ -637,7 +637,7 @@ def normalize_eigenvector_by_norm(
 # The fixed point system views functions primarily as a function of
 # (x_fp, p_sub) + parameters of the model
 def solve_fp(
-        res: dyncoup.FSIDynamicalSystem,
+        res: dyncoup.BaseDynamicalFSIModel,
         psub: float,
         psub_incr: float=5000,
         n_max: int=10,
@@ -687,7 +687,7 @@ def solve_fp(
     return xfp_n, info
 
 def solve_least_stable_mode(
-        model: dynbase.DynamicalSystem,
+        model: dynbase.BaseDynamicalModel,
         psub: float,
         fp_method='newton',
         fp_iter_params=None
@@ -697,7 +697,7 @@ def solve_least_stable_mode(
 
     Parameters
     ----------
-    model : femvf.models.dynamical.base.DynamicalSystem
+    model : femvf.models.dynamical.base.BaseDynamicalModel
     psub : float
     """
     # Solve the for the fixed point
@@ -729,7 +729,7 @@ def _apply_dirichlet_bmat(mat, idx, diag=1.0):
     return mat
 
 def solve_fp_newton(
-        res: dyncoup.FSIDynamicalSystem,
+        res: dyncoup.BaseDynamicalFSIModel,
         xfp_0: bvec.BlockVector,
         psub: float,
         newton_params: Optional[Dict]=None
@@ -804,7 +804,7 @@ def solve_fp_newton(
     return xfp_n, info
 
 def solve_fp_picard(
-        res: dyncoup.FSIDynamicalSystem,
+        res: dyncoup.BaseDynamicalFSIModel,
         xfp_0: bvec.BlockVector,
         psub: float,
         iter_params: Optional[Dict]=None
@@ -896,7 +896,7 @@ def solve_fp_picard(
     return xfp_n, info
 
 def solve_modal(
-        res: dynbase.DynamicalSystem,
+        res: dynbase.BaseDynamicalModel,
         xfp: bvec.BlockVector,
         psub: float,
     ) -> Tuple[List[float], List[bvec.BlockVector], List[bvec.BlockVector]]:
