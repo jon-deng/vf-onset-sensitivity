@@ -35,7 +35,7 @@ def set_props(props, hopf, celllabel_to_dofs, emod_cov, emod_bod):
 
 def run_minimize_onset_pressure(fpath, hopf, emod, alpha):
     """
-    Run the optimization experiment
+    Run the onset pressure minimization experiment
     """
     # Set the homogenous cover/body moduli and any constant properties
     region_to_dofs = process_celllabel_to_dofs_from_forms(

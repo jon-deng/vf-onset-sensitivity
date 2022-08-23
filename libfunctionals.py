@@ -366,6 +366,7 @@ class GlottalWidthErrorFunctional(BaseFunctional):
         dg_dcamp.set_mono(_dg_dcamp)
         return dg_dcamp
 
+
 class ModulusGradientNormSqr(BaseFunctional):
     """
     Returns the L2 norm (^2) of the gradient of the modulus
@@ -377,6 +378,7 @@ class ModulusGradientNormSqr(BaseFunctional):
         forms = model.res.solid.forms
         E = forms['coeff.prop.emod']
         dx = forms['measure.dx']
+        # TODO: This doesn't work if E is from a function space without a gradient! (DG0)
         grad_E = ufl.grad(E)
         self._functional = ufl.inner(grad_E, grad_E) * dx
         self._dfunctional_demod = dfn.derivative(self._functional, E)
@@ -394,7 +396,7 @@ class ModulusGradientNormSqr(BaseFunctional):
         dg_dprops[:] = 0
         dg_dprops['emod'][:] = dfn.assemble(
             self._dfunctional_demod, tensor=dfn.PETScVector()
-        ).vec()
+        )[:]
         return dg_dprops
 
     def assem_dg_dcamp(self):

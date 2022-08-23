@@ -1167,7 +1167,6 @@ def solve_reduced_gradient(
         hopf: HopfModel
     ) -> bvec.BlockVector:
     """Solve for the reduced gradient of a functional"""
-
     dg_dprops = functional.assem_dg_dprops()
     dg_dx = functional.assem_dg_dstate()
     _dg_dx = dg_dx.to_mono_petsc()
