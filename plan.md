@@ -23,6 +23,7 @@
   - (a measure of phonation efficiency?)
     - (I'm not sure how phonation efficiency could be defined at phonation onset since the 'output' at phonation onset is zero)
     - (potential case: ratio of phonation onset pressure to damage measure in VF interior at the fixed point?)
+    - (potential case: ratio of phonation onset pressure to structures total strain energy)
 
 ### Methods
 
