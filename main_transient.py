@@ -46,7 +46,7 @@ T_TOTAL = 0.6
 
 mesh_name = 'BC-dcov5.00e-02-cl1.00'
 mesh_path = f'mesh/{mesh_name}.msh'
-model = libsetup.load_tran(mesh_path, sep_method='smoothmin')
+model = libsetup.load_transient_model(mesh_path, sep_method='smoothmin')
 
 # Get DOFs associated with layer regions
 

@@ -28,7 +28,11 @@ def dynamical_fluidtype_from_sep_method(sep_method):
     else:
         raise ValueError("Something dun goofed")
 
-def load_hopf(mesh_path, sep_method='fixed', sep_vert_label='separation'):
+def load_hopf_model(
+        mesh_path,
+        sep_method='fixed',
+        sep_vert_label='separation'
+    ):
     FluidType, LinFluidType = dynamical_fluidtype_from_sep_method(sep_method)
 
     kwargs = {
@@ -55,7 +59,11 @@ def load_hopf(mesh_path, sep_method='fixed', sep_vert_label='separation'):
     res_hopf = libhopf.HopfModel(res, dres)
     return res_hopf, res, dres
 
-def load_tran(mesh_path, sep_method='fixed', sep_vert_label='separation'):
+def load_transient_model(
+        mesh_path,
+        sep_method='fixed',
+        sep_vert_label='separation'
+    ):
     FluidType = transient_fluidtype_from_sep_method(sep_method)
 
     return load.load_transient_fsi_model(

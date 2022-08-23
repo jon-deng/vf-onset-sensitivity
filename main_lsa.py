@@ -20,7 +20,7 @@ if __name__ == '__main__':
     # mesh_name = 'BC-dcov5.00e-02-cl1.00'
     mesh_name = 'M5_CB_GA3'
     mesh_path = f'mesh/{mesh_name}.msh'
-    hopf, *_ = libsetup.load_hopf(
+    hopf, *_ = libsetup.load_hopf_model(
         mesh_path,
         sep_method='fixed',
         sep_vert_label='separation-inf'

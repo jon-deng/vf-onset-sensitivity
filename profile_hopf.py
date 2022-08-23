@@ -10,7 +10,7 @@ import timeit
 from blockarray import subops as gops
 
 # import libhopf
-from libsetup import load_hopf, set_default_props
+from libsetup import load_hopf_model, set_default_props
 
 # pylint: disable=redefined-outer-name
 # pylint: disable=no-member
@@ -31,7 +31,7 @@ def solve_hopf_newton_step(hopf, xhopf0):
 if __name__ == '__main__':
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
     mesh_path = path.join('./mesh', mesh_name+'.msh')
-    hopf, res, dres = load_hopf(mesh_path, sep_method='smoothmin', sep_vert_label='separation-inf')
+    hopf, res, dres = load_hopf_model(mesh_path, sep_method='smoothmin', sep_vert_label='separation-inf')
 
     xhopf = hopf.state.copy()
     props = hopf.props.copy()

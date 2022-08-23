@@ -36,7 +36,7 @@ if __name__ == '__main__':
     # because the measurement here is generated from a similar model
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
     mesh_path = path.join('./mesh', mesh_name+'.xml')
-    hopf, res, dres = libsetup.load_hopf(
+    hopf, res, dres = libsetup.load_hopf_model(
         mesh_path, sep_method='smoothmin', sep_vert_label='separation-inf'
     )
 
@@ -50,7 +50,7 @@ if __name__ == '__main__':
     hopf.set_state(xhopf_0)
 
     ## Load the synthetic measured glottal width + frequency
-    model_trans = libsetup.load_tran(mesh_path, sep_method='smoothmin')
+    model_trans = libsetup.load_transient_model(mesh_path, sep_method='smoothmin')
 
     proc_gw = TimeSeries(solidsig.MinGlottalWidth(model_trans))
     psub = 5.7e2 * 10

@@ -10,7 +10,7 @@ import numpy as np
 from blockarray import linalg as bla
 
 import libfunctionals as libfuncs
-from libsetup import load_hopf, set_default_props
+from libsetup import load_hopf_model, set_default_props
 from test_hopf import _test_taylor
 
 
@@ -74,7 +74,7 @@ if __name__ == '__main__':
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
     mesh_path = path.join('./mesh', mesh_name+'.msh')
 
-    hopf, res, dres = load_hopf(mesh_path, sep_method='smoothmin', sep_vert_label='separation')
+    hopf, res, dres = load_hopf_model(mesh_path, sep_method='smoothmin', sep_vert_label='separation')
     xhopf = hopf.state.copy()
     props0 = hopf.props.copy()
     set_default_props(props0, res.solid.forms['mesh.mesh'])

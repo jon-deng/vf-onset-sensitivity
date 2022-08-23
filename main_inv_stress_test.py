@@ -50,8 +50,8 @@ EMODS_COV_GT, EMODS_BOD_GT = [e[0] for e in emods_covbod_gt], [e[1] for e in emo
 mesh_name = 'BC-dcov5.00e-02-cl1.00'
 mesh_name = 'M5_CB_GA3'
 mesh_path = path.join('./mesh', mesh_name+'.msh')
-RES_LAMP = libsetup.load_tran(mesh_path, sep_method='arearatio', sep_vert_label='separation-inf')
-RES_HOPF, RES_DYN, DRES_DYN = libsetup.load_hopf(mesh_path, sep_method='fixed', sep_vert_label='separation-inf')
+RES_LAMP = libsetup.load_transient_model(mesh_path, sep_method='arearatio', sep_vert_label='separation-inf')
+RES_HOPF, RES_DYN, DRES_DYN = libsetup.load_hopf_model(mesh_path, sep_method='fixed', sep_vert_label='separation-inf')
 
 def set_props(props, celllabel_to_dofs, emod_cov, emod_bod):
     # Set any constant properties

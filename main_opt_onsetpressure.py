@@ -97,7 +97,7 @@ if __name__ == '__main__':
     mesh_name = 'M5_CB_GA3'
     mesh_path = path.join('./mesh', mesh_name+'.msh')
 
-    hopf, res, dres = libsetup.load_hopf(
+    hopf, res, dres = libsetup.load_hopf_model(
         mesh_path, sep_method='fixed', sep_vert_label='separation-inf'
     )
 

@@ -13,7 +13,7 @@ import numpy as np
 # from femvf.meshutils import process_celllabel_to_dofs_from_forms
 import blockarray.linalg as bla
 
-from libsetup import set_default_props, load_hopf
+from libsetup import set_default_props, load_hopf_model
 
 # slepc4py.init(sys.argv)
 
@@ -92,7 +92,7 @@ if __name__ == '__main__':
     ## Load the Hopf model to test
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
     mesh_path = path.join('./mesh', mesh_name+'.msh')
-    model, res, dres = load_hopf(
+    model, res, dres = load_hopf_model(
         mesh_path, sep_method='smoothmin', sep_vert_label='separation-inf'
     )
 
