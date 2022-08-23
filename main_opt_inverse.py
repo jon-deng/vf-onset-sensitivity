@@ -12,6 +12,7 @@ from scipy import optimize
 from blockarray import blockvec  as bvec
 from femvf import statefile as sf
 from femvf.postprocess import solid as solidsig
+from femvf.postprocess.base import TimeSeries
 from vfsig import modal as modalsig
 
 from lib_main_transient import case_config
@@ -35,14 +36,23 @@ if __name__ == '__main__':
     # because the measurement here is generated from a similar model
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
     mesh_path = path.join('./mesh', mesh_name+'.xml')
+    hopf, res, dres = libsetup.load_hopf(
+        mesh_path, sep_method='smoothmin', sep_vert_label='separation-inf'
+    )
 
-    hopf, xhopf, props0 = libsetup.setup_hopf_state(mesh_path)
-    hopf.set_state(xhopf)
+    props = hopf.props.copy()
+    props = libsetup.set_default_props(props, hopf.res.solid.forms['mesh.mesh'])
+    hopf.set_props(props)
+
+    PSUBS = np.linspace(0, 1000, 11)*10
+    xhopf_0 = libhopf.gen_hopf_initial_guess(hopf, PSUBS, tol=100.0)
+    xhopf_0, _info = libhopf.solve_hopf_newton(hopf, xhopf_0)
+    hopf.set_state(xhopf_0)
 
     ## Load the synthetic measured glottal width + frequency
-    model_trans = libsetup.setup_transient_model(mesh_path)
+    model_trans = libsetup.load_tran(mesh_path, sep_method='smoothmin')
 
-    proc_gw = solidsig.make_sig_glottal_width_sharp(model_trans)
+    proc_gw = TimeSeries(solidsig.MinGlottalWidth(model_trans))
     psub = 5.7e2 * 10
     fname = case_config(mesh_name, psub, ECOV, EBODY)
     fpath = f'{OUT_DIR}/{fname}.h5'

@@ -33,13 +33,14 @@ def set_props(props, hopf, celllabel_to_dofs, emod_cov, emod_bod):
     props['emod'][dofs_share] = 1/2*(emod_cov + emod_bod)
     return props
 
-def run_opt(fpath, hopf, emod, alpha):
+def run_minimize_onset_pressure(fpath, hopf, emod, alpha):
     """
     Run the optimization experiment
     """
     # Set the homogenous cover/body moduli and any constant properties
     region_to_dofs = process_celllabel_to_dofs_from_forms(
-        hopf.res.solid.forms, hopf.res.solid.forms['fspace.scalar'])
+        hopf.res.solid.forms, hopf.res.solid.forms['fspace.scalar'].dofmap()
+    )
     set_props(hopf.props, hopf, region_to_dofs, emod, emod)
     hopf.set_props(hopf.props)
 
@@ -114,4 +115,4 @@ if __name__ == '__main__':
 
     for emod, alpha in itertools.product(emods, alphas):
         fpath = f"out/minimize_onset_pressure/opt_hist_emod{emod:.2e}_alpha{alpha:.2e}.h5"
-        run_opt(fpath, hopf, emod, alpha)
+        run_minimize_onset_pressure(fpath, hopf, emod, alpha)
