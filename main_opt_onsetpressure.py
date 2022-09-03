@@ -16,6 +16,16 @@ import libsetup
 import libhopf
 import libfunctionals as libfuncs
 
+import exputils
+
+parameter_types = {
+    'MeshName': str,
+    'Ecov': float,
+    'Ebod': float,
+    'alpha': float
+}
+ExpParam = exputils.make_parameters(parameter_types)
+
 PSUBS = np.arange(0, 1500, 50) * 10
 
 def set_props(props, hopf, celllabel_to_dofs, emod_cov, emod_bod):
