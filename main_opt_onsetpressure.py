@@ -18,13 +18,14 @@ import libfunctionals as libfuncs
 
 import exputils
 
-parameter_types = {
+ptypes = {
     'MeshName': str,
     'Ecov': float,
     'Ebod': float,
-    'alpha': float
+    'alpha': float,
+    'FunctionalType': str
 }
-ExpParam = exputils.make_parameters(parameter_types)
+ExpParam = exputils.make_parameters(ptypes)
 
 PSUBS = np.arange(0, 1500, 50) * 10
 
