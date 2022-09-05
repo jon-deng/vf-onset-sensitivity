@@ -94,7 +94,7 @@ def set_default_props(props, mesh):
 def set_constant_props(props, mesh):
     props['eta'][:] =  5.0
     props['rho'][:] =  1.0
-    props['nu'][:] =  0.49
+    props['nu'][:] =  0.45
 
     # Fluid separation smoothing props
     if all(key in props for key in ['zeta_min', 'zeta_sep']):
