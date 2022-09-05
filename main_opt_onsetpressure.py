@@ -5,11 +5,20 @@ Solve a simple test optimization problem
 import os.path as path
 from pprint import pprint
 import itertools
+from typing import Union
+import math
 
 import h5py
 import numpy as np
 from scipy import optimize
 from blockarray import blockvec  as bvec
+from femvf import load
+from femvf.models.transient import (
+    solid as tsld, fluid as tfld, coupled as tcpl, base as tbase
+)
+from femvf.models.dynamical import (
+    solid as dsld, fluid as dfld, coupled as dcpl, base as dbase
+)
 from femvf.meshutils import process_celllabel_to_dofs_from_forms
 
 import libsetup
@@ -19,15 +28,65 @@ import libfunctionals as libfuncs
 import exputils
 
 ptypes = {
+    'Name': str,
+    'omega': float,
+    'beta': float
+}
+FrequencyConstrainedFuncParam = exputils.make_parameters(ptypes)
+
+ptypes = {
     'MeshName': str,
     'Ecov': float,
     'Ebod': float,
-    'alpha': float,
-    'FunctionalType': str
+    'Functional': FrequencyConstrainedFuncParam
 }
 ExpParam = exputils.make_parameters(ptypes)
 
 PSUBS = np.arange(0, 1500, 50) * 10
+
+def get_dyna_model(params: exputils.BaseParameters):
+    """
+    Return the model corresponding to parameters
+    """
+    mesh_name = params['MeshName']
+    mesh_path = path.join('./mesh', mesh_name+'.msh')
+
+    hopf, res, dres = libsetup.load_hopf_model(
+        mesh_path, sep_method='fixed', sep_vert_label='separation-inf'
+    )
+    return hopf, res, dres
+
+def get_tran_model(params: exputils.BaseParameters):
+    """
+    Return the model corresponding to parameters
+    """
+
+    mesh_name = params['MeshName']
+    mesh_path = path.join('./mesh', mesh_name+'.msh')
+
+    model = load.load_transient_fsi_model(
+        mesh_path, None,
+        SolidType=tsld.KelvinVoigt,
+        FluidType=tfld.BernoulliFixedSep,
+        separation_vertex_label='sep-inf'
+    )
+    return model
+
+def get_props(
+        model: Union[tbase.BaseTransientModel, dbase.BaseDynamicalModel],
+        params: exputils.BaseParameters
+    ):
+    """
+    Return the properties vector
+    """
+    props = model.props.copy()
+
+    region_to_dofs = process_celllabel_to_dofs_from_forms(
+        model.res.solid.forms, model.res.solid.forms['fspace.scalar'].dofmap()
+    )
+
+    props = set_props(props, model, region_to_dofs, params['Ecov'], params['Ebod'])
+    return props
 
 def set_props(props, hopf, celllabel_to_dofs, emod_cov, emod_bod):
     # Set any constant properties
@@ -44,40 +103,75 @@ def set_props(props, hopf, celllabel_to_dofs, emod_cov, emod_bod):
     props['emod'][dofs_share] = 1/2*(emod_cov + emod_bod)
     return props
 
-def run_minimize_onset_pressure(fpath, hopf, emod, alpha):
+def get_functional(
+        model: dbase.BaseDynamicalModel,
+        params: exputils.BaseParameters
+    ):
     """
-    Run the onset pressure minimization experiment
+    Return the functional
     """
-    # Set the homogenous cover/body moduli and any constant properties
-    region_to_dofs = process_celllabel_to_dofs_from_forms(
-        hopf.res.solid.forms, hopf.res.solid.forms['fspace.scalar'].dofmap()
-    )
-    set_props(hopf.props, hopf, region_to_dofs, emod, emod)
-    hopf.set_props(hopf.props)
+    func_onset_pressure = libfuncs.OnsetPressureFunctional(model)
+    func_onset_frequency = libfuncs.AbsOnsetFrequencyFunctional(model)
+    if isinstance(params['Functional'], str):
+        func_name = params['Functional']
+        if func_name == 'OnsetPressure':
+            func = func_onset_pressure
+        elif func_name == 'OnsetFrequency':
+            func = func_onset_frequency
+        else:
+            raise ValueError("Unknown functional '{func_name}'")
+    elif isinstance(params['Functional'], FrequencyConstrainedFuncParam):
+        func_params = params['Functional']
+        omega = func_params['omega']
+        beta = func_params['beta']
+        if func_params['Name'] == 'OnsetPressure':
+            func = (
+                func_onset_pressure
+                + beta*(func_onset_frequency-omega)**2
+            )
+        else:
+            raise ValueError("Unknown functional '{func_name}'")
+    else:
+        raise ValueError(f"Unknown functional type {type(params['Functional'])}")
 
-    # Solve for the Hopf bifurcation
+    return func
+
+def run_minimize_functional(params, output_dir='out'):
+    """
+    Run an experiment where a functional is minimized
+    """
+    ## Load the model and set model properties
+    hopf, *_ = get_dyna_model(params)
+
+    props = get_props(hopf, params)
+    hopf.set_props(props)
+
+    ## Solve for the Hopf bifurcation
     xhopf_0 = libhopf.gen_hopf_initial_guess(hopf, PSUBS, tol=100.0)
     xhopf_n, info = libhopf.solve_hopf_newton(hopf, xhopf_0)
     hopf.set_state(xhopf_n)
 
-    # Create the onset pressure functional
-    func_onset_pressure = libfuncs.OnsetPressureFunctional(hopf)
-    func_onset_frequency = libfuncs.AbsOnsetFrequencyFunctional(hopf)
-    func_egrad_norm = libfuncs.ModulusGradientNormSqr(hopf)
-
-    func = (
-        func_onset_pressure
-        + 1000.0*(func_onset_frequency-float(abs(xhopf_n['omega'][0])))**2
-        + alpha*func_egrad_norm
-    )
+    ## Load the functional/objective function and gradient
+    # params = params.substitute(
+    #     {'Functional/omega': xhopf_n['omega'][0]}
+    # )
+    params = params.substitute({
+        'Functional': {
+            'Name': params['Functional']['Name'],
+            'omega': xhopf_n['omega'][0],
+            'beta': 1000
+        }
+    })
+    func = get_functional(hopf, params)
 
     redu_grad = libhopf.ReducedGradient(func, hopf)
 
-    # Create the objective function and gradient needed for optimization
+    ## Run the minimizer
+    # Set the initial guess
     x0 = bvec.concatenate_vec([hopf.props.copy(), redu_grad.camp.copy()])
     x0[-2:] = 0.0 # these correspond to complex amp. parameters
 
-    ## Optimization
+    # Set optimizer options/callback
     opt_options = {
         'disp': 99,
         'maxiter': 150,
@@ -87,6 +181,7 @@ def run_minimize_onset_pressure(fpath, hopf, emod, alpha):
     def opt_callback(xk):
         print("In callback")
 
+    fpath = path.join(output_dir, params.to_str()+'.h5')
     if not path.isfile(fpath):
         with h5py.File(fpath, mode='w') as f:
             grad_manager = libhopf.OptGradManager(redu_grad, f)
@@ -97,33 +192,30 @@ def run_minimize_onset_pressure(fpath, hopf, emod, alpha):
                 options=opt_options,
                 callback=opt_callback
             )
-
         pprint(opt_res)
     else:
-        print(f"File {fpath} already exists.")
+        print(f"Skipping existing file '{fpath}'")
 
 if __name__ == '__main__':
     # Load the Hopf system
-    mesh_name = 'BC-dcov5.00e-02-cl1.00'
-    mesh_name = 'M5_CB_GA3'
-    mesh_path = path.join('./mesh', mesh_name+'.msh')
+    params = ExpParam({
+        'MeshName': 'M5_CB_GA3',
+        'Ecov': 2.5*10*1e3,
+        'Ebod': 2.5*10*1e3,
+        'Functional': {
+            'Name': 'OnsetPressure',
+            'omega': np.nan,
+            'beta': 1000
+        }
+    })
+    # mesh_name = 'BC-dcov5.00e-02-cl1.00'
+    # mesh_name = 'M5_CB_GA3'
+    # mesh_path = path.join('./mesh', mesh_name+'.msh')
 
-    hopf, res, dres = libsetup.load_hopf_model(
-        mesh_path, sep_method='fixed', sep_vert_label='separation-inf'
-    )
-
-    # `alpha` is a weight for the first-order smoothing term of elastic modulus
-    # alphas = 10**np.array([-np.inf])
-    # A characteristic gradient of 1kPa/1cm over a volume of 1cm^2 has a
-    # functional value of 1e8 Ba^2*cm^2 (cgs unit)
-    # 'unit' value of alpha should then start around 1e-8
-    # for alpha in alphas:
-    alphas = 10**np.array([-np.inf]+[-10, -8, -6, -4])
-
-    demod = 2.5
-    emods = np.arange(2.5, 20+demod/2, demod)*10*1e3
+    # demod = 2.5
+    # emods = np.arange(2.5, 20+demod/2, demod)*10*1e3
     # emods = np.array([5.0]) * 10 * 1e3
 
-    for emod, alpha in itertools.product(emods, alphas):
-        fpath = f"out/minimize_onset_pressure/opt_hist_emod{emod:.2e}_alpha{alpha:.2e}.h5"
-        run_minimize_onset_pressure(fpath, hopf, emod, alpha)
+    # for emod, alpha in itertools.product(emods, alphas):
+    #     fpath = f"out/minimize_onset_pressure/opt_hist_emod{emod:.2e}_alpha{alpha:.2e}.h5"
+    run_minimize_functional(params, output_dir='out')
