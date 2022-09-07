@@ -12,7 +12,7 @@ from blockarray import linalg as bla
 
 import libfunctionals as libfuncs
 from libsetup import load_hopf_model, set_default_props
-from test_hopf import _test_taylor
+from test_hopf import taylor_convergence
 
 
 # pylint: disable=redefined-outer-name
@@ -21,6 +21,26 @@ from test_hopf import _test_taylor
 EBODY = 5e3 * 10
 ECOV = 5e3 * 10
 PSUB = 450 * 10
+
+def _test_taylor(*args, **kwargs):
+    errs, magnitudes, conv_rates = taylor_convergence(*args, **kwargs)
+    assert pass_taylor_convergence_test(errs, magnitudes, conv_rates)
+
+def pass_taylor_convergence_test(errs, magnitudes, conv_rates, relerr_tol=1e-5):
+    """
+    Return whether a set of errors passes the Taylor convergence test
+    """
+    is_taylor2 = np.all(np.isclose(conv_rates, 2, rtol=0.1, atol=0.1))
+    with np.errstate(invalid='ignore'):
+        rel_errs = np.where(errs == 0, 0, errs/magnitudes)
+    is_relerr = np.all(np.isclose(rel_errs, 0, atol=relerr_tol))
+    if is_taylor2:
+        return True
+    elif is_relerr:
+        return True
+    else:
+        return False
+
 
 @pytest.fixture()
 def setup_hopf_model():
@@ -51,22 +71,22 @@ def setup_linearization(func, setup_hopf_model):
     hopf = setup_hopf_model
 
     state0 = hopf.state.copy()
-    setup_dstate = state0.copy()
-    setup_dstate[:] = 0
-    setup_dstate['u'] = 1.0e-5
-    hopf.apply_dirichlet_bvec(setup_dstate)
+    dstate = state0.copy()
+    dstate[:] = 0
+    dstate['u'] = 1.0e-5
+    hopf.apply_dirichlet_bvec(dstate)
 
     props0 = hopf.props.copy()
     set_default_props(props0, hopf.res.solid.forms['mesh.mesh'])
-    setup_dprops = props0.copy()
-    setup_dprops[:] = 0
-    setup_dprops['emod'] = 1.0
+    dprops = props0.copy()
+    dprops[:] = 0
+    dprops['emod'] = 1.0
 
     camp0 = func.camp.copy()
-    setup_dcamp = camp0.copy()
-    setup_dcamp['amp'] = 1e-4
-    setup_dcamp['phase'] = np.pi*1e-5
-    return (state0, camp0, props0), (setup_dstate, setup_dcamp, setup_dprops)
+    dcamp = camp0.copy()
+    dcamp['amp'] = 1e-4
+    dcamp['phase'] = np.pi*1e-5
+    return (state0, camp0, props0), (dstate, dcamp, dprops)
 
 
 @pytest.fixture()

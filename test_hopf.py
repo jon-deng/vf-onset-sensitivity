@@ -22,7 +22,7 @@ from libsetup import set_default_props, load_hopf_model
 
 PSUB = 450.0 * 10
 
-def _test_taylor(x0, dx, res, jac, action=None, norm=None):
+def taylor_convergence(x0, dx, res, jac, action=None, norm=None):
     """
     Test that the Taylor convergence order is 2
     """
@@ -38,25 +38,23 @@ def _test_taylor(x0, dx, res, jac, action=None, norm=None):
     dres_exacts = [res_n-res_0 for res_n in res_ns]
     dres_linear = action(jac(x0), dx)
 
-    errs = [
+    errs = np.array([
         norm(dres_exact-alpha*dres_linear)
         for dres_exact, alpha in zip(dres_exacts, alphas)
-    ]
-    magnitudes = [
+    ])
+    magnitudes = np.array([
         1/2*norm(dres_exact+alpha*dres_linear)
         for dres_exact, alpha in zip(dres_exacts, alphas)
-    ]
+    ])
     with np.errstate(invalid='ignore'):
-        conv_rates = [
-            np.log(err_0/err_1)/np.log(alpha_0/alpha_1)
-            for err_0, err_1, alpha_0, alpha_1
-            in zip(errs[:-1], errs[1:], alphas[:-1], alphas[1:])]
-        rel_errs = np.array(errs)/np.array(magnitudes)*100
+        conv_rates = np.log(errs[:-1]/errs[1:])/np.log(alphas[:-1]/alphas[1:])
+        rel_errs = errs/magnitudes
 
     print("")
     print(f"||dres_linear||, ||dres_exact|| = {norm(dres_linear)}, {norm(dres_exacts[-1])}")
     print("Relative errors: ", rel_errs)
     print("Convergence rates: ", np.array(conv_rates))
+    return errs, magnitudes, conv_rates
 
 def test_assem_dres_dstate(hopf, state0, dstate):
 
