@@ -189,8 +189,8 @@ def run_minimize_functional(params, output_dir='out'):
     params = params.substitute({
         'Functional': {
             'Name': params['Functional']['Name'],
-            'omega': xhopf_n['omega'][0],
-            'beta': 1000
+            'omega': abs(xhopf_n['omega'][0]),
+            'beta': 1000.0
         }
     })
     func = get_functional(hopf, params)
