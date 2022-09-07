@@ -1180,7 +1180,7 @@ def solve_reduced_gradient(
 
     # Solve the adjoint problem for the 'adjoint state'
     _dg_dres, _ = subops.solve_petsc_lu(_dres_dx_adj, _dg_dx, out=_dg_dres)
-    dg_dres.set_vec(_dg_dres)
+    dg_dres.set_mono(_dg_dres)
 
     # Compute the reduced gradient
     dres_dprops = hopf.assem_dres_dprops()
