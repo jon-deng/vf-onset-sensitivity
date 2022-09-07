@@ -83,7 +83,7 @@ def get_props(
     props = model.props.copy()
 
     region_to_dofs = process_celllabel_to_dofs_from_forms(
-        model.res.solid.forms, model.res.solid.forms['fspace.scalar'].dofmap()
+        model.res.solid.forms, model.res.solid.forms['fspace.scalar_dg0'].dofmap()
     )
 
     props = set_props(props, model, region_to_dofs, params['Ecov'], params['Ebod'])
