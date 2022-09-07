@@ -2,6 +2,7 @@
 Solve a simple test optimization problem
 """
 
+import argparse
 import os.path as path
 from pprint import pprint
 import itertools
@@ -136,6 +137,36 @@ def get_functional(
 
     return func
 
+
+def get_params(study_name: str):
+    """
+    Return an iterable of parameters for a given study name
+    """
+
+    DEFAULT_PARAMS = ExpParam({
+        'MeshName': 'M5_CB_GA3',
+        'Ecov': 2.5*10*1e3,
+        'Ebod': 2.5*10*1e3,
+        'Functional': {
+            'Name': 'OnsetPressure',
+            'omega': np.nan,
+            'beta': 1000
+        }
+    })
+    if study_name == 'none':
+        return []
+    elif study_name == 'test':
+        return [DEFAULT_PARAMS]
+    elif study_name == 'main_optimization':
+        emods = np.arange(2.5, 20, 2.5) * 10 * 1e3
+        paramss = (
+            DEFAULT_PARAMS.substitute({'Ecov': emod, 'Ebod': emod})
+            for emod in emods
+        )
+        return paramss
+    else:
+        raise ValueError("Unknown `study_name` '{study_name}'")
+
 def run_minimize_functional(params, output_dir='out'):
     """
     Run an experiment where a functional is minimized
@@ -196,26 +227,19 @@ def run_minimize_functional(params, output_dir='out'):
     else:
         print(f"Skipping existing file '{fpath}'")
 
+def run_functional_sensitivity(params, output_dir='out'):
+    """
+    Run an experiment where the sensitivity of a functional is saved
+    """
+    raise NotImplementedError()
+
 if __name__ == '__main__':
     # Load the Hopf system
-    params = ExpParam({
-        'MeshName': 'M5_CB_GA3',
-        'Ecov': 2.5*10*1e3,
-        'Ebod': 2.5*10*1e3,
-        'Functional': {
-            'Name': 'OnsetPressure',
-            'omega': np.nan,
-            'beta': 1000
-        }
-    })
-    # mesh_name = 'BC-dcov5.00e-02-cl1.00'
-    # mesh_name = 'M5_CB_GA3'
-    # mesh_path = path.join('./mesh', mesh_name+'.msh')
 
-    # demod = 2.5
-    # emods = np.arange(2.5, 20+demod/2, demod)*10*1e3
-    # emods = np.array([5.0]) * 10 * 1e3
+    argparser = argparse.ArgumentParser()
+    argparser.add_argument('--study-name', type=str, default='none')
+    clargs = argparser.parse_args()
 
-    # for emod, alpha in itertools.product(emods, alphas):
-    #     fpath = f"out/minimize_onset_pressure/opt_hist_emod{emod:.2e}_alpha{alpha:.2e}.h5"
-    run_minimize_functional(params, output_dir='out')
+    paramss = get_params(clargs.study_name)
+    for params in paramss:
+        run_minimize_functional(params, output_dir='out')
