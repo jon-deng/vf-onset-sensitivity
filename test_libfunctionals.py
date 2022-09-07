@@ -74,6 +74,7 @@ def setup_linearization(func, setup_hopf_model):
     dstate = state0.copy()
     dstate[:] = 0
     dstate['u'] = 1.0e-5
+    dstate['psub'] = 1.0
     hopf.apply_dirichlet_bvec(dstate)
 
     props0 = hopf.props.copy()
