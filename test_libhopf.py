@@ -40,6 +40,47 @@ def setup_props(setup_hopf_model):
     libsetup.set_default_props(props, hopf.res.solid.forms['mesh.mesh'])
     return props
 
+class TestHopfModel:
+    """
+    Test correctness and functionality of the `HopfModel` class
+    """
+    @pytest.fixture()
+    def setup_state_linearization(self, setup_hopf_model):
+        hopf = setup_hopf_model
+        state = hopf.state.copy()
+        state[:] = 0
+
+        dstate = state.copy()
+        dstate['u'] = 1e-5
+
+        hopf.apply_dirichlet_bvec(dstate)
+        return (state, dstate)
+
+    def test_assem_dres_dstate(
+            self,
+            setup_hopf_model,
+            setup_props,
+            setup_state_linearization
+        ):
+
+        hopf = setup_hopf_model
+        props = setup_props
+        state0, dstate = setup_state_linearization
+
+        def hopf_res(x):
+            hopf.set_state(x)
+            res = hopf.assem_res()
+            hopf.apply_dirichlet_bvec(res)
+            return hopf.assem_res()
+
+        def hopf_jac(x):
+            hopf.set_state(x)
+            dres_dstate = hopf.assem_dres_dstate()
+            hopf.apply_dirichlet_bmat(dres_dstate)
+            return dres_dstate
+
+        taylor_convergence(state0, dstate, hopf_res, hopf_jac)
+
 class TestHopf:
     @pytest.fixture()
     def setup_bound_pairs(self):
