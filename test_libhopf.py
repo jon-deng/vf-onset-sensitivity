@@ -40,32 +40,55 @@ def setup_props(setup_hopf_model):
     libsetup.set_default_props(props, hopf.res.solid.forms['mesh.mesh'])
     return props
 
+@pytest.fixture()
+def setup_linearization_point(setup_hopf_model, setup_props):
+    """Return a linearization point"""
+    hopf = setup_hopf_model
+
+    # NOTE: Some `state` components can't be zero or Hopf jacobians may have zero rank
+    (state_labels,
+     mode_real_labels,
+     mode_imag_labels,
+     psub_labels,
+     omega_labels) = hopf.labels_hopf_components
+
+    state = hopf.state.copy()
+    state[:] = 0
+    state[mode_real_labels] = 1.0
+    state[mode_imag_labels] = 1.0
+    PSUB = 450*10
+    state[psub_labels] = PSUB
+    state[omega_labels] = 1.0
+    hopf.apply_dirichlet_bvec(state)
+
+    props = setup_props
+    return (state, props)
+
 class TestHopfModel:
     """
     Test correctness and functionality of the `HopfModel` class
     """
     @pytest.fixture()
-    def setup_state_linearization(self, setup_hopf_model):
+    def setup_dstate(self, setup_hopf_model):
         hopf = setup_hopf_model
-        state = hopf.state.copy()
-        state[:] = 0
 
-        dstate = state.copy()
+        dstate = hopf.state.copy()
         dstate['u'] = 1e-5
 
         hopf.apply_dirichlet_bvec(dstate)
-        return (state, dstate)
+        return dstate
 
     def test_assem_dres_dstate(
             self,
             setup_hopf_model,
-            setup_props,
-            setup_state_linearization
+            setup_linearization_point,
+            setup_dstate
         ):
 
         hopf = setup_hopf_model
-        props = setup_props
-        state0, dstate = setup_state_linearization
+        state, props = setup_linearization_point
+        dstate = setup_dstate
+        hopf.set_props(props)
 
         def hopf_res(x):
             hopf.set_state(x)
@@ -79,7 +102,39 @@ class TestHopfModel:
             hopf.apply_dirichlet_bmat(dres_dstate)
             return dres_dstate
 
-        taylor_convergence(state0, dstate, hopf_res, hopf_jac)
+        taylor_convergence(state, dstate, hopf_res, hopf_jac)
+
+    @pytest.fixture()
+    def setup_dprops(self, setup_hopf_model):
+        hopf = setup_hopf_model
+
+        dprops = hopf.props.copy()
+        dprops[:] = 0.0
+        dprops['emod'] = 1.0
+        return dprops
+
+    def test_assem_dres_dprops(
+            self,
+            setup_hopf_model,
+            setup_linearization_point,
+            setup_dprops
+        ):
+
+        hopf = setup_hopf_model
+        state, props = setup_linearization_point
+        dprops = setup_dprops
+        hopf.set_state(state)
+
+        def hopf_res(x):
+            hopf.set_props(x)
+            return hopf.assem_res()
+
+        def hopf_jac(x):
+            hopf.set_props(x)
+            dres_dprops = hopf.assem_dres_dprops()
+            hopf.zero_rows_dirichlet_bmat(dres_dprops)
+            return dres_dprops
+        taylor_convergence(props, dprops, hopf_res, hopf_jac)
 
 class TestHopf:
     @pytest.fixture()
