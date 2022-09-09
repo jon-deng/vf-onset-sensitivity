@@ -46,7 +46,7 @@ class TestHopfModel:
     """
 
     @pytest.fixture()
-    def setup_linearization_point(setup_hopf_model, setup_props):
+    def setup_linearization_point(self, setup_hopf_model, setup_props):
         """Return a linearization point"""
         hopf = setup_hopf_model
 
