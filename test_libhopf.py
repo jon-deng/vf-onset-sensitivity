@@ -40,34 +40,35 @@ def setup_props(setup_hopf_model):
     libsetup.set_default_props(props, hopf.res.solid.forms['mesh.mesh'])
     return props
 
-@pytest.fixture()
-def setup_linearization_point(setup_hopf_model, setup_props):
-    """Return a linearization point"""
-    hopf = setup_hopf_model
-
-    # NOTE: Some `state` components can't be zero or Hopf jacobians may have zero rank
-    (state_labels,
-     mode_real_labels,
-     mode_imag_labels,
-     psub_labels,
-     omega_labels) = hopf.labels_hopf_components
-
-    state = hopf.state.copy()
-    state[:] = 0
-    state[mode_real_labels] = 1.0
-    state[mode_imag_labels] = 1.0
-    PSUB = 450*10
-    state[psub_labels] = PSUB
-    state[omega_labels] = 1.0
-    hopf.apply_dirichlet_bvec(state)
-
-    props = setup_props
-    return (state, props)
-
 class TestHopfModel:
     """
     Test correctness and functionality of the `HopfModel` class
     """
+
+    @pytest.fixture()
+    def setup_linearization_point(setup_hopf_model, setup_props):
+        """Return a linearization point"""
+        hopf = setup_hopf_model
+
+        # NOTE: Some `state` components can't be zero or Hopf jacobians may have zero rank
+        (state_labels,
+        mode_real_labels,
+        mode_imag_labels,
+        psub_labels,
+        omega_labels) = hopf.labels_hopf_components
+
+        state = hopf.state.copy()
+        state[:] = 0
+        state[mode_real_labels] = 1.0
+        state[mode_imag_labels] = 1.0
+        PSUB = 450*10
+        state[psub_labels] = PSUB
+        state[omega_labels] = 1.0
+        hopf.apply_dirichlet_bvec(state)
+
+        props = setup_props
+        return (state, props)
+
     @pytest.fixture()
     def setup_dstate(self, setup_hopf_model):
         hopf = setup_hopf_model
