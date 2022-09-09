@@ -112,6 +112,48 @@ class TestHopfModel:
 
         taylor_convergence(state, dstate, hopf_res, hopf_jac)
 
+    def test_assem_dres_dstate_adjoint(
+            self,
+            setup_hopf_model,
+            setup_linearization,
+            setup_dstate
+        ):
+        """
+        Test the adjoint of `HopfModel.assem_dres_dstate`
+
+        This should be true as long as the tranpose is computed correctly.
+        """
+
+        hopf = setup_hopf_model
+        state, props = setup_linearization
+        dstate = setup_dstate
+        hopf.set_state(state)
+        hopf.set_props(props)
+
+        # Compute the value of a linear functional `adj_res` on a residual vector
+        # given a known input `dstate`
+        dres_dstate = hopf.assem_dres_dstate()
+        hopf.apply_dirichlet_bmat(dres_dstate)
+
+        dres = bla.mult_mat_vec(dres_dstate, dstate)
+
+        adj_res = state.copy()
+        adj_res[:] = 1
+        hopf.apply_dirichlet_bvec(adj_res)
+
+        # Compute the value of the same linear functional using the adjoint
+        # strategy; compute `adj_state` for the known residual change
+        # and compute the same linear functional using `adj_state` and the
+        # supplied input `dstate`
+        dres_dstate_adj = hopf.assem_dres_dstate().transpose()
+        hopf.apply_dirichlet_bmat(dres_dstate_adj)
+        adj_state = bla.mult_mat_vec(dres_dstate_adj, adj_res)
+
+        assert np.isclose(
+            bv.dot(adj_state, dstate), bv.dot(adj_res, dres),
+            rtol=1e-9, atol=1e-9
+        )
+
     @pytest.fixture()
     def setup_dprops(self, setup_hopf_model):
         """Return a properties perturbation"""
