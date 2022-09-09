@@ -40,14 +40,19 @@ def setup_props(setup_hopf_model):
     libsetup.set_default_props(props, hopf.res.solid.forms['mesh.mesh'])
     return props
 
+
 class TestHopfModel:
     """
     Test correctness and functionality of the `HopfModel` class
     """
 
     @pytest.fixture()
-    def setup_linearization_point(self, setup_hopf_model, setup_props):
-        """Return a linearization point"""
+    def setup_linearization(self, setup_hopf_model, setup_props):
+        """
+        Return a linearization point for the Hopf model
+
+        The point is not necessarily a Hopf bifurcation.
+        """
         hopf = setup_hopf_model
 
         # NOTE: Some `state` components can't be zero or Hopf jacobians may have zero rank
@@ -71,6 +76,7 @@ class TestHopfModel:
 
     @pytest.fixture()
     def setup_dstate(self, setup_hopf_model):
+        """Return a state perturbation"""
         hopf = setup_hopf_model
 
         dstate = hopf.state.copy()
@@ -82,12 +88,13 @@ class TestHopfModel:
     def test_assem_dres_dstate(
             self,
             setup_hopf_model,
-            setup_linearization_point,
+            setup_linearization,
             setup_dstate
         ):
+        """Test `HopfModel.assem_dres_dstate`"""
 
         hopf = setup_hopf_model
-        state, props = setup_linearization_point
+        state, props = setup_linearization
         dstate = setup_dstate
         hopf.set_props(props)
 
@@ -107,6 +114,7 @@ class TestHopfModel:
 
     @pytest.fixture()
     def setup_dprops(self, setup_hopf_model):
+        """Return a properties perturbation"""
         hopf = setup_hopf_model
 
         dprops = hopf.props.copy()
@@ -117,12 +125,13 @@ class TestHopfModel:
     def test_assem_dres_dprops(
             self,
             setup_hopf_model,
-            setup_linearization_point,
+            setup_linearization,
             setup_dprops
         ):
+        """Test `HopfModel.assem_dres_dprops`"""
 
         hopf = setup_hopf_model
-        state, props = setup_linearization_point
+        state, props = setup_linearization
         dprops = setup_dprops
         hopf.set_state(state)
 
@@ -136,6 +145,7 @@ class TestHopfModel:
             hopf.zero_rows_dirichlet_bmat(dres_dprops)
             return dres_dprops
         taylor_convergence(props, dprops, hopf_res, hopf_jac)
+
 
 class TestHopf:
     @pytest.fixture()
@@ -183,6 +193,7 @@ class TestHopf:
         return xhopf_0
 
     def test_solve_hopf_newton(self, setup_hopf_model, setup_props, setup_xhopf_0):
+        """Test `solve_hopf_newton`"""
         xhopf_0 = setup_xhopf_0
         hopf = setup_hopf_model
         props = setup_props
@@ -190,20 +201,20 @@ class TestHopf:
 
         xhopf, info = libhopf.solve_hopf_newton(hopf, xhopf_0)
 
+
 class TestFunctionalGradient:
 
     @pytest.fixture()
     def setup_linearization(self, setup_props, setup_hopf_model):
         """
-        Return a linearization point and direction for a Hopf model
+        Return a linearization point corresponding to a Hopf bifurcation
 
         Returns
         -------
-        xhopf, props, dprops :
+        xhopf, props :
             `xhopf` - the state corresponding to the Hopf bifurcation
             to `props`
             `props` - the Hopf model properties
-            `dprops` - the Hopf model properties perturbation
         """
         hopf = setup_hopf_model
         props = setup_props
@@ -215,13 +226,16 @@ class TestFunctionalGradient:
         psubs = np.arange(100, 1000, 100)*10
         xhopf_0 = libhopf.gen_hopf_initial_guess(hopf, psubs)
         xhopf, info = libhopf.solve_hopf_newton(hopf, xhopf_0)
+        return xhopf, props
 
-        hopf.set_state(xhopf_0)
+    @pytest.fixture()
+    def setup_dprops(self, setup_props):
+        """Return a `props` perturbation"""
 
-        dprops = props.copy()
+        dprops = setup_props.copy()
         dprops[:] = 0
         dprops['emod'] = 1.0
-        return xhopf, props, dprops
+        return dprops
 
     @pytest.fixture()
     def setup_func(self, setup_hopf_model):
@@ -229,7 +243,13 @@ class TestFunctionalGradient:
         hopf = setup_hopf_model
         return libfuncs.OnsetPressureFunctional(hopf)
 
-    def test_solve_reduced_gradient(self, setup_func, setup_hopf_model, setup_linearization):
+    def test_solve_reduced_gradient(
+            self,
+            setup_func,
+            setup_hopf_model,
+            setup_linearization,
+            setup_dprops
+        ):
         """
         Test `solve_reduced_gradient`
 
@@ -243,7 +263,8 @@ class TestFunctionalGradient:
         """
         hopf = setup_hopf_model
         func = setup_func
-        xhopf, props, dprops = setup_linearization
+        xhopf, props = setup_linearization
+        dprops = setup_dprops
 
         def res(props):
             hopf.set_props(props)
@@ -277,10 +298,14 @@ class TestFunctionalGradient:
         return libhopf.ReducedGradient(func, hopf)
 
     @pytest.fixture()
-    def setup_rg_propss(self, setup_func, setup_linearization):
+    def setup_rg_propss(
+            self,
+            setup_linearization,
+            setup_dprops
+        ):
         """Return an iterable of `Hopf.props` vectors"""
-        _, props, dprops = setup_linearization
-        func = setup_func
+        _, props = setup_linearization
+        dprops = setup_dprops
 
         # camp = func.camp.copy()
         propss = [
@@ -310,10 +335,17 @@ class TestFunctionalGradient:
             hopf.set_props(redu_grad.hist_props[-1])
             print(bla.norm(hopf.assem_res()))
 
+
     @pytest.fixture()
-    def setup_og_propss(self, setup_func, setup_linearization):
+    def setup_og_propss(
+            self,
+            setup_func,
+            setup_linearization,
+            setup_dprops
+        ):
         """Return an iterable of `Hopf.props` + camp vectors"""
-        _, props, dprops = setup_linearization
+        _, props = setup_linearization
+        dprops = setup_dprops
         func = setup_func
 
         camp = func.camp.copy()
