@@ -62,11 +62,23 @@ class TestHopfModel:
         psub_labels,
         omega_labels) = hopf.labels_hopf_components
 
+        # Create a pure x-shearing motion to use for displacement/velocities
+        y = hopf.res.solid.forms['coeff.state.u1'].function_space().tabulate_dof_coordinates()[1::2, 1]
+        ux = 1e-2*(y-y.min())/(y.max()-y.min())
+        uy = 0
+
         state = hopf.state.copy()
         state[:] = 0
+        disp_labels = ['u', 'v']
+        suffixes = ['', '_mode_real', '_mode_imag']
+        for label in disp_labels:
+            for suffix in suffixes:
+                state[label+suffix][:-1:2] = ux
+                state[label+suffix][1::2] = uy
+
         state[mode_real_labels] = 1.0
         state[mode_imag_labels] = 1.0
-        PSUB = 450*10
+        PSUB = 100*10
         state[psub_labels] = PSUB
         state[omega_labels] = 1.0
         hopf.apply_dirichlet_bvec(state)
