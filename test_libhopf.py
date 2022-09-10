@@ -69,6 +69,11 @@ class TestHopfModel:
 
         state = hopf.state.copy()
         state[:] = 0
+
+        # TODO: Note that some subtle bugs may only appear for certain
+        # linearization conditions
+        # (for example non zero 'u_mode_real' but 0 'u')
+        # so you should probably parameterize this in the future
         disp_labels = ['u', 'v']
         suffixes = ['', '_mode_real', '_mode_imag']
         for label in disp_labels:
