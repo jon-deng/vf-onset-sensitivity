@@ -323,15 +323,15 @@ class HopfModel:
         # Assemble the matrix by rows
         omega = self.state['omega'][0]
 
-        row0 = [res.assem_dres_dprops()]
+        row0 = [res.assem_dres_dprops().copy()]
 
         dres.set_dstate(mode_real)
         dres.set_dstatet(-float(omega)*mode_imag)
-        row1 = [dres.assem_dres_dprops()]
+        row1 = [dres.assem_dres_dprops().copy()]
 
         dres.set_dstate(mode_imag)
         dres.set_dstatet(float(omega)*mode_real)
-        row2 = [dres.assem_dres_dprops()]
+        row2 = [dres.assem_dres_dprops().copy()]
 
         _mats = [subops.zero_mat(1, m) for m in self.props.bshape[0]]
         row3 = [
