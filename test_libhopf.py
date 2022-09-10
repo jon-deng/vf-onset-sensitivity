@@ -130,28 +130,21 @@ class TestHopfModel:
         hopf.set_state(state)
         hopf.set_props(props)
 
-        # Compute the value of a linear functional `adj_res` on a residual vector
-        # given a known input `dstate`
         dres_dstate = hopf.assem_dres_dstate()
         hopf.apply_dirichlet_bmat(dres_dstate)
 
-        dres = bla.mult_mat_vec(dres_dstate, dstate)
+        dres_adj = state.copy()
+        dres_adj[:] = 0
+        dres_adj['psub'] = 1
+        # adj_res[:] = 1
+        hopf.apply_dirichlet_bvec(dres_adj)
 
-        adj_res = state.copy()
-        adj_res[:] = 1
-        hopf.apply_dirichlet_bvec(adj_res)
-
-        # Compute the value of the same linear functional using the adjoint
-        # strategy; compute `adj_state` for the known residual change
-        # and compute the same linear functional using `adj_state` and the
-        # supplied input `dstate`
         dres_dstate_adj = hopf.assem_dres_dstate().transpose()
         hopf.apply_dirichlet_bmat(dres_dstate_adj)
-        adj_state = bla.mult_mat_vec(dres_dstate_adj, adj_res)
 
-        assert np.isclose(
-            bv.dot(adj_state, dstate), bv.dot(adj_res, dres),
-            rtol=1e-9, atol=1e-9
+        self._test_operator_adjoint(
+            dres_dstate, dres_dstate_adj,
+            dstate, dres_adj
         )
 
     @pytest.fixture()
@@ -187,6 +180,55 @@ class TestHopfModel:
             hopf.zero_rows_dirichlet_bmat(dres_dprops)
             return dres_dprops
         taylor_convergence(props, dprops, hopf_res, hopf_jac)
+
+    def test_assem_dres_dprops_adjoint(
+            self,
+            setup_hopf_model,
+            setup_linearization,
+            setup_dprops
+        ):
+        """
+        Test the adjoint of `HopfModel.assem_dres_dprops`
+
+        This should be true as long as the tranpose is computed correctly.
+        """
+        hopf = setup_hopf_model
+        state, props = setup_linearization
+        dprops = setup_dprops
+        hopf.set_state(state)
+        hopf.set_props(props)
+
+        dres_dprops = hopf.assem_dres_dprops()
+
+        dres_adj = state.copy()
+        dres_adj[:] = 1
+        # dres_adj['psub'] = 1
+        hopf.apply_dirichlet_bvec(dres_adj)
+
+        dres_dprops_adj = dres_dprops.transpose()
+
+        self._test_operator_adjoint(
+            dres_dprops, dres_dprops_adj,
+            dprops, dres_adj
+        )
+
+    def _test_operator_adjoint(self, op, op_adj, dx, dy_adj):
+        """
+        Test an operator and its adjoint are consistent
+        """
+        # NOTE: op maps x -> y
+        # op_adj maps y_adj -> x_adj
+
+        # Compute the value of a linear functional `adj_res` on a residual vector
+        # given a known input `dstate`
+        dy = bla.mult_mat_vec(op, dx)
+        dx_adj = bla.mult_mat_vec(op_adj, dy_adj)
+
+        print(bv.dot(dx_adj, dx), bv.dot(dy_adj, dy))
+        assert np.isclose(
+            bv.dot(dx_adj, dx), bv.dot(dy_adj, dy),
+            rtol=1e-9, atol=1e-9
+        )
 
 
 class TestHopf:
@@ -311,6 +353,7 @@ class TestFunctionalGradient:
         def res(props):
             hopf.set_props(props)
             x, info = libhopf.solve_hopf_newton(hopf, xhopf)
+            assert info['status'] == 0
 
             func.set_state(x)
             func.set_props(props)
@@ -320,9 +363,9 @@ class TestFunctionalGradient:
             hopf.set_props(props)
             x, info = libhopf.solve_hopf_newton(hopf, xhopf)
 
-            for model in (func, hopf):
-                model.set_state(x)
-                model.set_props(props)
+            hopf.set_state(x)
+            func.set_state(x)
+            func.set_props(props)
 
             return libhopf.solve_reduced_gradient(func, hopf)
 
