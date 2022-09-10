@@ -158,6 +158,35 @@ class TestHopfModel:
             dstate, dres_adj
         )
 
+    def test_assem_dres_dstate_inv(
+            self,
+            setup_hopf_model,
+            setup_linearization,
+            setup_dstate
+        ):
+        """Test `HopfModel.assem_dres_dstate`"""
+
+        hopf = setup_hopf_model
+        state, props = setup_linearization
+        dstate = setup_dstate
+        hopf.set_state(state)
+        hopf.set_props(props)
+
+        dres_dstate = hopf.assem_dres_dstate()
+        hopf.apply_dirichlet_bmat(dres_dstate)
+        hopf.apply_dirichlet_bvec(dstate)
+        dres = bla.mult_mat_vec(dres_dstate, dstate)
+
+        dstate_test = dres.copy()
+        _dres_dstate = dres_dstate.to_mono_petsc()
+        _dstate_test = _dres_dstate.getVecRight()
+        subops.solve_petsc_lu(_dres_dstate, dres.to_mono_petsc(), out=_dstate_test)
+        dstate_test.set_mono(_dstate_test)
+
+        err = dstate-dstate_test
+        print(err.norm())
+        assert np.isclose(err.norm(), 0, rtol=1e-8, atol=1e-9)
+
     @pytest.fixture()
     def setup_dprops(self, setup_hopf_model):
         """Return a properties perturbation"""
@@ -373,7 +402,7 @@ class TestFunctionalGradient:
             dres_dstate = hopf.assem_dres_dstate()
             hopf.apply_dirichlet_bmat(dres_dstate)
             _dres_dstate = dres_dstate.to_mono_petsc()
-            _dstate, _ = subops.solve_petsc_lu(_dres_dstate, -_dres, out=_dstate)
+            _dstate, _ = subops.solve_petsc_lu(_dres_dstate, -1*_dres, out=_dstate)
             dstate.set_mono(_dstate)
 
             return dstate
