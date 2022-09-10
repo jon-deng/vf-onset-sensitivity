@@ -91,7 +91,7 @@ class TestHopfModel:
 
         label = request.param
         print(f"Testing along direction {label}")
-        dstate[label] = 1e-2
+        dstate[label] = 1e-4
 
         hopf.apply_dirichlet_bvec(dstate)
         return dstate
@@ -402,7 +402,7 @@ class TestFunctionalGradient:
             dres_dstate = hopf.assem_dres_dstate()
             hopf.apply_dirichlet_bmat(dres_dstate)
             _dres_dstate = dres_dstate.to_mono_petsc()
-            _dstate, _ = subops.solve_petsc_lu(_dres_dstate, -1*_dres, out=_dstate)
+            subops.solve_petsc_lu(_dres_dstate, -1*_dres, out=_dstate)
             dstate.set_mono(_dstate)
 
             return dstate
@@ -456,7 +456,7 @@ class TestFunctionalGradient:
             func.set_state(x)
             func.set_props(props)
 
-            return libhopf.solve_reduced_gradient(func, hopf)
+            return bla.dot(libhopf.solve_reduced_gradient(func, hopf), dprops)
 
         taylor_convergence(
             props, dprops, res, jac,
