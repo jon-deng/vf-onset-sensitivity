@@ -992,17 +992,16 @@ def solve_hopf_newton(
         """Linear subproblem of a Newton solver"""
         hopf.set_state(xhopf_n)
 
-        res_n = hopf.assem_res()
-        jac_n = hopf.assem_dres_dstate()
-        hopf.apply_dirichlet_bvec(res_n)
-        hopf.apply_dirichlet_bmat(jac_n)
-
         def assem_res():
             """Return residual"""
+            res_n = hopf.assem_res()
+            hopf.apply_dirichlet_bvec(res_n)
             return res_n
 
         def solve(rhs_n):
             """Return jac^-1 res"""
+            jac_n = hopf.assem_dres_dstate()
+            hopf.apply_dirichlet_bmat(jac_n)
             _rhs_n = rhs_n.to_mono_petsc()
             _jac_n = jac_n.to_mono_petsc()
             _dx_n = _jac_n.getVecRight()
