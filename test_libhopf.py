@@ -74,13 +74,24 @@ class TestHopfModel:
         props = setup_props
         return (state, props)
 
-    @pytest.fixture()
-    def setup_dstate(self, setup_hopf_model):
+    @pytest.fixture(
+        params=[
+            'u', 'v',
+            'u_mode_real', 'v_mode_real',
+            'u_mode_imag', 'v_mode_imag',
+            'psub', 'omega'
+        ]
+    )
+    def setup_dstate(self, setup_hopf_model, request):
         """Return a state perturbation"""
         hopf = setup_hopf_model
 
         dstate = hopf.state.copy()
-        dstate['u'] = 1e-5
+        dstate[:] = 0
+
+        label = request.param
+        print(f"Testing along direction {label}")
+        dstate[label] = 1e-2
 
         hopf.apply_dirichlet_bvec(dstate)
         return dstate
