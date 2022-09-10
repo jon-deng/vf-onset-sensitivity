@@ -108,11 +108,11 @@ def test_assem_dg_dstate(func, setup_state, setup_dstate):
         func.set_state(x)
         return func.assem_g()
 
-    def jac(x):
+    def jac(x, dx):
         func.set_state(x)
-        return func.assem_dg_dstate()
+        return bla.dot(func.assem_dg_dstate(), dx)
 
-    _test_taylor(setup_state, setup_dstate, res, jac, action=bla.dot, norm=lambda x: (x**2)**0.5)
+    _test_taylor(setup_state, setup_dstate, res, jac, norm=lambda x: (x**2)**0.5)
 
 
 @pytest.fixture()
@@ -133,11 +133,11 @@ def test_assem_dg_dprops(func, setup_props, setup_dprops):
         func.set_props(x)
         return func.assem_g()
 
-    def jac(x):
+    def jac(x, dx):
         func.set_props(x)
-        return func.assem_dg_dprops()
+        return bla.dot(func.assem_dg_dprops(), dx)
 
-    _test_taylor(setup_props, setup_dprops, res, jac, action=bla.dot, norm=lambda x: (x**2)**0.5)
+    _test_taylor(setup_props, setup_dprops, res, jac, norm=lambda x: (x**2)**0.5)
 
 
 @pytest.fixture()
@@ -158,11 +158,11 @@ def test_assem_dg_dcamp(func, setup_camp, setup_dcamp):
         func.set_camp(x)
         return func.assem_g()
 
-    def jac(x):
+    def jac(x, dx):
         func.set_camp(x)
-        return func.assem_dg_dcamp()
+        return bla.dot(func.assem_dg_dcamp(), dx)
 
-    _test_taylor(setup_camp, setup_dcamp, res, jac, action=bla.dot, norm=lambda x: (x**2)**0.5)
+    _test_taylor(setup_camp, setup_dcamp, res, jac, norm=lambda x: (x**2)**0.5)
 
 
 @pytest.fixture(

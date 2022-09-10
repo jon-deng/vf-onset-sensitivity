@@ -22,12 +22,10 @@ from libsetup import set_default_props, load_hopf_model
 
 PSUB = 450.0 * 10
 
-def taylor_convergence(x0, dx, res, jac, action=None, norm=None):
+def taylor_convergence(x0, dx, res, jac, norm=None):
     """
     Test that the Taylor convergence order is 2
     """
-    if action is None:
-        action = bla.mult_mat_vec
     if norm is None:
         norm = bla.norm
 
@@ -36,7 +34,7 @@ def taylor_convergence(x0, dx, res, jac, action=None, norm=None):
     res_0 = res(x0).copy()
 
     dres_exacts = [res_n-res_0 for res_n in res_ns]
-    dres_linear = action(jac(x0), dx)
+    dres_linear = jac(x0, dx)
 
     errs = np.array([
         norm(dres_exact-alpha*dres_linear)

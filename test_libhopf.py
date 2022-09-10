@@ -104,11 +104,11 @@ class TestHopfModel:
             hopf.apply_dirichlet_bvec(res)
             return hopf.assem_res()
 
-        def hopf_jac(x):
+        def hopf_jac(x, dx):
             hopf.set_state(x)
             dres_dstate = hopf.assem_dres_dstate()
             hopf.apply_dirichlet_bmat(dres_dstate)
-            return dres_dstate
+            return bla.mult_mat_vec(dres_dstate, dx)
 
         taylor_convergence(state, dstate, hopf_res, hopf_jac)
 
@@ -174,11 +174,11 @@ class TestHopfModel:
             hopf.set_props(x)
             return hopf.assem_res()
 
-        def hopf_jac(x):
+        def hopf_jac(x, dx):
             hopf.set_props(x)
             dres_dprops = hopf.assem_dres_dprops()
             hopf.zero_rows_dirichlet_bmat(dres_dprops)
-            return dres_dprops
+            return bla.mult_mat_vec(dres_dprops, dx)
         taylor_convergence(props, dprops, hopf_res, hopf_jac)
 
     def test_assem_dres_dprops_adjoint(
@@ -359,7 +359,7 @@ class TestFunctionalGradient:
             func.set_props(props)
             return func.assem_g()
 
-        def jac(props):
+        def jac(props, dprops):
             hopf.set_props(props)
             x, info = libhopf.solve_hopf_newton(hopf, xhopf)
 
@@ -371,7 +371,7 @@ class TestFunctionalGradient:
 
         taylor_convergence(
             props, dprops, res, jac,
-            action=bla.dot, norm=lambda x: x
+            norm=lambda x: x
         )
 
 
