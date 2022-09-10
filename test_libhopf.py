@@ -8,7 +8,7 @@ import pytest
 import h5py
 import numpy as np
 
-from blockarray import linalg as bla, blockvec as bv
+from blockarray import linalg as bla, blockvec as bv, subops
 
 import libhopf
 import libfunctionals as libfuncs
@@ -320,6 +320,55 @@ class TestFunctionalGradient:
         dprops[:] = 0
         dprops['emod'] = 1.0
         return dprops
+
+    # The below operators represent 'reduced' operators on the residual
+    # This operator represents the map between property changes and state
+    # through the implicit function theorem on the Hopf system residual
+    def test_dstate_dprops(
+            self,
+            setup_hopf_model,
+            setup_linearization,
+            setup_dprops
+        ):
+        """Test a combined operator of `HopfModel`"""
+
+        hopf = setup_hopf_model
+        xhopf, props = setup_linearization
+        dprops = setup_dprops
+
+        def res(y):
+            hopf.set_props(y)
+            x, info = libhopf.solve_hopf_newton(hopf, xhopf)
+            print(info)
+            assert info['status'] == 0
+            return x
+
+        def jac(y, dy):
+            # Set the linearization point
+            hopf.set_props(y)
+            x, info = libhopf.solve_hopf_newton(hopf, xhopf)
+            assert info['status'] == 0
+            print(info)
+            hopf.set_state(x)
+
+            # Compute the jacobian action
+            dres_dprops = hopf.assem_dres_dprops()
+            hopf.zero_rows_dirichlet_bmat(dres_dprops)
+            dres = bla.mult_mat_vec(dres_dprops, dy)
+            _dres = dres.to_mono_petsc()
+
+            dstate = hopf.state.copy()
+            _dstate = dstate.to_mono_petsc()
+            dres_dstate = hopf.assem_dres_dstate()
+            hopf.apply_dirichlet_bmat(dres_dstate)
+            _dres_dstate = dres_dstate.to_mono_petsc()
+            _dstate, _ = subops.solve_petsc_lu(_dres_dstate, -_dres, out=_dstate)
+            dstate.set_mono(_dstate)
+
+            return dstate
+        taylor_convergence(props, dprops, res, jac)
+
+    # def test_dstate_dprops_adjoint():
 
     @pytest.fixture()
     def setup_func(self, setup_hopf_model):
