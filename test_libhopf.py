@@ -187,14 +187,22 @@ class TestHopfModel:
         print(err.norm())
         assert np.isclose(err.norm(), 0, rtol=1e-8, atol=1e-9)
 
-    @pytest.fixture()
-    def setup_dprops(self, setup_hopf_model):
+    @pytest.fixture(
+        params=[
+            ('emod', 1e2),
+            ('rho', 1e-2),
+            ('rho_air', 1e-4)
+        ]
+    )
+    def setup_dprops(self, setup_hopf_model, request):
         """Return a properties perturbation"""
         hopf = setup_hopf_model
 
         dprops = hopf.props.copy()
         dprops[:] = 0.0
-        dprops['emod'] = 1.0
+        label, value = request.param
+        dprops[label] = value
+        print(f"Testing along direction {label}")
         return dprops
 
     def test_assem_dres_dprops(
@@ -212,7 +220,9 @@ class TestHopfModel:
 
         def hopf_res(x):
             hopf.set_props(x)
-            return hopf.assem_res()
+            res = hopf.assem_res()
+            hopf.apply_dirichlet_bvec(res)
+            return res
 
         def hopf_jac(x, dx):
             hopf.set_props(x)
