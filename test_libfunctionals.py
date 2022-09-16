@@ -54,7 +54,11 @@ def setup_hopf_model():
     return hopf
 
 @pytest.fixture(
-    params=[libfuncs.OnsetPressureFunctional, libfuncs.GlottalWidthErrorFunctional]
+    params=[
+        libfuncs.OnsetPressureFunctional,
+        libfuncs.GlottalWidthErrorFunctional,
+        libfuncs.StrainEnergyFunctional
+    ]
 )
 def func(setup_hopf_model, request):
     """

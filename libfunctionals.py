@@ -381,15 +381,15 @@ class StrainEnergyFunctional(BaseFunctional):
         cauchy_stress = forms['expr.stress_elastic']
         dx = forms['measure.dx']
 
-        strain_energy = cauchy_stress*inf_strain*dx
+        strain_energy = ufl.inner(cauchy_stress, inf_strain)*dx
         self.assem_strain_energy = CachedFormAssembler(strain_energy)
         dstrain_energy_du = dfn.derivative(strain_energy, dis)
         self.assem_dstrain_energy_du = CachedFormAssembler(dstrain_energy_du)
-        dstrain_energy_demod = dfn.derivative(dstrain_energy_demod, emod)
+        dstrain_energy_demod = dfn.derivative(strain_energy, emod)
         self.assem_dstrain_energy_demod = CachedFormAssembler(dstrain_energy_demod)
 
     def assem_g(self):
-        return dfn.assemble(self.strain_energy)
+        return np.array(self.assem_strain_energy.assemble())
 
     def assem_dg_dstate(self):
         dg_dstate = self.state.copy()
