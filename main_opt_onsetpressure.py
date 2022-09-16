@@ -139,6 +139,7 @@ def get_functional(
 
     elif isinstance(params['Functional'], FrequencyPenaltyFuncParam):
         func_params = params['Functional']
+        func_name = func_params['Name']
         omega = func_params['omega']
         beta = func_params['beta']
 
@@ -188,7 +189,7 @@ def get_params(study_name: str):
         paramss = (
             DEFAULT_PARAMS_PENALTY.substitute(
             {
-                'Functional/name': func_name,
+                'Functional/Name': func_name,
                 'Ecov': emod,
                 'Ebod': emod
             }
@@ -315,13 +316,17 @@ if __name__ == '__main__':
 
     argparser = argparse.ArgumentParser()
     argparser.add_argument('--study-name', type=str, default='none')
-    argparser.add_argument('--study-type', type=str, default='sensitivity')
+    argparser.add_argument('--study-type', type=str, default='none')
     clargs = argparser.parse_args()
 
     paramss = get_params(clargs.study_name)
-    if clargs.study_type == 'sensitivity':
+    if clargs.study_type == 'none':
+        pass
+    elif clargs.study_type == 'sensitivity':
         for params in paramss:
             run_functional_sensitivity(params, output_dir='out/sensitivity')
     elif clargs.study_type == 'minimization':
         for params in paramss:
             run_minimize_functional(params, output_dir='out/minimization')
+    else:
+        raise ValueError(f"Unknown '--study-type' {clargs.study_type}")
