@@ -8,6 +8,7 @@ import jax
 import dolfin as dfn
 import ufl
 
+from femvf.models.assemblyutils import CachedFormAssembler
 from blockarray import blockvec  as bvec
 
 import libsignal
@@ -366,6 +367,48 @@ class GlottalWidthErrorFunctional(BaseFunctional):
         dg_dcamp.set_mono(_dg_dcamp)
         return dg_dcamp
 
+class StrainEnergyFunctional(BaseFunctional):
+
+    def __init__(self, model: 'libhopf.HopfModel'):
+        super().__init__(model)
+
+        from femvf.models.equations.solid.solidforms import form_inf_strain
+        forms = model.res.solid.forms
+        dis = forms['coeff.state.u1']
+        inf_strain = form_inf_strain(dis)
+
+        emod = forms['coeff.prop.emod']
+        cauchy_stress = forms['expr.stress_elastic']
+        dx = forms['measure.dx']
+
+        strain_energy = cauchy_stress*inf_strain*dx
+        self.assem_strain_energy = CachedFormAssembler(strain_energy)
+        dstrain_energy_du = dfn.derivative(strain_energy, dis)
+        self.assem_dstrain_energy_du = CachedFormAssembler(dstrain_energy_du)
+        dstrain_energy_demod = dfn.derivative(dstrain_energy_demod, emod)
+        self.assem_dstrain_energy_demod = CachedFormAssembler(dstrain_energy_demod)
+
+    def assem_g(self):
+        return dfn.assemble(self.strain_energy)
+
+    def assem_dg_dstate(self):
+        dg_dstate = self.state.copy()
+        dg_dstate[:] = 0.0
+        dstrain_energy_du = self.assem_dstrain_energy_du.assemble()
+        dg_dstate['u'] = dstrain_energy_du
+        return dg_dstate
+
+    def assem_dg_dprops(self):
+        dg_dprops = self.props.copy()
+        dg_dprops[:] = 0
+        dg_demod = self.assem_dstrain_energy_demod.assemble()
+        dg_dprops['emod'] = dg_demod
+        return dg_dprops
+
+    def assem_dg_dcamp(self):
+        dg_dcamp = self.camp.copy()
+        dg_dcamp[:] = 0
+        return dg_dcamp
 
 class ModulusGradientNormSqr(BaseFunctional):
     """

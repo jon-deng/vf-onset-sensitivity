@@ -33,15 +33,23 @@ ptypes = {
     'omega': float,
     'beta': float
 }
-FrequencyConstrainedFuncParam = exputils.make_parameters(ptypes)
+FrequencyPenaltyFuncParam = exputils.make_parameters(ptypes)
 
 ptypes = {
     'MeshName': str,
     'Ecov': float,
     'Ebod': float,
-    'Functional': FrequencyConstrainedFuncParam
+    'Functional': FrequencyPenaltyFuncParam
 }
-ExpParam = exputils.make_parameters(ptypes)
+ExpParamFreqPenalty = exputils.make_parameters(ptypes)
+
+ptypes = {
+    'MeshName': str,
+    'Ecov': float,
+    'Ebod': float,
+    'Functional': str
+}
+ExpParamBasic = exputils.make_parameters(ptypes)
 
 PSUBS = np.arange(0, 1500, 50) * 10
 
@@ -109,29 +117,36 @@ def get_functional(
         params: exputils.BaseParameters
     ):
     """
-    Return the functional
+    Return the specified functional
     """
     func_onset_pressure = libfuncs.OnsetPressureFunctional(model)
     func_onset_frequency = libfuncs.AbsOnsetFrequencyFunctional(model)
-    if isinstance(params['Functional'], str):
-        func_name = params['Functional']
+    func_strain_energy = libfuncs.StrainEnergyFunctional(model)
+    def get_named_functional(func_name):
         if func_name == 'OnsetPressure':
             func = func_onset_pressure
         elif func_name == 'OnsetFrequency':
             func = func_onset_frequency
+        elif func_name == 'OnsetPressureStrainEnergy':
+            func = func_strain_energy * func_onset_pressure
         else:
             raise ValueError("Unknown functional '{func_name}'")
-    elif isinstance(params['Functional'], FrequencyConstrainedFuncParam):
+        return func
+
+    if isinstance(params['Functional'], str):
+        func_name = params['Functional']
+        func = get_named_functional(func_name)
+
+    elif isinstance(params['Functional'], FrequencyPenaltyFuncParam):
         func_params = params['Functional']
         omega = func_params['omega']
         beta = func_params['beta']
-        if func_params['Name'] == 'OnsetPressure':
-            func = (
-                func_onset_pressure
-                + beta*(func_onset_frequency-omega)**2
-            )
-        else:
-            raise ValueError("Unknown functional '{func_name}'")
+
+        func = get_named_functional(func_name)
+        func = (
+            func
+            + beta*(func_onset_frequency-omega)**2
+        )
     else:
         raise ValueError(f"Unknown functional type {type(params['Functional'])}")
 
@@ -143,25 +158,58 @@ def get_params(study_name: str):
     Return an iterable of parameters for a given study name
     """
 
-    DEFAULT_PARAMS = ExpParam({
+    DEFAULT_PARAMS_PENALTY = ExpParamFreqPenalty({
         'MeshName': 'M5_CB_GA3',
         'Ecov': 2.5*10*1e3,
         'Ebod': 2.5*10*1e3,
         'Functional': {
             'Name': 'OnsetPressure',
-            'omega': np.nan,
+            'omega': -1,
             'beta': 1000
         }
     })
+
+    DEFAULT_PARAMS_BASIC = ExpParamBasic({
+        'MeshName': 'M5_CB_GA3',
+        'Ecov': 2.5*10*1e3,
+        'Ebod': 2.5*10*1e3,
+        'Functional': 'OnsetPressure'
+    })
+
     if study_name == 'none':
         return []
     elif study_name == 'test':
-        return [DEFAULT_PARAMS]
-    elif study_name == 'main_optimization':
+        return [DEFAULT_PARAMS_BASIC]
+    elif study_name == 'main_minimization':
+        functional_names = [
+            'OnsetPressure', 'OnsetPressureStrainEnergy'
+        ]
         emods = np.arange(2.5, 20, 2.5) * 10 * 1e3
         paramss = (
-            DEFAULT_PARAMS.substitute({'Ecov': emod, 'Ebod': emod})
-            for emod in emods
+            DEFAULT_PARAMS_PENALTY.substitute(
+            {
+                'Functional/name': func_name,
+                'Ecov': emod,
+                'Ebod': emod
+            }
+            )
+            for func_name, emod in itertools.product(functional_names, emods)
+        )
+        return paramss
+    elif study_name == 'main_sensitivity':
+        functional_names = [
+            'OnsetPressure', 'OnsetFrequency', 'OnsetPressureStrainEnergy'
+        ]
+        emods = np.arange(2.5, 20, 2.5) * 10 * 1e3
+        paramss = (
+            DEFAULT_PARAMS_BASIC.substitute(
+            {
+                'Functional': func_name,
+                'Ecov': emod,
+                'Ebod': emod
+            }
+            )
+            for func_name, emod in itertools.product(functional_names, emods)
         )
         return paramss
     else:
@@ -267,11 +315,13 @@ if __name__ == '__main__':
 
     argparser = argparse.ArgumentParser()
     argparser.add_argument('--study-name', type=str, default='none')
+    argparser.add_argument('--study-type', type=str, default='sensitivity')
     clargs = argparser.parse_args()
 
     paramss = get_params(clargs.study_name)
-    for params in paramss:
-        run_functional_sensitivity(params, output_dir='out')
-
-    for params in paramss:
-        run_minimize_functional(params, output_dir='out')
+    if clargs.study_type == 'sensitivity':
+        for params in paramss:
+            run_functional_sensitivity(params, output_dir='out/sensitivity')
+    elif clargs.study_type == 'minimization':
+        for params in paramss:
+            run_minimize_functional(params, output_dir='out/minimization')
