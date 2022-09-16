@@ -12,7 +12,7 @@ import math
 import h5py
 import numpy as np
 from scipy import optimize
-from blockarray import blockvec  as bvec
+from blockarray import blockvec as bvec, h5utils
 from femvf import load
 from femvf.models.transient import (
     solid as tsld, fluid as tfld, coupled as tcpl, base as tbase
@@ -167,10 +167,7 @@ def get_params(study_name: str):
     else:
         raise ValueError("Unknown `study_name` '{study_name}'")
 
-def run_minimize_functional(params, output_dir='out'):
-    """
-    Run an experiment where a functional is minimized
-    """
+def setup_redu_grad(params):
     ## Load the model and set model properties
     hopf, *_ = get_dyna_model(params)
 
@@ -196,6 +193,13 @@ def run_minimize_functional(params, output_dir='out'):
     func = get_functional(hopf, params)
 
     redu_grad = libhopf.ReducedGradient(func, hopf)
+    return redu_grad, hopf, xhopf_n, props
+
+def run_minimize_functional(params, output_dir='out/minimization'):
+    """
+    Run an experiment where a functional is minimized
+    """
+    redu_grad, hopf, xhopf_n, props = setup_redu_grad(params)
 
     ## Run the minimizer
     # Set the initial guess
@@ -227,11 +231,36 @@ def run_minimize_functional(params, output_dir='out'):
     else:
         print(f"Skipping existing file '{fpath}'")
 
-def run_functional_sensitivity(params, output_dir='out'):
+def run_functional_sensitivity(params, output_dir='out/sensitivity'):
     """
     Run an experiment where the sensitivity of a functional is saved
     """
-    raise NotImplementedError()
+    redu_grad, hopf, xhopf_n, props = setup_redu_grad(params)
+    dprops = redu_grad.assem_dg_dprops()
+
+    ## Compute the sensitivity of the functional to properties
+    fpath = path.join(output_dir, params.to_str()+'.h5')
+    if not path.isfile(fpath):
+        with h5py.File(fpath, mode='w') as f:
+            ## Write out the gradient
+            h5utils.create_resizable_block_vector_group(
+                f.require_group('dprops'), props.labels, props.bshape
+            )
+            h5utils.append_block_vector_to_group(
+                f['dprops'], dprops
+            )
+
+            ## Write out the state, control, properties vector
+            for (key, vec) in zip(['state', 'props'], [hopf.state, hopf.props]):
+                h5utils.create_resizable_block_vector_group(
+                    f.require_group(key), vec.labels, vec.bshape
+                )
+                h5utils.append_block_vector_to_group(
+                    f[key], vec
+                )
+    else:
+        print(f"Skipping existing file '{fpath}'")
+
 
 if __name__ == '__main__':
     # Load the Hopf system
@@ -241,5 +270,8 @@ if __name__ == '__main__':
     clargs = argparser.parse_args()
 
     paramss = get_params(clargs.study_name)
+    for params in paramss:
+        run_functional_sensitivity(params, output_dir='out')
+
     for params in paramss:
         run_minimize_functional(params, output_dir='out')
