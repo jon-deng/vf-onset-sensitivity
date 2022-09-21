@@ -60,7 +60,7 @@ def setup_hopf_model():
         libfuncs.StrainEnergyFunctional
     ]
 )
-def func(setup_hopf_model, request):
+def setup_func(setup_hopf_model, request):
     """
     Return a hopf model functional to test
     """
@@ -68,13 +68,16 @@ def func(setup_hopf_model, request):
     return FunctionalClass(setup_hopf_model)
 
 @pytest.fixture()
-def setup_linearization(func, setup_hopf_model):
+def setup_linearization(setup_func, setup_hopf_model):
     """
     Return a linearzation point and direction
     """
+    func = setup_func
     hopf = setup_hopf_model
 
     state0 = hopf.state.copy()
+    state0['u'] = np.random.rand(*state0['u'].shape)
+    hopf.apply_dirichlet_bvec(state0)
     dstate = state0.copy()
     dstate[:] = 0
     dstate['u'] = 1.0e-5
@@ -93,21 +96,21 @@ def setup_linearization(func, setup_hopf_model):
     dcamp['phase'] = np.pi*1e-5
     return (state0, camp0, props0), (dstate, dcamp, dprops)
 
+def set_linearization(setup_func, state, camp, props):
+    """
+    Set the linearization point for a functional
+    """
+    func = setup_func
+    func.set_state(state)
+    func.set_props(props)
+    func.set_camp(camp)
 
-@pytest.fixture()
-def setup_state(setup_linearization):
-    """Return a state linearization point"""
-    (state0, camp0, props0), _ = setup_linearization
-    return state0
-
-@pytest.fixture()
-def setup_dstate(setup_linearization):
-    """Return a linearization direction"""
-    _, (dstate, dcamp, dprops) = setup_linearization
-    return dstate
-
-def test_assem_dg_dstate(func, setup_state, setup_dstate):
+def test_assem_dg_dstate(setup_func, setup_linearization):
     """Test the functional `state` derivative"""
+    func = setup_func
+    (state, camp, props), (dstate, dcamp, dprops) = setup_linearization
+    set_linearization(func, state, camp, props)
+
     def res(x):
         func.set_state(x)
         return func.assem_g()
@@ -116,23 +119,14 @@ def test_assem_dg_dstate(func, setup_state, setup_dstate):
         func.set_state(x)
         return bla.dot(func.assem_dg_dstate(), dx)
 
-    _test_taylor(setup_state, setup_dstate, res, jac, norm=lambda x: (x**2)**0.5)
+    _test_taylor(state, dstate, res, jac, norm=lambda x: (x**2)**0.5)
 
-
-@pytest.fixture()
-def setup_props(setup_linearization):
-    """Return a linearization point"""
-    (state0, camp0, props0), _ = setup_linearization
-    return props0
-
-@pytest.fixture()
-def setup_dprops(setup_linearization):
-    """Return a linearization direction"""
-    _, (dstate, dcamp, dprops) = setup_linearization
-    return dprops
-
-def test_assem_dg_dprops(func, setup_props, setup_dprops):
+def test_assem_dg_dprops(setup_func, setup_linearization):
     """Test the functional `props` derivative"""
+    func = setup_func
+    (state, camp, props), (dstate, dcamp, dprops) = setup_linearization
+    set_linearization(func, state, camp, props)
+
     def res(x):
         func.set_props(x)
         return func.assem_g()
@@ -141,23 +135,14 @@ def test_assem_dg_dprops(func, setup_props, setup_dprops):
         func.set_props(x)
         return bla.dot(func.assem_dg_dprops(), dx)
 
-    _test_taylor(setup_props, setup_dprops, res, jac, norm=lambda x: (x**2)**0.5)
+    _test_taylor(props, dprops, res, jac, norm=lambda x: (x**2)**0.5)
 
-
-@pytest.fixture()
-def setup_camp(setup_linearization):
-    """Return a linearization point"""
-    (state0, camp0, props0), _ = setup_linearization
-    return camp0
-
-@pytest.fixture()
-def setup_dcamp(setup_linearization):
-    """Return a linearization direction"""
-    _, (dstate, dcamp, dprops) = setup_linearization
-    return dcamp
-
-def test_assem_dg_dcamp(func, setup_camp, setup_dcamp):
+def test_assem_dg_dcamp(setup_func, setup_linearization):
     """Test the functional `camp` derivative"""
+    func = setup_func
+    (state, camp, props), (dstate, dcamp, dprops) = setup_linearization
+    set_linearization(func, state, camp, props)
+
     def res(x):
         func.set_camp(x)
         return func.assem_g()
@@ -166,7 +151,7 @@ def test_assem_dg_dcamp(func, setup_camp, setup_dcamp):
         func.set_camp(x)
         return bla.dot(func.assem_dg_dcamp(), dx)
 
-    _test_taylor(setup_camp, setup_dcamp, res, jac, norm=lambda x: (x**2)**0.5)
+    _test_taylor(camp, dcamp, res, jac, norm=lambda x: (x**2)**0.5)
 
 
 @pytest.fixture(
