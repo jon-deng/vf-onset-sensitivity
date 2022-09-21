@@ -232,14 +232,17 @@ def setup_redu_grad(params):
     # params = params.substitute(
     #     {'Functional/omega': xhopf_n['omega'][0]}
     # )
-    params = params.substitute({
-        'Functional': {
-            'Name': params['Functional']['Name'],
-            'omega': abs(xhopf_n['omega'][0]),
-            'beta': 1000.0
-        }
-    })
-    func = get_functional(hopf, params)
+    _params = params.substitute({})
+    if isinstance(params['Functional'], FrequencyPenaltyFuncParam):
+        if params['Functional/omega'] == -1:
+            _params = params.substitute({
+                'Functional': {
+                    'Name': params['Functional']['Name'],
+                    'omega': abs(xhopf_n['omega'][0]),
+                    'beta': 1000.0
+                }
+            })
+    func = get_functional(hopf, _params)
 
     redu_grad = libhopf.ReducedGradient(func, hopf)
     return redu_grad, hopf, xhopf_n, props
