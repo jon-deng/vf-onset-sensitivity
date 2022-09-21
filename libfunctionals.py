@@ -169,13 +169,13 @@ class Product(BinaryFunctional):
         return self.a.assem_g() * self.b.assem_g()
 
     def assem_dg_dstate(self):
-        return self.a.assem_g()*self.b.assem_dg_dstate() + self.a.assem_dg_dstate()*self.b.assem_g()
+        return float(self.a.assem_g())*self.b.assem_dg_dstate() + self.a.assem_dg_dstate()*float(self.b.assem_g())
 
     def assem_dg_dprops(self):
-        return self.a.assem_g()*self.b.assem_dg_dprops() + self.a.assem_dg_dprops()*self.b.assem_g()
+        return float(self.a.assem_g())*self.b.assem_dg_dprops() + self.a.assem_dg_dprops()*float(self.b.assem_g())
 
     def assem_dg_dcamp(self):
-        return self.a.assem_g()*self.b.assem_dg_dcamp() + self.a.assem_dg_dcamp()*self.b.assem_g()
+        return float(self.a.assem_g())*self.b.assem_dg_dcamp() + self.a.assem_dg_dcamp()*float(self.b.assem_g())
 
 class ScalarSum(UnaryFunctional):
     def assem_g(self):
