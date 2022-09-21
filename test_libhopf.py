@@ -385,7 +385,7 @@ class TestFunctionalGradient:
 
         dprops = setup_props.copy()
         dprops[:] = 0
-        dprops['emod'] = 1.0
+        dprops['emod'] = 1.0e2
         return dprops
 
     # The below operators represent 'reduced' operators on the residual
