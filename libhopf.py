@@ -1168,6 +1168,7 @@ def solve_reduced_gradient(
     """Solve for the reduced gradient of a functional"""
     dg_dprops = functional.assem_dg_dprops()
     dg_dx = functional.assem_dg_dstate()
+    hopf.apply_dirichlet_bvec(dg_dx)
     _dg_dx = dg_dx.to_mono_petsc()
 
     dres_dx_adj = hopf.assem_dres_dstate().transpose()
