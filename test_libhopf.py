@@ -437,11 +437,18 @@ class TestFunctionalGradient:
 
     # def test_dstate_dprops_adjoint():
 
-    @pytest.fixture()
-    def setup_func(self, setup_hopf_model):
+    @pytest.fixture(
+        params=[
+            libfuncs.StrainEnergyFunctional,
+            libfuncs.OnsetPressureFunctional,
+            libfuncs.AbsOnsetFrequencyFunctional
+        ]
+    )
+    def setup_func(self, setup_hopf_model, request):
         """Return a Hopf model functional"""
         hopf = setup_hopf_model
-        return libfuncs.OnsetPressureFunctional(hopf)
+        Functional = request.param
+        return Functional(hopf)
 
     def test_solve_reduced_gradient(
             self,
