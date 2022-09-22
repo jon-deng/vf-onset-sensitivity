@@ -263,7 +263,7 @@ def run_minimize_functional(params, output_dir='out/minimization'):
     # Set optimizer options/callback
     opt_options = {
         'disp': 99,
-        'maxiter': 200,
+        'maxiter': 150,
         'ftol': 0.0,
         # 'maxls': 100
     }
