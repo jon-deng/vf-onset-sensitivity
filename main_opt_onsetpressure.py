@@ -7,7 +7,6 @@ import os.path as path
 from pprint import pprint
 import itertools
 from typing import Union
-import math
 
 import h5py
 import numpy as np
@@ -15,10 +14,10 @@ from scipy import optimize
 from blockarray import blockvec as bvec, h5utils
 from femvf import load
 from femvf.models.transient import (
-    solid as tsld, fluid as tfld, coupled as tcpl, base as tbase
+    solid as tsld, fluid as tfld, base as tbase
 )
 from femvf.models.dynamical import (
-    solid as dsld, fluid as dfld, coupled as dcpl, base as dbase
+    base as dbase
 )
 from femvf.meshutils import process_celllabel_to_dofs_from_forms
 
@@ -27,6 +26,8 @@ import libhopf
 import libfunctionals as libfuncs
 
 import exputils
+
+# pylint: disable=redefined-outer-name
 
 ptypes = {
     'Name': str,
@@ -178,6 +179,7 @@ def get_params(study_name: str):
     })
 
     emods = np.arange(2.5, 20, 2.5) * 10 * 1e3
+    emods = emods[:1]
 
     if study_name == 'none':
         return []
@@ -261,7 +263,7 @@ def run_minimize_functional(params, output_dir='out/minimization'):
     # Set optimizer options/callback
     opt_options = {
         'disp': 99,
-        'maxiter': 150,
+        'maxiter': 200,
         'ftol': 0.0,
         # 'maxls': 100
     }
