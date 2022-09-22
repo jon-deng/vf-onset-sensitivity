@@ -179,7 +179,6 @@ def get_params(study_name: str):
     })
 
     emods = np.arange(2.5, 20, 2.5) * 10 * 1e3
-    emods = emods[:1]
 
     if study_name == 'none':
         return []
