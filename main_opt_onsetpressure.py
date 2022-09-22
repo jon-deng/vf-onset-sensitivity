@@ -177,39 +177,39 @@ def get_params(study_name: str):
         'Functional': 'OnsetPressure'
     })
 
+    emods = np.arange(2.5, 20, 2.5) * 10 * 1e3
+
     if study_name == 'none':
         return []
     elif study_name == 'test':
         return [DEFAULT_PARAMS_BASIC]
     elif study_name == 'main_minimization':
         functional_names = [
-            'OnsetPressure', 'OnsetPressureStrainEnergy'
+            'OnsetPressure',
+            'OnsetPressureStrainEnergy'
         ]
-        emods = np.arange(2.5, 20, 2.5) * 10 * 1e3
+
         paramss = (
-            DEFAULT_PARAMS_PENALTY.substitute(
-            {
+            DEFAULT_PARAMS_PENALTY.substitute({
                 'Functional/Name': func_name,
                 'Ecov': emod,
                 'Ebod': emod
-            }
-            )
+            })
             for func_name, emod in itertools.product(functional_names, emods)
         )
         return paramss
     elif study_name == 'main_sensitivity':
         functional_names = [
-            'OnsetPressure', 'OnsetFrequency', 'OnsetPressureStrainEnergy'
+            'OnsetPressure',
+            'OnsetFrequency',
+            'OnsetPressureStrainEnergy'
         ]
-        emods = np.arange(2.5, 20, 2.5) * 10 * 1e3
         paramss = (
-            DEFAULT_PARAMS_BASIC.substitute(
-            {
+            DEFAULT_PARAMS_BASIC.substitute({
                 'Functional': func_name,
                 'Ecov': emod,
                 'Ebod': emod
-            }
-            )
+            })
             for func_name, emod in itertools.product(functional_names, emods)
         )
         return paramss
