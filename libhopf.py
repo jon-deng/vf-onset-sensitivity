@@ -32,6 +32,7 @@ import h5py
 
 import nonlineq as nleq
 from femvf.models.dynamical import base as dynbase, coupled as dyncoup
+from femvf.parameters import parameterization as paramzn
 import blockarray.h5utils as h5utils
 import blockarray.subops as subops
 import blockarray.linalg as bla
@@ -1203,25 +1204,34 @@ class OptGradManager:
     opt_grad : Callable[[array_like], array_like]
     """
 
-    def __init__(self, redu_grad: ReducedGradient, f: h5py.Group):
+    def __init__(
+            self,
+            redu_grad: ReducedGradient,
+            f: h5py.Group,
+            param: paramzn.BaseParameterization
+        ):
         self.redu_grad = redu_grad
         self.f = f
+        self.param = param
 
         # Add groups to the h5 file to store optimization history
-        param_labels = (redu_grad.props.labels[0]+redu_grad.camp.labels[0],)
-        param_bshape = (redu_grad.props.bshape[0]+redu_grad.camp.bshape[0],)
+        param_labels = self.param.x.labels
+        param_bshape = self.param.x.bshape
+        prop_labels = self.redu_grad.props.labels
+        prop_bshape = self.redu_grad.props.bshape
         h5utils.create_resizable_block_vector_group(
-            f.create_group('parameters'),
-            param_labels,
-            param_bshape)
+            f.create_group('parameters'), param_labels, param_bshape
+        )
         h5utils.create_resizable_block_vector_group(
-            f.create_group('grad'),
-            param_labels,
-            param_bshape)
+            f.create_group('grad'), param_labels, param_bshape
+        )
+        h5utils.create_resizable_block_vector_group(
+            f.create_group('hopf_props'), prop_labels, prop_bshape
+        )
         h5utils.create_resizable_block_vector_group(
             f.create_group('hopf_state'),
-            redu_grad.res.state.labels,
-            redu_grad.res.state.bshape)
+            redu_grad.res.state.labels, redu_grad.res.state.bshape
+        )
         f.create_dataset('objective', (0,), maxshape=(None,))
 
         # Newton solver convergence info for solving the Hopf bifurcation system
@@ -1234,20 +1244,30 @@ class OptGradManager:
         """
         Update the Hopf model properties and solve for a Hopf bifurcation
 
+        Before calling this, the Hopf system must have been solved for
+        a Hopf bifurcation already; this function simply records all values
+        at the current state.
+
         Parameters
         ----------
         p : bvec.BlockVector
-            The parameter vector consisting of dynamical model properties +
-            complex amplitude properties (size 2)
+            The parameter vector
         """
         ## Record current state to h5 file
         # Record the current parameter set
         h5utils.append_block_vector_to_group(
-            self.f['parameters'], p)
+            self.f['parameters'], p
+        )
 
         hopf_state = self.redu_grad.hist_state[-1]
         h5utils.append_block_vector_to_group(
-            self.f['hopf_state'], hopf_state)
+            self.f['hopf_state'], hopf_state
+        )
+
+        hopf_props = self.redu_grad.props
+        h5utils.append_block_vector_to_group(
+            self.f['hopf_props'], hopf_props
+        )
 
         self.f['hopf_newton_num_iter'].resize(self.f['hopf_newton_num_iter'].size+1, axis=0)
         self.f['hopf_newton_num_iter'][-1] = info['num_iter']
@@ -1265,19 +1285,13 @@ class OptGradManager:
         # Set properties and complex amplitude of the ReducedGradient
         # This has to convert the monolithic input parameters to the block
         # format of the ReducedGradient object
-        p_hopf = p[:-2]
-        _p_hopf = self.redu_grad.props.copy()
-        _p_hopf.set_mono(p_hopf)
-
-        p_camp = p[-2:]
-        _p_camp = self.redu_grad.camp.copy()
-        _p_camp.set_mono(p_camp)
+        self.param.x.set_mono(p)
+        p_hopf = self.param.apply(self.param.x)
 
         # After setting `self.redu_grad` props, the Hopf system should be solved
-        hopf_state, info = self.redu_grad.set_props(_p_hopf)
-        self.redu_grad.set_camp(_p_camp)
+        hopf_state, info = self.redu_grad.set_props(p_hopf)
 
-        self._update_h5(hopf_state, info, bvec.concatenate_vec([_p_hopf, _p_camp]))
+        self._update_h5(hopf_state, info, p_hopf)
 
     def grad(self, p):
         try:
@@ -1301,12 +1315,14 @@ class OptGradManager:
             g = self.redu_grad.assem_g()
 
             # Solve the gradient of the objective function
-            _dg_dp = bvec.concatenate_vec([self.redu_grad.assem_dg_dprops(), self.redu_grad.assem_dg_dcamp()])
+            _dg_dprops = self.redu_grad.assem_dg_dprops()
+            _dg_dprops['rho_air'] = 0.0
+
+            _dg_dp = self.param.apply_vjp(_dg_dprops)
 
             # TODO: Use a generic conversion method to handle optimizing subsets of parameters
             # This is a hardcoded fix to make sure that the optimizer doesn't change 'rho_air' since
             # the gradient w.r.t this parameter is not zero
-            _dg_dp['rho_air'] = 0.0
             dg_dp = _dg_dp.to_mono_ndarray()
 
         # Record the current objective function and gradient
