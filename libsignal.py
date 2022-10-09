@@ -50,7 +50,8 @@ def make_glottal_width(hopf, num_points=100):
 
     HOPF_COMPONENT_SIZES = tuple([
         hopf.state[labels].mshape[0]
-        for labels in hopf.labels_hopf_components])
+        for labels in hopf.labels_hopf_components
+    ])
 
     def glottal_width(state, camp):
         (xfp,
@@ -58,7 +59,7 @@ def make_glottal_width(hopf, num_points=100):
             mode_imag,
             psub,
             omega) = _split_mono_hopf_state(state, HOPF_COMPONENT_SIZES)
-        ampl, phase = camp[0], camp[1]
+        ampl, phase = camp[-2], camp[-1]
 
         # get the reference position of the surface
         ucur = (xfp[IDX_U] + XREF)

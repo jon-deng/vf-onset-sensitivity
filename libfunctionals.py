@@ -1,6 +1,9 @@
 """
 Contains definitions of functionals
 """
+
+from typing import List
+
 import numbers
 import numpy as np
 from jax import numpy as jnp
@@ -19,6 +22,7 @@ class GenericFunctional:
     """
     All functionals have to supply the below functions
     """
+
     def assem_g(self):
         raise NotImplementedError()
 
@@ -27,10 +31,6 @@ class GenericFunctional:
 
     def assem_dg_dprops(self):
         raise NotImplementedError()
-
-    def assem_dg_dcamp(self):
-        raise NotImplementedError()
-
 
     def __pos__(self):
         return self
@@ -113,16 +113,12 @@ class DerivedFunctional(GenericFunctional):
     """
     Derived functional are computed from other functionals
     """
-    def __init__(self, funcs):
+    def __init__(self, funcs: List[GenericFunctional]):
         self.funcs = tuple(funcs)
 
     @property
     def state(self):
         return self.funcs[0].state
-
-    @property
-    def camp(self):
-        return self.funcs[0].camp
 
     def set_state(self, state):
         for func in self.funcs:
@@ -131,10 +127,6 @@ class DerivedFunctional(GenericFunctional):
     def set_props(self, props):
         for func in self.funcs:
             func.set_props(props)
-
-    def set_camp(self, camp):
-        for func in self.funcs:
-            func.set_camp(camp)
 
 class BinaryFunctional(DerivedFunctional):
     def __init__(self, a: GenericFunctional, b: GenericFunctional):
@@ -161,9 +153,6 @@ class Sum(BinaryFunctional):
     def assem_dg_dprops(self):
         return self.a.assem_dg_dprops() + self.b.assem_dg_dprops()
 
-    def assem_dg_dcamp(self):
-        return self.a.assem_dg_dcamp() + self.b.assem_dg_dcamp()
-
 class Product(BinaryFunctional):
     def assem_g(self):
         return self.a.assem_g() * self.b.assem_g()
@@ -173,9 +162,6 @@ class Product(BinaryFunctional):
 
     def assem_dg_dprops(self):
         return self.a.assem_g()*self.b.assem_dg_dprops() + self.a.assem_dg_dprops()*self.b.assem_g()
-
-    def assem_dg_dcamp(self):
-        return self.a.assem_g()*self.b.assem_dg_dcamp() + self.a.assem_dg_dcamp()*self.b.assem_g()
 
 class ScalarSum(UnaryFunctional):
     def assem_g(self):
@@ -187,9 +173,6 @@ class ScalarSum(UnaryFunctional):
     def assem_dg_dprops(self):
         return self.a.assem_dg_dprops()
 
-    def assem_dg_dcamp(self):
-        return self.a.assem_dg_dcamp()
-
 class ScalarPower(UnaryFunctional):
     def assem_g(self):
         return self.a.assem_g() ** self.C
@@ -199,9 +182,6 @@ class ScalarPower(UnaryFunctional):
 
     def assem_dg_dprops(self):
         return self.C * self.a.assem_g()**(self.C-1) * self.a.assem_dg_dprops()
-
-    def assem_dg_dcamp(self):
-        return self.C * self.a.assem_g()**(self.C-1) * self.a.assem_dg_dcamp()
 
 class ScalarProduct(UnaryFunctional):
     def assem_g(self):
@@ -213,27 +193,25 @@ class ScalarProduct(UnaryFunctional):
     def assem_dg_dprops(self):
         return self.C * self.a.assem_dg_dprops()
 
-    def assem_dg_dcamp(self):
-        return self.C * self.a.assem_dg_dcamp()
-
 
 class BaseFunctional(GenericFunctional):
     """
     Represents a functional object acting on the Hopf state
 
     The functional is represented by
-        f(x, p, camp)
-    where x is the Hopf state vector, p are the model properties and camp is the
-    complex amplitude.
+        f(x, p)
+    where x is the Hopf state vector, and p are the model properties.
     """
     def __init__(self, model: 'libhopf.HopfModel'):
         self.model = model
 
         self.state = self.model.state
         self.props = self.model.props
-        self.camp = bvec.convert_subtype_to_petsc(
-            bvec.BlockVector([np.zeros(1), np.zeros(1)], (2,), (('amp', 'phase'),))
-            )
+
+        # TODO: Use this snippet for A Hopf model that has 'camp' added into the properties vector
+        # self.camp = bvec.convert_subtype_to_petsc(
+        #     bvec.BlockVector([np.zeros(1), np.zeros(1)], (2,), (('amp', 'phase'),))
+        #     )
 
     def set_state(self, state):
         self.model.set_state(state)
@@ -241,17 +219,13 @@ class BaseFunctional(GenericFunctional):
     def set_props(self, props):
         self.model.set_props(props)
 
-    def set_camp(self, camp):
-        self.camp[:] = camp
-
 class OnsetPressureFunctional(BaseFunctional):
     """
     Represents a functional returning the onset pressure
 
     The functional is represented by
-        f(x, p, camp)
-    where x is the Hopf state vector, p are the model properties and camp is the
-    complex amplitude.
+        f(x, p)
+    where x is the Hopf state vector, and p are the model properties
     """
 
     def assem_g(self):
@@ -267,11 +241,6 @@ class OnsetPressureFunctional(BaseFunctional):
         dg_dprops = self.props.copy()
         dg_dprops[:] = 0
         return dg_dprops
-
-    def assem_dg_dcamp(self):
-        dg_dcamp = self.camp.copy()
-        dg_dcamp[:] = 0
-        return dg_dcamp
 
 class OnsetFrequencyFunctional(BaseFunctional):
     """
@@ -292,11 +261,6 @@ class OnsetFrequencyFunctional(BaseFunctional):
         dg_dprops[:] = 0
         return dg_dprops
 
-    def assem_dg_dcamp(self):
-        dg_dcamp = self.camp.copy()
-        dg_dcamp[:] = 0
-        return dg_dcamp
-
 class AbsOnsetFrequencyFunctional(BaseFunctional):
     """
     Represents a functional returning the onset frequency
@@ -316,11 +280,6 @@ class AbsOnsetFrequencyFunctional(BaseFunctional):
         dg_dprops[:] = 0
         return dg_dprops
 
-    def assem_dg_dcamp(self):
-        dg_dcamp = self.camp.copy()
-        dg_dcamp[:] = 0
-        return dg_dcamp
-
 class GlottalWidthErrorFunctional(BaseFunctional):
     """
     Return a weighted square error between model and reference glottal width
@@ -339,33 +298,28 @@ class GlottalWidthErrorFunctional(BaseFunctional):
 
         eval_gw = libsignal.make_glottal_width(model, gw_ref.size)
 
-        def _err(state, camp):
-            gw_hopf = eval_gw(state, camp)
+        def _err(state, props):
+            gw_hopf = eval_gw(state, props)
             return jnp.sum(weights*(gw_ref - gw_hopf)**2)
 
         self._err = _err
         self._grad_state_err = jax.grad(_err, argnums=0)
-        self._grad_camp_err = jax.grad(_err, argnums=1)
+        self._grad_props_err = jax.grad(_err, argnums=1)
 
     def assem_g(self):
-        return self._err(self.state.to_mono_ndarray(), self.camp.to_mono_ndarray())
+        return self._err(self.state.to_mono_ndarray(), self.props.to_mono_ndarray())
 
     def assem_dg_dstate(self):
-        _dg_dstate = self._grad_state_err(self.state.to_mono_ndarray(), self.camp.to_mono_ndarray())
+        _dg_dstate = self._grad_state_err(self.state.to_mono_ndarray(), self.props.to_mono_ndarray())
         dg_dstate = self.state.copy()
         dg_dstate.set_mono(_dg_dstate)
         return dg_dstate
 
     def assem_dg_dprops(self):
+        _dg_dprops = self._grad_props_err(self.state.to_mono_ndarray(), self.props.to_mono_ndarray())
         dg_dprops = self.props.copy()
-        dg_dprops[:] = 0
+        dg_dprops.set_mono(_dg_dprops)
         return dg_dprops
-
-    def assem_dg_dcamp(self):
-        _dg_dcamp = self._grad_camp_err(self.state.to_mono_ndarray(), self.camp.to_mono_ndarray())
-        dg_dcamp = self.camp.copy()
-        dg_dcamp.set_mono(_dg_dcamp)
-        return dg_dcamp
 
 class StrainEnergyFunctional(BaseFunctional):
 
@@ -405,11 +359,6 @@ class StrainEnergyFunctional(BaseFunctional):
         dg_dprops['emod'] = dg_demod
         return dg_dprops
 
-    def assem_dg_dcamp(self):
-        dg_dcamp = self.camp.copy()
-        dg_dcamp[:] = 0
-        return dg_dcamp
-
 class ModulusGradientNormSqr(BaseFunctional):
     """
     Returns the L2 norm (^2) of the gradient of the modulus
@@ -441,8 +390,3 @@ class ModulusGradientNormSqr(BaseFunctional):
             self._dfunctional_demod, tensor=dfn.PETScVector()
         )[:]
         return dg_dprops
-
-    def assem_dg_dcamp(self):
-        dg_dcamp = self.camp.copy()
-        dg_dcamp[:] = 0
-        return dg_dcamp

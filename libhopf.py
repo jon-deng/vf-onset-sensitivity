@@ -1027,10 +1027,10 @@ class ReducedGradient:
     """
     This class handles solution of reduced gradients on the Hopf model
 
-    Consider the functional, g(x; p, camp), where x, p, camp represent the Hopf
-    state vector, parameters, and complex amplitude, respectively. Also consider
+    Consider the functional, g(x; p), where x, p represent the Hopf
+    state vector, and parameters respectively. Also consider
     the Hopf system defined by F(x; p) = 0. The reduced gradient is the function
-    g^(p, camp)=g(x(p), p, camp) where x is implicitly constrained by the Hopf
+    g^(p)=g(x(p), p) where x is implicitly constrained by the Hopf
     system.
 
     The reduced gradient is difficult to solve for since solution of the Hopf
@@ -1067,15 +1067,10 @@ class ReducedGradient:
 
         self._hist_state = [self.res.state.copy()]
         self._hist_props = [self.props.copy()]
-        self._hist_camp = [self.camp.copy()]
 
         if newton_params is None:
             newton_params = {}
         self._newton_params = newton_params
-
-    @property
-    def camp(self):
-        return self.func.camp
 
     @property
     def props(self):
@@ -1134,15 +1129,10 @@ class ReducedGradient:
 
         self.hist_state.append(xhopf_n.copy())
         self.hist_props.append(self.props.copy())
-        self.hist_camp.append(self.camp.copy())
 
         self.res.set_state(xhopf_n)
 
         return xhopf_n, info
-
-    def set_camp(self, camp):
-        """Set the complex amplitude"""
-        self.func.set_camp(camp)
 
     def set_props(self, props):
         """
