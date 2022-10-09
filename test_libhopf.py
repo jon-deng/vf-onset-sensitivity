@@ -8,6 +8,7 @@ import pytest
 import h5py
 import numpy as np
 
+from femvf.parameters import parameterization as pazn
 from blockarray import linalg as bla, blockvec as bv, subops
 
 import libhopf
@@ -16,7 +17,7 @@ import libsetup
 from test_hopf import taylor_convergence
 
 # pylint: disable=redefined-outer-name
-# pylint: disable=no-member
+# pylint: disable=no-member, invalid-name
 
 @pytest.fixture()
 def setup_hopf_model():
@@ -544,37 +545,58 @@ class TestFunctionalGradient:
             print(bla.norm(hopf.assem_res()))
 
 
-    @pytest.fixture()
-    def setup_og_propss(
-            self,
-            setup_func,
-            setup_linearization,
-            setup_dprops
-        ):
-        """Return an iterable of `Hopf.props` + camp vectors"""
-        _, props = setup_linearization
-        dprops = setup_dprops
-        func = setup_func
-
-        camp = func.camp.copy()
-        propss = [
-            bv.concatenate_vec([props + alpha*dprops, camp])
-            for alpha in np.linspace(0, 100, 3)
+    @pytest.fixture(
+        params=[
+            pazn.Identity
         ]
-        return propss
+    )
+    def setup_parameterization(self, setup_hopf_model, request):
+        """
+        Return a parameterization
+        """
+        model = setup_hopf_model.res
+        Param = request.param
+        return Param(model, model.props)
 
-    def test_OptGradManager(self, setup_redu_grad, setup_og_propss):
+    @pytest.fixture()
+    def setup_params(self, setup_parameterization, setup_linearization, setup_dprops, ):
+        """
+        Return a sequence of parameters
+        """
+        xhopf, props = setup_linearization
+        dprops = setup_dprops
+        parameterization = setup_parameterization
+
+        p0 = parameterization.x.copy()
+        for key, subvec in props.items():
+            if key in p0:
+                p0[key] = subvec
+
+        dp = parameterization.x.copy()
+        dp[:] = 0
+        for key, subvec in dprops.items():
+            if key in p0:
+                dp[key] = subvec
+        return [p0 + alpha*dp for alpha in np.linspace(0, 1, 2)]
+
+    def test_OptGradManager(
+            self,
+            setup_redu_grad,
+            setup_parameterization,
+            setup_params
+        ):
         """
         Test the ReducedGradientManager object
         """
         redu_grad = setup_redu_grad
-        propss = setup_og_propss
+        parameterization = setup_parameterization
+        params = setup_params
 
         with h5py.File("out/_test_make_opt_grad.h5", mode='w') as f:
-            grad_manager = libhopf.OptGradManager(redu_grad, f)
+            grad_manager = libhopf.OptGradManager(redu_grad, f, parameterization)
 
-            for props in propss:
-                print(grad_manager.grad(props.to_mono_ndarray()))
+            for param in params:
+                print(grad_manager.grad(param.to_mono_ndarray()))
 
             print(f.keys())
 

@@ -1307,7 +1307,7 @@ class OptGradManager:
 
         if solver_failure:
             g = np.nan
-            _dg_dp = bvec.concatenate_vec([self.redu_grad.props, self.redu_grad.camp]).copy()
+            _dg_dp = self.param.x.copy()
             _dg_dp[:] = np.nan
             dg_dp = _dg_dp.to_mono_ndarray()
         else:
@@ -1315,10 +1315,12 @@ class OptGradManager:
             g = self.redu_grad.assem_g()
 
             # Solve the gradient of the objective function
-            _dg_dprops = self.redu_grad.assem_dg_dprops()
+            _dg_dprops = self.param.y.copy()
+            _dg_dprops[:] = self.redu_grad.assem_dg_dprops()
             _dg_dprops['rho_air'] = 0.0
 
-            _dg_dp = self.param.apply_vjp(_dg_dprops)
+            self.param.x.set_mono(p)
+            _dg_dp = self.param.apply_vjp(self.param.x, _dg_dprops)
 
             # TODO: Use a generic conversion method to handle optimizing subsets of parameters
             # This is a hardcoded fix to make sure that the optimizer doesn't change 'rho_air' since
