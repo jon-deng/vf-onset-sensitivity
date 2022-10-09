@@ -1084,10 +1084,6 @@ class ReducedGradient:
     def hist_state(self):
         return self._hist_state
 
-    @property
-    def hist_camp(self):
-        return self._hist_camp
-
     def _update_hopf(self):
         """
         Keeps track of Hopf solution when properties are updated
@@ -1148,9 +1144,6 @@ class ReducedGradient:
 
     def assem_dg_dprops(self):
         return solve_reduced_gradient(self.func, self.res)
-
-    def assem_dg_dcamp(self):
-        return self.func.assem_dg_dcamp()
 
 def solve_reduced_gradient(
         functional: libfunc.GenericFunctional,
