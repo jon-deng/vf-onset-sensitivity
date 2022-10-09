@@ -516,7 +516,6 @@ class TestFunctionalGradient:
         _, props = setup_linearization
         dprops = setup_dprops
 
-        # camp = func.camp.copy()
         propss = [
             bv.concatenate_vec([props + alpha*dprops])
             for alpha in np.linspace(0, 100, 3)
