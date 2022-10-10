@@ -1268,13 +1268,14 @@ class OptGradManager:
         # Set properties and complex amplitude of the ReducedGradient
         # This has to convert the monolithic input parameters to the block
         # format of the ReducedGradient object
-        self.param.x.set_mono(p)
+        p_vec = self.param.x.copy()
+        p_vec.set_mono(p)
         p_hopf = self.param.apply(self.param.x)
 
         # After setting `self.redu_grad` props, the Hopf system should be solved
         hopf_state, info = self.redu_grad.set_props(p_hopf)
 
-        self._update_h5(hopf_state, info, p_hopf)
+        self._update_h5(hopf_state, info, p_vec)
 
     def grad(self, p):
         try:
