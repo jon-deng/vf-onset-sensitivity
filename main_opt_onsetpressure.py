@@ -8,6 +8,7 @@ from pprint import pprint
 import itertools
 from typing import Union
 
+import dolfin as dfn
 import h5py
 import numpy as np
 from scipy import optimize
@@ -19,6 +20,7 @@ from femvf.models.transient import (
 from femvf.models.dynamical import (
     base as dbase
 )
+from femvf.parameters import parameterization as pzn
 from femvf.meshutils import process_celllabel_to_dofs_from_forms
 
 import libsetup
@@ -27,6 +29,7 @@ import libfunctionals as libfuncs
 
 import exputils
 
+dfn.set_log_level(50)
 # pylint: disable=redefined-outer-name
 
 ptypes = {
@@ -221,8 +224,14 @@ def setup_redu_grad(params):
     ## Load the model and set model properties
     hopf, *_ = get_dyna_model(params)
 
-    props = get_props(hopf, params)
-    hopf.set_props(props)
+    _props = get_props(hopf, params)
+    parameterization = pzn.TractionShape(hopf.res, _props)
+    p = parameterization.x.copy()
+    for key, subvec in _props.items():
+        if key in p:
+            p[key][:] = subvec
+
+    hopf.set_props(parameterization.apply(p))
 
     ## Solve for the Hopf bifurcation
     xhopf_0 = libhopf.gen_hopf_initial_guess(hopf, PSUBS, tol=100.0)
@@ -246,19 +255,15 @@ def setup_redu_grad(params):
     func = get_functional(hopf, _params)
 
     redu_grad = libhopf.ReducedGradient(func, hopf)
-    return redu_grad, hopf, xhopf_n, props
+    return redu_grad, hopf, xhopf_n, p, parameterization
 
 def run_minimize_functional(params, output_dir='out/minimization'):
     """
     Run an experiment where a functional is minimized
     """
-    redu_grad, hopf, xhopf_n, props = setup_redu_grad(params)
+    redu_grad, hopf, xhopf_n, p0, parameterization = setup_redu_grad(params)
 
     ## Run the minimizer
-    # Set the initial guess
-    x0 = bvec.concatenate_vec([hopf.props.copy(), redu_grad.camp.copy()])
-    x0[-2:] = 0.0 # these correspond to complex amp. parameters
-
     # Set optimizer options/callback
     opt_options = {
         'disp': 99,
@@ -272,9 +277,11 @@ def run_minimize_functional(params, output_dir='out/minimization'):
     fpath = path.join(output_dir, params.to_str()+'.h5')
     if not path.isfile(fpath):
         with h5py.File(fpath, mode='w') as f:
-            grad_manager = libhopf.OptGradManager(redu_grad, f)
+            grad_manager = libhopf.OptGradManager(
+                redu_grad, f, parameterization
+            )
             opt_res = optimize.minimize(
-                grad_manager.grad, x0.to_mono_ndarray(),
+                grad_manager.grad, p0.to_mono_ndarray(),
                 method='L-BFGS-B',
                 jac=True,
                 options=opt_options,
@@ -288,20 +295,22 @@ def run_functional_sensitivity(params, output_dir='out/sensitivity'):
     """
     Run an experiment where the sensitivity of a functional is saved
     """
-    redu_grad, hopf, xhopf_n, props = setup_redu_grad(params)
+    redu_grad, hopf, xhopf_n, p0, parameterization = setup_redu_grad(params)
     dprops = redu_grad.assem_dg_dprops()
+    dparam = parameterization.apply_vjp(p0, dprops)
 
     ## Compute the sensitivity of the functional to properties
     fpath = path.join(output_dir, params.to_str()+'.h5')
     if not path.isfile(fpath):
         with h5py.File(fpath, mode='w') as f:
-            ## Write out the gradient
-            h5utils.create_resizable_block_vector_group(
-                f.require_group('dprops'), props.labels, props.bshape
-            )
-            h5utils.append_block_vector_to_group(
-                f['dprops'], dprops
-            )
+            ## Write out the gradient vectors
+            for (key, vec) in zip(['dprops', 'dparam'], [dprops, dparam]):
+                h5utils.create_resizable_block_vector_group(
+                    f.require_group(key), vec.labels, vec.bshape
+                )
+                h5utils.append_block_vector_to_group(
+                    f[key], vec
+                )
 
             ## Write out the state, control, properties vector
             for (key, vec) in zip(['state', 'props'], [hopf.state, hopf.props]):
