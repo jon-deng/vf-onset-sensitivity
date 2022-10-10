@@ -545,6 +545,7 @@ class TestFunctionalGradient:
 
     @pytest.fixture(
         params=[
+            pazn.TractionShape,
             pazn.Identity
         ]
     )
