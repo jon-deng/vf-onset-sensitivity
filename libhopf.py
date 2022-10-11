@@ -1270,7 +1270,7 @@ class OptGradManager:
         # format of the ReducedGradient object
         p_vec = self.param.x.copy()
         p_vec.set_mono(p)
-        p_hopf = self.param.apply(self.param.x)
+        p_hopf = self.param.apply(p_vec)
 
         # After setting `self.redu_grad` props, the Hopf system should be solved
         hopf_state, info = self.redu_grad.set_props(p_hopf)
