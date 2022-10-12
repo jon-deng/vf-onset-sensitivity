@@ -8,7 +8,6 @@ from pprint import pprint
 import itertools
 from typing import Union
 
-import dolfin as dfn
 import h5py
 import numpy as np
 from scipy import optimize
@@ -29,6 +28,9 @@ import libfunctionals as libfuncs
 
 import exputils
 
+# NOTE: Import `dolfin` after `scipy.optimize` is important!
+# Importing it after seems to lead to segfaults!
+import dolfin as dfn
 dfn.set_log_level(50)
 # pylint: disable=redefined-outer-name
 
