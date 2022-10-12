@@ -45,6 +45,7 @@ ptypes = {
     'MeshName': str,
     'Ecov': float,
     'Ebod': float,
+    'ParamOption': str,
     'Functional': FrequencyPenaltyFuncParam
 }
 ExpParamFreqPenalty = exputils.make_parameters(ptypes)
@@ -53,6 +54,7 @@ ptypes = {
     'MeshName': str,
     'Ecov': float,
     'Ebod': float,
+    'ParamOption': str,
     'Functional': str
 }
 ExpParamBasic = exputils.make_parameters(ptypes)
@@ -160,7 +162,7 @@ def get_functional(
     return func
 
 
-def get_params(study_name: str):
+def get_exp_params(study_name: str):
     """
     Return an iterable of parameters for a given study name
     """
@@ -169,6 +171,7 @@ def get_params(study_name: str):
         'MeshName': 'M5_CB_GA3',
         'Ecov': 2.5*10*1e3,
         'Ebod': 2.5*10*1e3,
+        'ParamOption': 'all',
         'Functional': {
             'Name': 'OnsetPressure',
             'omega': -1,
@@ -180,6 +183,7 @@ def get_params(study_name: str):
         'MeshName': 'M5_CB_GA3',
         'Ecov': 2.5*10*1e3,
         'Ebod': 2.5*10*1e3,
+        'ParamOption': 'all',
         'Functional': 'OnsetPressure'
     })
 
@@ -194,14 +198,17 @@ def get_params(study_name: str):
             'OnsetPressure',
             'OnsetPressureStrainEnergy'
         ]
+        param_options = ['all', 'const_shape']
 
         paramss = (
             DEFAULT_PARAMS_PENALTY.substitute({
                 'Functional/Name': func_name,
                 'Ecov': emod,
-                'Ebod': emod
+                'Ebod': emod,
+                'ParamOption': param_opt
             })
-            for func_name, emod in itertools.product(functional_names, emods)
+            for func_name, emod, param_opt
+            in itertools.product(functional_names, emods, param_options)
         )
         return paramss
     elif study_name == 'main_sensitivity':
@@ -227,7 +234,17 @@ def setup_redu_grad(params):
     hopf, *_ = get_dyna_model(params)
 
     _props = get_props(hopf, params)
-    parameterization = pzn.TractionShape(hopf.res, _props)
+
+    if params['ParamOption'] == 'const_shape':
+        parameterization = pzn.ConstantSubset(
+            hopf.res, const_vals={'umesh': 0}
+        )
+    elif params['ParamOption'] == 'all':
+        parameterization = pzn.TractionShape(
+            hopf.res, lame_lambda=1e2, lame_mu=1e2
+        )
+    else:
+        raise ValueError(f"Unknown 'ParamOption': {params['ParamOption']}")
     p = parameterization.x.copy()
     for key, subvec in _props.items():
         if key in p:
@@ -271,6 +288,7 @@ def run_minimize_functional(params, output_dir='out/minimization'):
         'disp': 99,
         'maxiter': 150,
         'ftol': 0.0,
+        'maxcor': 50
         # 'maxls': 100
     }
     def opt_callback(xk):
@@ -334,7 +352,7 @@ if __name__ == '__main__':
     argparser.add_argument('--study-type', type=str, default='none')
     clargs = argparser.parse_args()
 
-    paramss = get_params(clargs.study_name)
+    paramss = get_exp_params(clargs.study_name)
     if clargs.study_type == 'none':
         pass
     elif clargs.study_type == 'sensitivity':
