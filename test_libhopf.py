@@ -381,13 +381,20 @@ class TestFunctionalGradient:
         xhopf, info = libhopf.solve_hopf_newton(hopf, xhopf_0)
         return xhopf, props
 
-    @pytest.fixture()
-    def dprops(self, props):
+    @pytest.fixture(
+        params=[
+            ('emod', 1e2),
+            ('umesh', 1.0e-4)
+        ]
+    )
+    def dprops(self, props, request):
         """Return a `props` perturbation"""
 
         dprops = props.copy()
         dprops[:] = 0
-        dprops['emod'] = 1.0e2
+
+        key, val = request.param
+        dprops[key] = val
         return dprops
 
     # The below operators represent 'reduced' operators on the residual
@@ -408,7 +415,7 @@ class TestFunctionalGradient:
         def res(y):
             hopf.set_props(y)
             x, info = libhopf.solve_hopf_newton(hopf, xhopf)
-            print(info)
+            # print(info)
             assert info['status'] == 0
             return x
 
@@ -417,7 +424,7 @@ class TestFunctionalGradient:
             hopf.set_props(y)
             x, info = libhopf.solve_hopf_newton(hopf, xhopf)
             assert info['status'] == 0
-            print(info)
+            # print(info)
             hopf.set_state(x)
 
             # Compute the jacobian action
@@ -473,7 +480,7 @@ class TestFunctionalGradient:
         hopf = hopf_model
         func = functional
         xhopf, props = linearization
-        dprops = dprops
+        # dprops = dprops
 
         def res(props):
             hopf.set_props(props)
@@ -482,7 +489,7 @@ class TestFunctionalGradient:
 
             func.set_state(x)
             func.set_props(props)
-            return func.assem_g()
+            return np.array(func.assem_g())
 
         def jac(props, dprops):
             hopf.set_props(props)
