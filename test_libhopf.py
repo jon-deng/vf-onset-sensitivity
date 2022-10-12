@@ -209,7 +209,8 @@ class TestHopfModel:
         params=[
             ('emod', 1e2),
             ('rho', 1e-2),
-            ('rho_air', 1e-4)
+            ('rho_air', 1e-4),
+            ('umesh', 1.0e-4)
         ]
     )
     def dprops(self, hopf_model, request):
