@@ -198,7 +198,7 @@ def get_exp_params(study_name: str):
             'OnsetPressure',
             'OnsetPressureStrainEnergy'
         ]
-        param_options = ['all', 'const_shape']
+        param_options = ['const_shape', 'all']
 
         paramss = (
             DEFAULT_PARAMS_PENALTY.substitute({
@@ -207,8 +207,8 @@ def get_exp_params(study_name: str):
                 'Ebod': emod,
                 'ParamOption': param_opt
             })
-            for func_name, emod, param_opt
-            in itertools.product(functional_names, emods, param_options)
+            for param_opt, func_name, emod
+            in itertools.product(param_options, functional_names, emods)
         )
         return paramss
     elif study_name == 'main_sensitivity':
@@ -241,7 +241,7 @@ def setup_redu_grad(params):
         )
     elif params['ParamOption'] == 'all':
         parameterization = pzn.TractionShape(
-            hopf.res, lame_lambda=1e2, lame_mu=1e2
+            hopf.res, lame_lambda=1.0e3, lame_mu=1.0e3
         )
     else:
         raise ValueError(f"Unknown 'ParamOption': {params['ParamOption']}")
