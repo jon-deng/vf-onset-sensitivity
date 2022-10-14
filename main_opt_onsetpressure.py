@@ -61,7 +61,7 @@ ExpParamBasic = exputils.make_parameters(ptypes)
 
 PSUBS = np.arange(0, 1500, 50) * 10
 
-def get_dyna_model(params: exputils.BaseParameters):
+def setup_dyna_model(params: exputils.BaseParameters):
     """
     Return the model corresponding to parameters
     """
@@ -73,7 +73,7 @@ def get_dyna_model(params: exputils.BaseParameters):
     )
     return hopf, res, dres
 
-def get_tran_model(params: exputils.BaseParameters):
+def setup_tran_model(params: exputils.BaseParameters):
     """
     Return the model corresponding to parameters
     """
@@ -89,7 +89,7 @@ def get_tran_model(params: exputils.BaseParameters):
     )
     return model
 
-def get_props(
+def setup_props(
         model: Union[tbase.BaseTransientModel, dbase.BaseDynamicalModel],
         params: exputils.BaseParameters
     ):
@@ -120,7 +120,7 @@ def set_props(props, hopf, celllabel_to_dofs, emod_cov, emod_bod):
     props['emod'][dofs_share] = 1/2*(emod_cov + emod_bod)
     return props
 
-def get_functional(
+def setup_functional(
         model: dbase.BaseDynamicalModel,
         params: exputils.BaseParameters
     ):
@@ -162,7 +162,7 @@ def get_functional(
     return func
 
 
-def get_exp_params(study_name: str):
+def setup_exp_params(study_name: str):
     """
     Return an iterable of parameters for a given study name
     """
@@ -231,9 +231,9 @@ def get_exp_params(study_name: str):
 
 def setup_redu_grad(params):
     ## Load the model and set model properties
-    hopf, *_ = get_dyna_model(params)
+    hopf, *_ = setup_dyna_model(params)
 
-    _props = get_props(hopf, params)
+    _props = setup_props(hopf, params)
 
     if params['ParamOption'] == 'const_shape':
         parameterization = pzn.ConstantSubset(
@@ -271,7 +271,7 @@ def setup_redu_grad(params):
                     'beta': 1000.0
                 }
             })
-    func = get_functional(hopf, _params)
+    func = setup_functional(hopf, _params)
 
     redu_grad = libhopf.ReducedGradient(func, hopf)
     return redu_grad, hopf, xhopf_n, p, parameterization
@@ -352,7 +352,7 @@ if __name__ == '__main__':
     argparser.add_argument('--study-type', type=str, default='none')
     clargs = argparser.parse_args()
 
-    paramss = get_exp_params(clargs.study_name)
+    paramss = setup_exp_params(clargs.study_name)
     if clargs.study_type == 'none':
         pass
     elif clargs.study_type == 'sensitivity':
