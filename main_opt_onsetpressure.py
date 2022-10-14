@@ -161,6 +161,28 @@ def setup_functional(
 
     return func
 
+def setup_opt_options(
+        params: exputils.BaseParameters,
+        parameterization
+    ):
+    _lb = parameterization.x.copy()
+    _ub = parameterization.x.copy()
+    _lb[:] = -np.inf
+    _ub[:] = np.inf
+    # Add lower bound to emod
+    _lb['emod'][:] = 0.5e3*10
+
+    generic_options = {
+        'bounds': np.stack([_lb.to_mono_ndarray(), _ub.to_mono_ndarray()], axis=-1)
+    }
+    specific_options = {
+        'disp': 99,
+        'maxiter': 150,
+        'ftol': 0.0,
+        'maxcor': 50
+        # 'maxls': 100
+    }
+    return generic_options, specific_options
 
 def setup_exp_params(study_name: str):
     """
@@ -284,13 +306,7 @@ def run_minimize_functional(params, output_dir='out/minimization'):
 
     ## Run the minimizer
     # Set optimizer options/callback
-    opt_options = {
-        'disp': 99,
-        'maxiter': 150,
-        'ftol': 0.0,
-        'maxcor': 50
-        # 'maxls': 100
-    }
+    gen_opts, spe_opts = setup_opt_options(params, parameterization)
     def opt_callback(xk):
         print("In callback")
 
@@ -304,7 +320,8 @@ def run_minimize_functional(params, output_dir='out/minimization'):
                 grad_manager.grad, p0.to_mono_ndarray(),
                 method='L-BFGS-B',
                 jac=True,
-                options=opt_options,
+                **gen_opts,
+                options=spe_opts,
                 callback=opt_callback
             )
         pprint(opt_res)
