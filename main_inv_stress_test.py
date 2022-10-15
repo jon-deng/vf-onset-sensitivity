@@ -250,7 +250,7 @@ def run_inv_opt(fpath, emod_cov, emod_bod, gw_ref, omega_ref, alpha=0.0, opt_opt
 
     func_freq_err = 1/std_omega * (func_omega - 2*np.pi*omega_ref) ** 2
     func = func_gw_err + func_freq_err + func_egrad_norm
-    redu_grad = libhopf.ReducedGradient(
+    redu_grad = libhopf.ReducedFunctional(
         func, RES_HOPF, hopf_psub_intervals=PSUBS
     )
 

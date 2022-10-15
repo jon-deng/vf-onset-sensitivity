@@ -295,7 +295,7 @@ def setup_redu_grad(params):
             })
     func = setup_functional(hopf, _params)
 
-    redu_grad = libhopf.ReducedGradient(func, hopf)
+    redu_grad = libhopf.ReducedFunctional(func, hopf)
     return redu_grad, hopf, xhopf_n, p, parameterization
 
 def run_minimize_functional(params, output_dir='out/minimization'):

@@ -88,7 +88,7 @@ if __name__ == '__main__':
     func_freq_err = 1/std_omega * (func_omega - 2*np.pi*omega_ref) ** 2
     func = func_gw_err + func_freq_err
 
-    redu_grad = libhopf.ReducedGradient(func, hopf)
+    redu_grad = libhopf.ReducedFunctional(func, hopf)
 
     ## Compute an initial guess for the complex amplitude
     # Note that the initial guess for amplitude might be negative; this is fine

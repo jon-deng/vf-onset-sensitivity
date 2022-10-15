@@ -24,6 +24,7 @@ so the Hopf equations below are slightly different.
 from typing import Tuple, List, Dict, Optional
 import itertools
 import functools
+import operator
 import warnings
 import numpy as np
 from petsc4py import PETSc
@@ -1022,16 +1023,19 @@ def solve_hopf_newton(
     out[:], info = nleq.newton_solve(xhopf_0, linear_subproblem, norm=bvec.norm, params=newton_params)
     return out, info
 
-## Functions/classes to handle solving gradients of functionals over the Hopf state
-class ReducedGradient:
+## Functionality for reduced functionals
+class ReducedFunctional:
     """
-    This class handles solution of reduced gradients on the Hopf model
+    Represent a reduced functional of a Hopf bifurcation system
 
-    Consider the functional, g(x; p), where x, p represent the Hopf
-    state vector, and parameters respectively. Also consider
-    the Hopf system defined by F(x; p) = 0. The reduced gradient is the function
-    g^(p)=g(x(p), p) where x is implicitly constrained by the Hopf
-    system.
+    Consider a functional
+        g(x; p)
+    where x, p are the state vector, and parameters respectively.
+    Also consider the Hopf system defined by
+        F(x; p) = 0.
+    The reduced functional is
+        \hat{g}(p) = g(x(p), p)
+    where x is implicitly set by solving the Hopf system.
 
     The reduced gradient is difficult to solve for since solution of the Hopf
     system is not straightforward without a good initial guess for a given
@@ -1098,7 +1102,8 @@ class ReducedGradient:
         xhopf_0 = self.hist_state[-1]
 
         xhopf_n, info = solve_hopf_newton(
-            self.res, xhopf_0, newton_params=self._newton_params)
+            self.res, xhopf_0, newton_params=self._newton_params
+        )
 
         # Manually compute an initial guess if the Newton solver fails
         if info['status'] != 0:
@@ -1114,7 +1119,8 @@ class ReducedGradient:
 
             # Retry the Newton solver with the better initial guess
             xhopf_n, info = solve_hopf_newton(
-                self.res, xhopf_0, newton_params=self._newton_params)
+                self.res, xhopf_0, newton_params=self._newton_params
+            )
 
             if info['status'] != 0:
                 raise RuntimeError(
@@ -1140,10 +1146,37 @@ class ReducedGradient:
         return hopf_state, info
 
     def assem_g(self):
+        """
+        Return the functional value
+        """
         return self.func.assem_g()
 
     def assem_dg_dprops(self):
+        """
+        Return the functional gradient
+        """
         return solve_reduced_gradient(self.func, self.res)
+
+    def assem_d2g_dprops2(self, dp: bvec.BlockVector):
+        """
+        Return the functional hessian-vector product
+        """
+        norm_dp = bla.norm(dp)
+        unit_dp = dp/norm_dp
+
+        # Approximate the HVP with a central difference
+        def assem_dg(p):
+            self.set_props(p)
+            return self.assem_dg_dprops().copy()
+
+        h = 1e-2
+        alphas = [h, 0, -h]
+        kernel = [1, -2, 1]
+        dgs = [
+            k*assem_dg(self.props + alpha*unit_dp)
+            for k, alpha in zip(kernel, alphas)
+        ]
+        return functools.reduce(operator.add, dgs) / h**2 * norm_dp
 
 def solve_reduced_gradient(
         functional: libfunc.GenericFunctional,
@@ -1189,7 +1222,7 @@ class OptGradManager:
 
     def __init__(
             self,
-            redu_grad: ReducedGradient,
+            redu_grad: ReducedFunctional,
             f: h5py.Group,
             param: paramzn.BaseParameterization
         ):

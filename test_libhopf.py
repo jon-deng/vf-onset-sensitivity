@@ -512,7 +512,7 @@ class TestFunctionalGradient:
         """Return a `ReducedGradient` instance"""
         func = functional
         hopf = hopf_model
-        return libhopf.ReducedGradient(func, hopf)
+        return libhopf.ReducedFunctional(func, hopf)
 
     @pytest.fixture()
     def props_list(
