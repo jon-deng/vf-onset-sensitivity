@@ -41,10 +41,9 @@ def props(hopf_model):
     libsetup.set_default_props(props, hopf.res.solid.forms['mesh.mesh'])
     return props
 
-
 class TestHopfModel:
     """
-    Test correctness and functionality of the `HopfModel` class
+    Test `HopfModel`
     """
 
     @pytest.fixture()
@@ -299,8 +298,10 @@ class TestHopfModel:
             rtol=1e-9, atol=1e-9
         )
 
-
-class TestHopf:
+class TestHopfUtilities:
+    """
+    Test utility functions for the Hopf bifurcation system
+    """
     @pytest.fixture()
     def setup_bound_pairs(self):
         """Return lower/upper subglottal pressure bounds"""
@@ -354,49 +355,63 @@ class TestHopf:
 
         xhopf, info = libhopf.solve_hopf_newton(hopf, xhopf_0)
 
+@pytest.fixture()
+def linearization(props, hopf_model):
+    """
+    Return a linearization point corresponding to a Hopf bifurcation
+
+    Returns
+    -------
+    xhopf, props :
+        `xhopf` - the state corresponding to the Hopf bifurcation
+        to `props`
+        `props` - the Hopf model properties
+    """
+    hopf = hopf_model
+    props = props
+
+    # Create the ReducedGradientManager object;
+    # currently this required the Hopf system have state and properties that
+    # initially satisfy the equations
+    hopf.set_props(props)
+    psubs = np.arange(100, 1000, 100)*10
+    xhopf_0 = libhopf.gen_hopf_initial_guess(hopf, psubs)
+    xhopf, info = libhopf.solve_hopf_newton(hopf, xhopf_0)
+    return xhopf, props
+
+@pytest.fixture(
+    params=[
+        ('emod', 1e2),
+        ('umesh', 1.0e-4)
+    ]
+)
+def dprops(props, request):
+    """Return a `props` perturbation"""
+
+    dprops = props.copy()
+    dprops[:] = 0
+
+    key, val = request.param
+    dprops[key] = val
+    return dprops
+
+@pytest.fixture(
+    params=[
+        libfuncs.StrainEnergyFunctional,
+        libfuncs.OnsetPressureFunctional,
+        libfuncs.AbsOnsetFrequencyFunctional
+    ]
+)
+def functional(hopf_model, request):
+    """Return a Hopf model functional"""
+    hopf = hopf_model
+    Functional = request.param
+    return Functional(hopf)
 
 class TestFunctionalGradient:
-
-    @pytest.fixture()
-    def linearization(self, props, hopf_model):
-        """
-        Return a linearization point corresponding to a Hopf bifurcation
-
-        Returns
-        -------
-        xhopf, props :
-            `xhopf` - the state corresponding to the Hopf bifurcation
-            to `props`
-            `props` - the Hopf model properties
-        """
-        hopf = hopf_model
-        props = props
-
-        # Create the ReducedGradientManager object;
-        # currently this required the Hopf system have state and properties that
-        # initially satisfy the equations
-        hopf.set_props(props)
-        psubs = np.arange(100, 1000, 100)*10
-        xhopf_0 = libhopf.gen_hopf_initial_guess(hopf, psubs)
-        xhopf, info = libhopf.solve_hopf_newton(hopf, xhopf_0)
-        return xhopf, props
-
-    @pytest.fixture(
-        params=[
-            ('emod', 1e2),
-            ('umesh', 1.0e-4)
-        ]
-    )
-    def dprops(self, props, request):
-        """Return a `props` perturbation"""
-
-        dprops = props.copy()
-        dprops[:] = 0
-
-        key, val = request.param
-        dprops[key] = val
-        return dprops
-
+    """
+    Test functions operating on functionals
+    """
     # The below operators represent 'reduced' operators on the residual
     # This operator represents the map between property changes and state
     # through the implicit function theorem on the Hopf system residual
@@ -446,19 +461,6 @@ class TestFunctionalGradient:
 
     # def test_dstate_dprops_adjoint():
 
-    @pytest.fixture(
-        params=[
-            libfuncs.StrainEnergyFunctional,
-            libfuncs.OnsetPressureFunctional,
-            libfuncs.AbsOnsetFrequencyFunctional
-        ]
-    )
-    def functional(self, hopf_model, request):
-        """Return a Hopf model functional"""
-        hopf = hopf_model
-        Functional = request.param
-        return Functional(hopf)
-
     def test_solve_reduced_gradient(
             self,
             functional,
@@ -506,8 +508,16 @@ class TestFunctionalGradient:
             norm=lambda x: x
         )
 
+class TestReducedFunctional:
+    """
+    Test `ReducedFunctional` class
+    """
+
     @pytest.fixture()
     def rhopf(self, hopf_model):
+        """
+        Return a reduced Hopf model
+        """
         hopf = hopf_model
         rhopf = libhopf.ReducedHopfModel(
             hopf
@@ -555,6 +565,10 @@ class TestFunctionalGradient:
             hopf.set_props(rfunctional.rhopf_model.hist_props[-1])
             print(bla.norm(hopf.assem_res()))
 
+class TestOptGradManager:
+    """
+    Test the `OptGradManager` class
+    """
     @pytest.fixture(
         params=[
             pazn.TractionShape,
