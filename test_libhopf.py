@@ -506,13 +506,20 @@ class TestFunctionalGradient:
             norm=lambda x: x
         )
 
+    @pytest.fixture()
+    def rhopf(self, hopf_model):
+        hopf = hopf_model
+        rhopf = libhopf.ReducedHopfModel(
+            hopf
+        )
+        return rhopf
 
     @pytest.fixture()
-    def rgrad(self, functional, hopf_model):
-        """Return a `ReducedGradient` instance"""
+    def rfunctional(self, functional, rhopf):
+        """Return a `ReducedFunctional` instance"""
         func = functional
-        hopf = hopf_model
-        return libhopf.ReducedFunctional(func, hopf)
+
+        return libhopf.ReducedFunctional(func, rhopf)
 
     @pytest.fixture()
     def props_list(
@@ -530,26 +537,23 @@ class TestFunctionalGradient:
         ]
         return propss
 
-    def test_ReducedGradient(self, rgrad, props_list):
+    def test_ReducedGradient(self, rfunctional, props_list):
         """
         Test the ReducedGradientManager object
         """
-        redu_grad = rgrad
-
-        hopf = redu_grad.res
+        hopf = rfunctional.rhopf_model.res
         for props in props_list:
             # For each property in a list of properties to test, set the properties
             # of the ReducedGradient; the ReducedGradient should handle solving the
             # Hopf system implictly
-            redu_grad.set_props(props)
+            rfunctional.set_props(props)
             # print(redu_grad.assem_g())
 
             # Next, check that the Hopf system was correctly solved in
             # ReducedGradient by checking the Hopf residual
-            hopf.set_state(redu_grad.hist_state[-1])
-            hopf.set_props(redu_grad.hist_props[-1])
+            hopf.set_state(rfunctional.rhopf_model.hist_state[-1])
+            hopf.set_props(rfunctional.rhopf_model.hist_props[-1])
             print(bla.norm(hopf.assem_res()))
-
 
     @pytest.fixture(
         params=[
@@ -586,14 +590,14 @@ class TestFunctionalGradient:
 
     def test_OptGradManager(
             self,
-            rgrad,
+            rfunctional,
             parameterization,
             params
         ):
         """
         Test the ReducedGradientManager object
         """
-        redu_grad = rgrad
+        redu_grad = rfunctional
 
         with h5py.File("out/_test_make_opt_grad.h5", mode='w') as f:
             grad_manager = libhopf.OptGradManager(redu_grad, f, parameterization)

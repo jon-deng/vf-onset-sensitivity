@@ -1024,6 +1024,109 @@ def solve_hopf_newton(
     return out, info
 
 ## Functionality for reduced functionals
+class ReducedHopfModel:
+    """
+    Represent a Hopf bifurcation state as a function of parameters
+
+    This class handles solving the implicit Hopf system
+        F(x; p)
+    for the Hopf state
+        x(p)
+
+    Parameters
+    ----------
+    functional : libfunctionals.GenericFunctional
+    res : HopfModel
+    newton_params :
+        dictionary specifying newton solver parameters for solving the Hopf
+        system
+    hopf_psub_intervals :
+        Intervals of subglottal pressure to search for Hopf bifurcations.
+    """
+    def __init__(
+            self,
+            res: HopfModel,
+            hopf_psub_intervals: Optional[np.ndarray]=None,
+            newton_params: Optional[dict]=None
+        ):
+        self.res = res
+        if hopf_psub_intervals is None:
+            self.PSUB_INTERVALS = np.arange(0, 2600, 100) * 10
+        else:
+            self.PSUB_INTERVALS = np.array(hopf_psub_intervals)
+
+        self._hist_state = [self.res.state.copy()]
+        self._hist_props = [self.res.props.copy()]
+
+        if newton_params is None:
+            newton_params = {}
+        self._newton_params = newton_params
+
+    @property
+    def hist_props(self):
+        return self._hist_props
+
+    @property
+    def hist_state(self):
+        return self._hist_state
+
+    @property
+    def props(self):
+        return self.res.props
+
+    def set_props(self, props: bvec.BlockVector):
+        """
+        Set the Hopf system properties
+        """
+        self.res.set_props(props)
+
+        # Use the latest state from previously cached Hopf states as an
+        # initial guess
+        xhopf_0 = self.hist_state[-1]
+        xhopf_n, info = solve_hopf_newton(
+            self.res, xhopf_0, newton_params=self._newton_params
+        )
+
+        # If the Hopf system doesn't converge from the previous initial state
+        # try a new initial state computed from locating a Hopf bifurcation
+        # with bisection
+        if info['status'] != 0:
+            warnings.warn(
+                "Unable to solve Hopf system with Newton method using"
+                " initial guess from previous Hopf state."
+                f"Newton solver exited with message '{info['message']}' "
+                f"after {info['num_iter']} iterations. "
+                "Attemping to retry with a better initial guess with.",
+                category=RuntimeWarning
+            )
+            xhopf_0 = gen_hopf_initial_guess(
+                self.res, self.PSUB_INTERVALS, tol=100.0
+            )
+
+            # Retry the Newton solver with the better initial guess
+            xhopf_n, info = solve_hopf_newton(
+                self.res, xhopf_0, newton_params=self._newton_params
+            )
+
+            if info['status'] != 0:
+                raise RuntimeError(
+                    "Failed to solve Hopf system with new initial guess. "
+                    f"Newton solver exited with message '{info['message']}' "
+                    f"after {info['num_iter']} iterations. "
+                )
+
+        self.hist_state.append(xhopf_n.copy())
+        self.hist_props.append(props.copy())
+        self.res.set_state(xhopf_n)
+
+        return xhopf_n, info
+
+    def assem_state(self):
+        """
+        Return the Hopf model state
+        """
+        return self.hist_state[-1]
+
 class ReducedFunctional:
     """
     Represent a reduced functional of a Hopf bifurcation system
@@ -1058,91 +1161,22 @@ class ReducedFunctional:
     def __init__(
             self,
             func: libfunc.GenericFunctional,
-            res: HopfModel,
-            newton_params: Optional[dict]=None,
-            hopf_psub_intervals: Optional[np.ndarray]=None
+            reduced_hopf_model: HopfModel
         ):
         self.func = func
-        self.res = res
-        if hopf_psub_intervals is None:
-            self.PSUB_INTERVALS = np.arange(0, 2600, 100) * 10
-        else:
-            self.PSUB_INTERVALS = np.array(hopf_psub_intervals)
-
-        self._hist_state = [self.res.state.copy()]
-        self._hist_props = [self.props.copy()]
-
-        if newton_params is None:
-            newton_params = {}
-        self._newton_params = newton_params
+        self.rhopf_model = reduced_hopf_model
 
     @property
     def props(self):
-        return self.res.props
-
-    @property
-    def hist_props(self):
-        return self._hist_props
-
-    @property
-    def hist_state(self):
-        return self._hist_state
-
-    def _update_hopf(self):
-        """
-        Keeps track of Hopf solution when properties are updated
-
-        This should be called whenever the properties are set, since the
-        Hopf system solution will change whenever the properties change
-        """
-        ## Update the hopf system by solving the Hopf bifurcation equations
-
-        # Use the latest state in the history of Hopf states as an initial guess
-        # for solving the Hopf system with the new parameters
-        xhopf_0 = self.hist_state[-1]
-
-        xhopf_n, info = solve_hopf_newton(
-            self.res, xhopf_0, newton_params=self._newton_params
-        )
-
-        # Manually compute an initial guess if the Newton solver fails
-        if info['status'] != 0:
-            warnings.warn(
-                "Couldn't solve Hopf system with Newton method from last "
-                "used Hopf state. "
-                f"Newton solver exited with message '{info['message']}' "
-                f"after {info['num_iter']} iterations. "
-                "Attemping to retry with a better initial guess.",
-                category=RuntimeWarning
-            )
-            xhopf_0 = gen_hopf_initial_guess(self.res, self.PSUB_INTERVALS, tol=100.0)
-
-            # Retry the Newton solver with the better initial guess
-            xhopf_n, info = solve_hopf_newton(
-                self.res, xhopf_0, newton_params=self._newton_params
-            )
-
-            if info['status'] != 0:
-                raise RuntimeError(
-                    "Couldn't solve Hopf system with retried initial guess. "
-                    f"Newton solver exited with message '{info['message']}' "
-                    f"after {info['num_iter']} iterations. "
-                )
-
-        self.hist_state.append(xhopf_n.copy())
-        self.hist_props.append(self.props.copy())
-
-        self.res.set_state(xhopf_n)
-
-        return xhopf_n, info
+        return self.rhopf_model.props
 
     def set_props(self, props):
         """
         Set the model properties
         """
+        hopf_state, info = self.rhopf_model.set_props(props)
         self.func.set_props(props)
-        self.res.set_props(props)
-        hopf_state, info = self._update_hopf()
+        self.func.set_state(hopf_state)
         return hopf_state, info
 
     def assem_g(self):
@@ -1155,7 +1189,7 @@ class ReducedFunctional:
         """
         Return the functional gradient
         """
-        return solve_reduced_gradient(self.func, self.res)
+        return solve_reduced_gradient(self.func, self.rhopf_model)
 
     def assem_d2g_dprops2(self, dp: bvec.BlockVector):
         """
@@ -1246,7 +1280,7 @@ class OptGradManager:
         )
         h5utils.create_resizable_block_vector_group(
             f.create_group('hopf_state'),
-            redu_grad.res.state.labels, redu_grad.res.state.bshape
+            redu_grad.rhopf_model.state.labels, redu_grad.rhopf_model.state.bshape
         )
         f.create_dataset('objective', (0,), maxshape=(None,))
 
