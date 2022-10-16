@@ -16,6 +16,7 @@ import libfunctionals as libfuncs
 import libsetup
 from test_hopf import taylor_convergence
 
+from petsc4py import PETSc
 # pylint: disable=redefined-outer-name
 # pylint: disable=no-member, invalid-name
 
@@ -658,3 +659,54 @@ class TestOptGradManager:
             for key in list(f.keys()):
                 if 'hopf_newton_' in key:
                     print(f"{key}: {f[key][:]}")
+
+class TestReducedFunctionalHessianContext:
+
+    @pytest.fixture()
+    def rhopf(self, hopf_model):
+        """
+        Return a reduced Hopf model
+        """
+        hopf = hopf_model
+        rhopf = libhopf.ReducedHopfModel(
+            hopf
+        )
+        return rhopf
+
+    @pytest.fixture()
+    def rfunctional(self, functional, rhopf):
+        """Return a `ReducedFunctional` instance"""
+        func = functional
+
+        return libhopf.ReducedFunctional(func, rhopf)
+
+    @pytest.fixture()
+    def context(self, rfunctional):
+        """
+        Return a PETSc Python mat context
+        """
+        return libhopf.ReducedFunctionalHessianContext(rfunctional)
+
+    @pytest.fixture()
+    def mat(self, context):
+        """
+        Return a PETSc Python mat
+        """
+        n = context.rfunctional.props.mshape[0]
+        m = n
+
+        ret_mat = PETSc.Mat().createPython((m, n))
+        ret_mat.setPythonContext(context)
+        ret_mat.setUp()
+        return ret_mat
+
+    def test_mult(self, mat, context, linearization, dprops):
+        """
+        Test a PETSc Python mat's `mult` operation
+        """
+        _, props = linearization
+        context.set_props(props)
+
+        x = dprops.to_mono_petsc()
+        y = mat.getVecLeft()
+        mat.mult(x, y)

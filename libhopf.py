@@ -1191,7 +1191,7 @@ class ReducedFunctional:
         """
         return solve_reduced_gradient(self.func, self.rhopf_model.res)
 
-    def assem_d2g_dprops2(self, dprops: bvec.BlockVector, h=1):
+    def assem_d2g_dprops2(self, dprops: bvec.BlockVector, h=1) -> bvec.BlockVector:
         """
         Return the functional hessian-vector product
         """
@@ -1389,3 +1389,22 @@ class OptGradManager:
         self.f['objective'].resize(self.f['objective'].size+1, axis=0)
         self.f['objective'][-1] = g
         return g, dg_dp
+
+## petsc4py 'Context' objects
+class ReducedFunctionalHessianContext:
+    """
+    Context representing the reduced functional's Hessian action
+    """
+
+    def __init__(self, reduced_functional: ReducedFunctional):
+        self.rfunctional = reduced_functional
+
+    def set_props(self, props: bvec.BlockVector):
+        return self.rfunctional.set_props(props)
+
+    def mult(self, mat: PETSc.Mat, x: PETSc.Vec, y: PETSc.Vec):
+        block_x = self.rfunctional.props.copy()
+        block_x.set_mono(x)
+
+        block_y = self.rfunctional.assem_d2g_dprops2(block_x)
+        y.array[:] = block_y.to_mono_petsc()
