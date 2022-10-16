@@ -1197,14 +1197,16 @@ class ReducedFunctional:
         """
         norm_dprops = bla.norm(dprops)
         unit_dprops = dprops/norm_dprops
+        unit_dprops.print_summary()
 
         # Approximate the HVP with a central difference
         def assem_dg_dprops(p):
-            props.print_summary()
-            self.set_props(p)
+            # props.print_summary()
+            _, info = self.set_props(p)
+            print(info)
             return self.assem_dg_dprops().copy()
 
-        h = 1e-5
+        h = 1e0
 
         # CD
         alphas = [h, -h]
