@@ -39,6 +39,7 @@ def props(hopf_model):
 
     props = hopf.props.copy()
     libsetup.set_default_props(props, hopf.res.solid.forms['mesh.mesh'])
+    props['kcontact'][:] = 1e0
     return props
 
 class TestHopfModel:
@@ -368,7 +369,6 @@ def linearization(props, hopf_model):
         `props` - the Hopf model properties
     """
     hopf = hopf_model
-    props = props
 
     # Create the ReducedGradientManager object;
     # currently this required the Hopf system have state and properties that
@@ -564,6 +564,32 @@ class TestReducedFunctional:
             hopf.set_state(rfunctional.rhopf_model.hist_state[-1])
             hopf.set_props(rfunctional.rhopf_model.hist_props[-1])
             print(bla.norm(hopf.assem_res()))
+
+    def test_d2g_dprops2(self, rfunctional, linearization, dprops):
+        """
+        Test `ReducedFunctional.d2g_dprops2`
+        """
+        xhopf, props = linearization
+
+        norm_dprops = bla.norm(dprops)
+        unit_dprops = dprops/norm_dprops
+
+        def assem_grad(props):
+            # print(bla.norm(props))
+            rfunctional.set_props(props)
+            return rfunctional.assem_dg_dprops().copy()
+
+        def assem_hvp(props, dprops):
+            # print(bla.norm(props))
+            rfunctional.set_props(props)
+            return rfunctional.assem_d2g_dprops2(dprops).copy()
+
+        h = 1e-5
+        dgrad_fd = norm_dprops/h*(
+            assem_grad(props+h*unit_dprops) - assem_grad(props)
+        )
+        dgrad_hvp = assem_hvp(props, dprops)
+        print(bla.norm(dgrad_hvp), bla.norm(dgrad_fd), bla.norm(dgrad_hvp-dgrad_fd))
 
 class TestOptGradManager:
     """

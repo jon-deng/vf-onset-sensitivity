@@ -1189,28 +1189,37 @@ class ReducedFunctional:
         """
         Return the functional gradient
         """
-        return solve_reduced_gradient(self.func, self.rhopf_model)
+        return solve_reduced_gradient(self.func, self.rhopf_model.res)
 
-    def assem_d2g_dprops2(self, dp: bvec.BlockVector):
+    def assem_d2g_dprops2(self, dprops: bvec.BlockVector):
         """
         Return the functional hessian-vector product
         """
-        norm_dp = bla.norm(dp)
-        unit_dp = dp/norm_dp
+        norm_dprops = bla.norm(dprops)
+        unit_dprops = dprops/norm_dprops
 
         # Approximate the HVP with a central difference
-        def assem_dg(p):
+        def assem_dg_dprops(p):
+            props.print_summary()
             self.set_props(p)
             return self.assem_dg_dprops().copy()
 
-        h = 1e-2
-        alphas = [h, 0, -h]
-        kernel = [1, -2, 1]
+        h = 1e-5
+
+        # CD
+        alphas = [h, -h]
+        kernel = [2/h, -2/h]
+
+        # FD
+        # alphas = [h, 0]
+        # kernel = [1/h, -1/h]
+
+        props = self.props.copy()
         dgs = [
-            k*assem_dg(self.props + alpha*unit_dp)
+            k*assem_dg_dprops(props + alpha*unit_dprops)
             for k, alpha in zip(kernel, alphas)
         ]
-        return functools.reduce(operator.add, dgs) / h**2 * norm_dp
+        return norm_dprops * functools.reduce(operator.add, dgs)
 
 def solve_reduced_gradient(
         functional: libfunc.GenericFunctional,
