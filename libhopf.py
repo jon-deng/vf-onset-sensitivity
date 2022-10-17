@@ -1064,7 +1064,6 @@ class ReducedHopfModel:
 
         # The current Hopf state + properties at the linearization point
         self._props = self.hopf.props.copy()
-        self._state = self.hopf.state.copy()
 
     @property
     def hist_props(self):
@@ -1077,10 +1076,6 @@ class ReducedHopfModel:
     @property
     def props(self):
         return self._props
-
-    @property
-    def state(self):
-        return self._state
 
     def set_props(self, props: bvec.BlockVector):
         """
@@ -1124,7 +1119,6 @@ class ReducedHopfModel:
                     f"after {info['num_iter']} iterations. "
                 )
 
-        self.state[:] = xhopf_n
         self.hist_state.append(xhopf_n.copy())
         self.hist_props.append(props.copy())
         self.hopf.set_state(xhopf_n)
@@ -1135,7 +1129,7 @@ class ReducedHopfModel:
         """
         Return the Hopf model state
         """
-        return self.state
+        return self.hist_state[-1]
 
 class ReducedFunctional:
     """
@@ -1177,8 +1171,8 @@ class ReducedFunctional:
         self.rhopf_model = reduced_hopf_model
 
         # The current Hopf state + properties at the linearization point
-        self._props = self.rhopf_model.props.copy()
-        self._state = self.rhopf_model.state.copy()
+        self._props = self.rhopf_model.hopf.props.copy()
+        self._state = self.rhopf_model.hopf.state.copy()
 
     @property
     def props(self) -> bvec.BlockVector:
@@ -1225,15 +1219,17 @@ class ReducedFunctional:
 
         # Approximate the HVP with a central difference
         def assem_grad(hopf_props):
-            self.rhopf_model.hopf.set_props(hopf_props)
+            hopf = self.rhopf_model.hopf
+
+            hopf.set_props(hopf_props)
             hopf_state, info = solve_hopf_newton(
-                self.rhopf_model.hopf, self.state
+                hopf, self.state
             )
             assert info['status'] == 0
 
             return solve_reduced_gradient(
                 self.func,
-                self.rhopf_model.hopf,
+                hopf,
                 hopf_state,
                 hopf_props
             ).copy()
