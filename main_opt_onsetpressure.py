@@ -11,6 +11,8 @@ from typing import Union
 import h5py
 import numpy as np
 from scipy import optimize
+from petsc4py import PETSc
+from slepc4py import SLEPc
 from blockarray import blockvec as bvec, h5utils
 from femvf import load
 from femvf.models.transient import (
@@ -251,7 +253,7 @@ def setup_exp_params(study_name: str):
     else:
         raise ValueError("Unknown `study_name` '{study_name}'")
 
-def setup_redu_grad(params):
+def setup_redu_functional(params):
     ## Load the model and set model properties
     hopf, *_ = setup_dyna_model(params)
 
@@ -295,14 +297,14 @@ def setup_redu_grad(params):
             })
     func = setup_functional(hopf, _params)
 
-    redu_grad = libhopf.ReducedFunctional(func, libhopf.ReducedHopfModel(hopf))
-    return redu_grad, hopf, xhopf_n, p, parameterization
+    redu_functional = libhopf.ReducedFunctional(func, libhopf.ReducedHopfModel(hopf))
+    return redu_functional, hopf, xhopf_n, p, parameterization
 
 def run_minimize_functional(params, output_dir='out/minimization'):
     """
     Run an experiment where a functional is minimized
     """
-    redu_grad, hopf, xhopf_n, p0, parameterization = setup_redu_grad(params)
+    redu_grad, hopf, xhopf_n, p0, parameterization = setup_redu_functional(params)
 
     ## Run the minimizer
     # Set optimizer options/callback
@@ -332,16 +334,38 @@ def run_functional_sensitivity(params, output_dir='out/sensitivity'):
     """
     Run an experiment where the sensitivity of a functional is saved
     """
-    redu_grad, hopf, xhopf_n, p0, parameterization = setup_redu_grad(params)
-    dprops = redu_grad.assem_dg_dprops()
-    dparam = parameterization.apply_vjp(p0, dprops)
+    rfunc, hopf, xhopf_n, p0, parameterization = setup_redu_functional(params)
 
-    ## Compute the sensitivity of the functional to properties
+    ## Compute 1st order sensitivity of the functional
+    # rfunc.set_props(parameterization.apply(p0))
+    # grad_props = rfunc.assem_dg_dprops()
+    # grad_params = parameterization.apply_vjp(p0, grad_props)
+
+    ## Compute 2nd order sensitivity of the functional
+    redu_hess_context = libhopf.ReducedFunctionalHessianContext(rfunc)
+    redu_hess_context.set_props(parameterization.apply(p0))
+    mat = PETSc.Mat().createPython(hopf.props.mshape*2)
+    mat.setPythonContext(redu_hess_context)
+    mat.setUp()
+
+    eps = SLEPc.EPS().create()
+    eps.setOperators(mat)
+    eps.setDimensions(5, 20)
+    eps.setProblemType(SLEPc.EPS.ProblemType.HEP)
+    eps.setWhichEigenpairs(SLEPc.EPS.Which.LARGEST_MAGNITUDE)
+    eps.setUp()
+
+    eps.solve()
+
+    # breakpoint()
     fpath = path.join(output_dir, params.to_str()+'.h5')
     if not path.isfile(fpath):
         with h5py.File(fpath, mode='w') as f:
             ## Write out the gradient vectors
-            for (key, vec) in zip(['dprops', 'dparam'], [dprops, dparam]):
+            for (key, vec) in zip(
+                    ['grad_props', 'grad_param'],
+                    [grad_props, grad_params]
+                ):
                 h5utils.create_resizable_block_vector_group(
                     f.require_group(key), vec.labels, vec.bshape
                 )
