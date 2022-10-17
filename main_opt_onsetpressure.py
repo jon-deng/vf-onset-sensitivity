@@ -368,7 +368,7 @@ def run_functional_sensitivity(params, output_dir='out/sensitivity'):
         eigvals.append(eigval)
         eigvecs.append(eigvec)
 
-    breakpoint()
+    # breakpoint()
     fpath = path.join(output_dir, params.to_str()+'.h5')
     if not path.isfile(fpath):
         with h5py.File(fpath, mode='w') as f:
