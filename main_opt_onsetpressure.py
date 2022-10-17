@@ -365,12 +365,12 @@ def run_functional_sensitivity(params, output_dir='out/sensitivity'):
     _real_evec = mat.getVecRight()
     for n in range(neig):
         eigval = eps.getEigenpair(n, _real_evec)
-        eigvec = hopf.props.copy()
+        eigvec = parameterization.x.copy()
         eigvec.set_mono(_real_evec)
         eigvals.append(eigval)
         eigvecs.append(eigvec)
 
-    # breakpoint()
+    breakpoint()
     fpath = path.join(output_dir, params.to_str()+'.h5')
     if not path.isfile(fpath):
         with h5py.File(fpath, mode='w') as f:
