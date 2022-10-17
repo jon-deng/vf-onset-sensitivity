@@ -548,27 +548,27 @@ class TestReducedFunctional:
         ]
         return propss
 
-    def test_ReducedGradient(self, rfunctional, props_list):
+    def test_set_props(self, rfunctional, props_list):
         """
-        Test the ReducedGradientManager object
+        Test `ReducedFunctional.set_props` solves for a Hopf bifurcation
         """
-        hopf = rfunctional.rhopf_model.res
+        hopf = rfunctional.rhopf_model.hopf
         for props in props_list:
             # For each property in a list of properties to test, set the properties
-            # of the ReducedGradient; the ReducedGradient should handle solving the
+            # of the ReducedFunctional; the ReducedFunctional should handle solving the
             # Hopf system implictly
             rfunctional.set_props(props)
             # print(redu_grad.assem_g())
 
             # Next, check that the Hopf system was correctly solved in
             # ReducedGradient by checking the Hopf residual
-            hopf.set_state(rfunctional.rhopf_model.hist_state[-1])
-            hopf.set_props(rfunctional.rhopf_model.hist_props[-1])
+            hopf.set_state(rfunctional.rhopf_model.assem_state())
+            hopf.set_props(rfunctional.rhopf_model.props)
             print(bla.norm(hopf.assem_res()))
 
-    def test_d2g_dprops2(self, rfunctional, linearization, dprops):
+    def test_assem_d2g_dprops2(self, rfunctional, linearization, dprops):
         """
-        Test `ReducedFunctional.d2g_dprops2`
+        Test `ReducedFunctional.assem_d2g_dprops2`
         """
         xhopf, props = linearization
 
