@@ -337,9 +337,9 @@ def run_functional_sensitivity(params, output_dir='out/sensitivity'):
     rfunc, hopf, xhopf_n, p0, parameterization = setup_redu_functional(params)
 
     ## Compute 1st order sensitivity of the functional
-    # rfunc.set_props(parameterization.apply(p0))
-    # grad_props = rfunc.assem_dg_dprops()
-    # grad_params = parameterization.apply_vjp(p0, grad_props)
+    rfunc.set_props(parameterization.apply(p0))
+    grad_props = rfunc.assem_dg_dprops()
+    grad_params = parameterization.apply_vjp(p0, grad_props)
 
     ## Compute 2nd order sensitivity of the functional
     redu_hess_context = libhopf.ReducedFunctionalHessianContext(rfunc)
