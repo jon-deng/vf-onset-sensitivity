@@ -1045,22 +1045,26 @@ class ReducedHopfModel:
     """
     def __init__(
             self,
-            res: HopfModel,
+            hopf: HopfModel,
             hopf_psub_intervals: Optional[np.ndarray]=None,
             newton_params: Optional[dict]=None
         ):
-        self.res = res
+        self.hopf = hopf
         if hopf_psub_intervals is None:
             self.PSUB_INTERVALS = np.arange(0, 2600, 100) * 10
         else:
             self.PSUB_INTERVALS = np.array(hopf_psub_intervals)
 
-        self._hist_state = [self.res.state.copy()]
-        self._hist_props = [self.res.props.copy()]
+        self._hist_state = [self.hopf.state.copy()]
+        self._hist_props = [self.hopf.props.copy()]
 
         if newton_params is None:
             newton_params = {}
         self._newton_params = newton_params
+
+        # The current Hopf state + properties at the linearization point
+        self._props = self.hopf.props.copy()
+        self._state = self.hopf.state.copy()
 
     @property
     def hist_props(self):
@@ -1072,19 +1076,24 @@ class ReducedHopfModel:
 
     @property
     def props(self):
-        return self.res.props
+        return self._props
+
+    @property
+    def state(self):
+        return self._state
 
     def set_props(self, props: bvec.BlockVector):
         """
         Set the Hopf system properties
         """
-        self.res.set_props(props)
+        self.props[:] = props
+        self.hopf.set_props(self.props)
 
         # Use the latest state from previously cached Hopf states as an
         # initial guess
         xhopf_0 = self.hist_state[-1]
         xhopf_n, info = solve_hopf_newton(
-            self.res, xhopf_0, newton_params=self._newton_params
+            self.hopf, xhopf_0, newton_params=self._newton_params
         )
 
         # If the Hopf system doesn't converge from the previous initial state
@@ -1100,12 +1109,12 @@ class ReducedHopfModel:
                 category=RuntimeWarning
             )
             xhopf_0 = gen_hopf_initial_guess(
-                self.res, self.PSUB_INTERVALS, tol=100.0
+                self.hopf, self.PSUB_INTERVALS, tol=100.0
             )
 
             # Retry the Newton solver with the better initial guess
             xhopf_n, info = solve_hopf_newton(
-                self.res, xhopf_0, newton_params=self._newton_params
+                self.hopf, xhopf_0, newton_params=self._newton_params
             )
 
             if info['status'] != 0:
@@ -1115,9 +1124,10 @@ class ReducedHopfModel:
                     f"after {info['num_iter']} iterations. "
                 )
 
+        self.state[:] = xhopf_n
         self.hist_state.append(xhopf_n.copy())
         self.hist_props.append(props.copy())
-        self.res.set_state(xhopf_n)
+        self.hopf.set_state(xhopf_n)
 
         return xhopf_n, info
 
@@ -1125,7 +1135,7 @@ class ReducedHopfModel:
         """
         Return the Hopf model state
         """
-        return self.hist_state[-1]
+        return self.state
 
 class ReducedFunctional:
     """
@@ -1161,14 +1171,14 @@ class ReducedFunctional:
     def __init__(
             self,
             func: libfunc.GenericFunctional,
-            reduced_hopf_model: HopfModel
+            reduced_hopf_model: ReducedHopfModel
         ):
         self.func = func
         self.rhopf_model = reduced_hopf_model
 
         # The current Hopf state + properties at the linearization point
-        self._props = self.rhopf_model.res.props.copy()
-        self._state = self.rhopf_model.res.state.copy()
+        self._props = self.rhopf_model.props.copy()
+        self._state = self.rhopf_model.state.copy()
 
     @property
     def props(self) -> bvec.BlockVector:
@@ -1201,7 +1211,7 @@ class ReducedFunctional:
         """
         return solve_reduced_gradient(
             self.func,
-            self.rhopf_model.res,
+            self.rhopf_model.hopf,
             self.state,
             self.props
         )
@@ -1215,15 +1225,15 @@ class ReducedFunctional:
 
         # Approximate the HVP with a central difference
         def assem_grad(hopf_props):
-            self.rhopf_model.res.set_props(hopf_props)
+            self.rhopf_model.hopf.set_props(hopf_props)
             hopf_state, info = solve_hopf_newton(
-                self.rhopf_model.res, self.state
+                self.rhopf_model.hopf, self.state
             )
             assert info['status'] == 0
 
             return solve_reduced_gradient(
                 self.func,
-                self.rhopf_model.res,
+                self.rhopf_model.hopf,
                 hopf_state,
                 hopf_props
             ).copy()
