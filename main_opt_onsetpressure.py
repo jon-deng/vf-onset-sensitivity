@@ -265,7 +265,7 @@ def setup_redu_functional(params):
         )
     elif params['ParamOption'] == 'all':
         parameterization = pzn.TractionShape(
-            hopf.res, lame_lambda=1.0e3, lame_mu=1.0e3
+            hopf.res, lame_lambda=1.0e4, lame_mu=1.0e4
         )
     else:
         raise ValueError(f"Unknown 'ParamOption': {params['ParamOption']}")
