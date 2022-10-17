@@ -1210,7 +1210,7 @@ class ReducedFunctional:
             self.props
         )
 
-    def assem_d2g_dprops2(self, dprops: bvec.BlockVector, h=1) -> bvec.BlockVector:
+    def assem_d2g_dprops2(self, dprops: bvec.BlockVector, h=1e-5) -> bvec.BlockVector:
         """
         Return the functional hessian-vector product
         """

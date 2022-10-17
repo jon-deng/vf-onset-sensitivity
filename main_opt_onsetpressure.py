@@ -357,7 +357,18 @@ def run_functional_sensitivity(params, output_dir='out/sensitivity'):
 
     eps.solve()
 
-    # breakpoint()
+    neig = eps.getConverged()
+    eigvecs = []
+    eigvals = []
+    _real_evec = mat.getVecRight()
+    for n in range(neig):
+        eigval = eps.getEigenpair(n, _real_evec)
+        eigvec = hopf.props.copy()
+        eigvec.set_mono(_real_evec)
+        eigvals.append(eigval)
+        eigvecs.append(eigvec)
+
+    breakpoint()
     fpath = path.join(output_dir, params.to_str()+'.h5')
     if not path.isfile(fpath):
         with h5py.File(fpath, mode='w') as f:
@@ -372,6 +383,21 @@ def run_functional_sensitivity(params, output_dir='out/sensitivity'):
                 h5utils.append_block_vector_to_group(
                     f[key], vec
                 )
+
+            ## Write out the hessian eigenvalues and vectors
+            f.create_dataset('eigvals', data=np.array(eigvals).real)
+            for (key, vecs) in zip(
+                    ['hess_props'],
+                    [eigvecs]
+                ):
+                if len(vecs) > 0:
+                    h5utils.create_resizable_block_vector_group(
+                        f.require_group(key), vecs[0].labels, vecs[0].bshape
+                    )
+                    for vec in vecs:
+                        h5utils.append_block_vector_to_group(
+                            f[key], vec
+                        )
 
             ## Write out the state, control, properties vector
             for (key, vec) in zip(['state', 'props'], [hopf.state, hopf.props]):
