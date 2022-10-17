@@ -588,12 +588,12 @@ class TestReducedFunctional:
 
         h = 1e0
         # breakpoint()
-        rfunctional.set_props(props)
+        # rfunctional.set_props(props)
         dgrad_fd = norm_dprops/(h)*(
             assem_grad(props+h*unit_dprops) - assem_grad(props)
         )
 
-        rfunctional.set_props(props)
+        # rfunctional.set_props(props)
         dgrad_cd = norm_dprops/(2*h)*(
             assem_grad(props+h*unit_dprops) - assem_grad(props-h*unit_dprops)
         )

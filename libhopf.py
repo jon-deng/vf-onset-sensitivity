@@ -1166,18 +1166,28 @@ class ReducedFunctional:
         self.func = func
         self.rhopf_model = reduced_hopf_model
 
+        # The current Hopf state + properties at the linearization point
+        self._props = self.rhopf_model.res.props.copy()
+        self._state = self.rhopf_model.res.state.copy()
+
     @property
-    def props(self):
-        return self.rhopf_model.props
+    def props(self) -> bvec.BlockVector:
+        return self._props
+
+    @property
+    def state(self) -> bvec.BlockVector:
+        return self._state
 
     def set_props(self, props):
         """
         Set the model properties
         """
-        hopf_state, info = self.rhopf_model.set_props(props)
-        self.func.set_props(props)
-        self.func.set_state(hopf_state)
-        return hopf_state, info
+        self.props[:] = props
+        self.state[:], info = self.rhopf_model.set_props(props)
+
+        self.func.set_props(self.props)
+        self.func.set_state(self.state)
+        return self.state, info
 
     def assem_g(self):
         """
@@ -1189,7 +1199,12 @@ class ReducedFunctional:
         """
         Return the functional gradient
         """
-        return solve_reduced_gradient(self.func, self.rhopf_model.res)
+        return solve_reduced_gradient(
+            self.func,
+            self.rhopf_model.res,
+            self.state,
+            self.props
+        )
 
     def assem_d2g_dprops2(self, dprops: bvec.BlockVector, h=1) -> bvec.BlockVector:
         """
@@ -1199,9 +1214,19 @@ class ReducedFunctional:
         unit_dprops = dprops/norm_dprops
 
         # Approximate the HVP with a central difference
-        def assem_grad(p):
-            _, info = self.set_props(p)
-            return self.assem_dg_dprops().copy()
+        def assem_grad(hopf_props):
+            self.rhopf_model.res.set_props(hopf_props)
+            hopf_state, info = solve_hopf_newton(
+                self.rhopf_model.res, self.state
+            )
+            assert info['status'] == 0
+
+            return solve_reduced_gradient(
+                self.func,
+                self.rhopf_model.res,
+                hopf_state,
+                hopf_props
+            ).copy()
 
         # CD
         alphas = [h, -h]
@@ -1211,7 +1236,7 @@ class ReducedFunctional:
         # alphas = [h, 0]
         # kernel = [1/h, -1/h]
 
-        props = self.props.copy()
+        props = self.props
         dgs = [
             k*assem_grad(props + alpha*unit_dprops)
             for k, alpha in zip(kernel, alphas)
@@ -1220,9 +1245,15 @@ class ReducedFunctional:
 
 def solve_reduced_gradient(
         functional: libfunc.GenericFunctional,
-        hopf: HopfModel
+        hopf: HopfModel,
+        state: bvec.BlockVector,
+        props: bvec.BlockVector
     ) -> bvec.BlockVector:
     """Solve for the reduced gradient of a functional"""
+    for obj in (functional, hopf):
+        obj.set_state(state)
+        obj.set_props(props)
+
     dg_dprops = functional.assem_dg_dprops()
     dg_dx = functional.assem_dg_dstate()
     hopf.apply_dirichlet_bvec(dg_dx)
