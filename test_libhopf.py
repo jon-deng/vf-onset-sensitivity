@@ -357,6 +357,20 @@ class TestHopfUtilities:
 
         xhopf, info = libhopf.solve_hopf_newton(hopf, xhopf_0)
 
+@pytest.fixture(
+    params=[
+        pazn.TractionShape,
+        pazn.Identity
+    ]
+)
+def parameterization(hopf_model, request):
+    """
+    Return a parameterization
+    """
+    model = hopf_model.res
+    Param = request.param
+    return Param(model, model.props)
+
 @pytest.fixture()
 def linearization(props, hopf_model):
     """
@@ -604,22 +618,9 @@ class TestOptGradManager:
     """
     Test the `OptGradManager` class
     """
-    @pytest.fixture(
-        params=[
-            pazn.TractionShape,
-            pazn.Identity
-        ]
-    )
-    def parameterization(self, hopf_model, request):
-        """
-        Return a parameterization
-        """
-        model = hopf_model.res
-        Param = request.param
-        return Param(model, model.props)
 
     @pytest.fixture()
-    def params(self, parameterization, linearization, dprops, ):
+    def params(self, parameterization, linearization, dprops):
         """
         Return a sequence of parameters
         """
@@ -681,11 +682,18 @@ class TestReducedFunctionalHessianContext:
         return libhopf.ReducedFunctional(func, rhopf)
 
     @pytest.fixture()
-    def context(self, rfunctional):
+    def context(self, rfunctional, parameterization):
         """
         Return a PETSc Python mat context
         """
-        return libhopf.ReducedFunctionalHessianContext(rfunctional)
+        return libhopf.ReducedFunctionalHessianContext(
+            rfunctional, parameterization
+        )
+
+    @pytest.fixture()
+    def param_0(self, parameterization):
+        p0 = parameterization.x.copy()
+        p0['emod'][:] = 10*1e3*10
 
     @pytest.fixture()
     def mat(self, context):

@@ -342,9 +342,11 @@ def run_functional_sensitivity(params, output_dir='out/sensitivity'):
     grad_params = parameterization.apply_vjp(p0, grad_props)
 
     ## Compute 2nd order sensitivity of the functional
-    redu_hess_context = libhopf.ReducedFunctionalHessianContext(rfunc)
-    redu_hess_context.set_props(parameterization.apply(p0))
-    mat = PETSc.Mat().createPython(hopf.props.mshape*2)
+    redu_hess_context = libhopf.ReducedFunctionalHessianContext(
+        rfunc, parameterization
+    )
+    redu_hess_context.set_params(p0)
+    mat = PETSc.Mat().createPython(p0.mshape*2)
     mat.setPythonContext(redu_hess_context)
     mat.setUp()
 

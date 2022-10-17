@@ -1214,6 +1214,11 @@ class ReducedFunctional:
         """
         Return the functional hessian-vector product
         """
+        # Make sure that the input dprops has the right subvector types
+        _dprops = self.props.copy()
+        _dprops[:] = dprops
+        dprops = _dprops
+
         norm_dprops = bla.norm(dprops)
         unit_dprops = dprops/norm_dprops
 
@@ -1433,15 +1438,29 @@ class ReducedFunctionalHessianContext:
     Context representing the reduced functional's Hessian action
     """
 
-    def __init__(self, reduced_functional: ReducedFunctional):
+    def __init__(
+            self,
+            reduced_functional: ReducedFunctional,
+            parameterization: paramzn.BaseParameterization
+        ):
         self.rfunctional = reduced_functional
+        self.parameterization = parameterization
+        self.params = parameterization.x.copy()
 
-    def set_props(self, props: bvec.BlockVector):
-        return self.rfunctional.set_props(props)
+    def set_params(self, params: bvec.BlockVector):
+        self.params[:] = params
+        return self.rfunctional.set_props(
+            self.parameterization.apply(params)
+        )
 
     def mult(self, mat: PETSc.Mat, x: PETSc.Vec, y: PETSc.Vec):
-        block_x = self.rfunctional.props.copy()
-        block_x.set_mono(x)
+        bx = self.parameterization.x.copy()
+        bx.set_mono(x)
 
-        block_y = self.rfunctional.assem_d2g_dprops2(block_x)
-        y.array[:] = block_y.to_mono_petsc()
+        # Use the parameterization to convert parameter -> model properties
+        dprops = self.parameterization.apply_jvp(self.params, bx)
+        hy = self.rfunctional.assem_d2g_dprops2(dprops)
+        # Convert dual properties -> dual parameter
+        by = self.parameterization.apply_vjp(self.params, hy)
+
+        y.array[:] = by.to_mono_petsc()
