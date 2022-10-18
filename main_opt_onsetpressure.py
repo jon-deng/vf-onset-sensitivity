@@ -241,13 +241,16 @@ def setup_exp_params(study_name: str):
             'OnsetFrequency',
             'OnsetPressureStrainEnergy'
         ]
+        param_options = ['const_shape', 'all']
         paramss = (
             DEFAULT_PARAMS_BASIC.substitute({
                 'Functional': func_name,
                 'Ecov': emod,
-                'Ebod': emod
+                'Ebod': emod,
+                'ParamOption': param_option
             })
-            for func_name, emod in itertools.product(functional_names, emods)
+            for func_name, emod, param_option
+            in itertools.product(functional_names, emods, param_options)
         )
         return paramss
     else:
@@ -260,8 +263,13 @@ def setup_redu_functional(params):
     _props = setup_props(hopf, params)
 
     if params['ParamOption'] == 'const_shape':
+        const_vals = {key: subvec for key, subvec in _props.sub_items()}
+        const_vals.pop('emod')
+
+        # scale = {'emod'}
         parameterization = pzn.ConstantSubset(
-            hopf.res, const_vals={'umesh': 0}
+            hopf.res,
+            const_vals=const_vals
         )
     elif params['ParamOption'] == 'all':
         parameterization = pzn.TractionShape(
