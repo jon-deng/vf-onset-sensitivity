@@ -440,13 +440,17 @@ def xhopf_params(hopf_model, params):
         ('umesh', 1.0e-4)
     ]
 )
-def dprops(props, request):
+def dprops_dir(request):
+    return request.param
+
+@pytest.fixture()
+def dprops(props, dprops_dir):
     """Return a `props` perturbation"""
 
     dprops = props.copy()
     dprops[:] = 0
 
-    key, val = request.param
+    key, val = dprops_dir
     dprops[key] = val
     return dprops
 
@@ -565,7 +569,7 @@ class TestFunctionalGradient:
 
 class TestReducedFunctional:
     """
-    Test `ReducedFunctional` class
+    Test `libhopf.ReducedFunctional`
     """
 
     @pytest.fixture()
@@ -602,6 +606,16 @@ class TestReducedFunctional:
         ]
         return propss
 
+    @pytest.fixture()
+    def step_size(self, dprops_dir):
+        prop_key, prop_value = dprops_dir
+
+        key_to_h = {
+            'emod': 1,
+            'umesh': 1e-5
+        }
+        return key_to_h.get(prop_key, 1.0e-3)
+
     def test_set_props(self, rfunctional, props_list):
         """
         Test `ReducedFunctional.set_props` solves for a Hopf bifurcation
@@ -620,27 +634,29 @@ class TestReducedFunctional:
             hopf.set_props(rfunctional.rhopf_model.props)
             print(bla.norm(hopf.assem_res()))
 
-    def test_assem_d2g_dprops2(self, rfunctional, xhopf_props, dprops):
+    def test_assem_d2g_dprops2(
+            self, rfunctional, xhopf_props, dprops, step_size
+        ):
         """
         Test `ReducedFunctional.assem_d2g_dprops2`
         """
+        h = step_size
         xhopf, props = xhopf_props
 
         norm_dprops = bla.norm(dprops)
         unit_dprops = dprops/norm_dprops
-        unit_dprops.print_summary()
+        # unit_dprops.print_summary()
 
         def assem_grad(props):
             # print(bla.norm(props))
             rfunctional.set_props(props)
             return rfunctional.assem_dg_dprops().copy()
 
-        def assem_hvp(props, dprops):
+        def assem_hvp(props, dprops, h):
             # print(bla.norm(props))
             rfunctional.set_props(props)
-            return rfunctional.assem_d2g_dprops2(dprops).copy()
+            return rfunctional.assem_d2g_dprops2(dprops, h=h).copy()
 
-        h = 1e0
         # breakpoint()
         # rfunctional.set_props(props)
         dgrad_fd = norm_dprops/(h)*(
@@ -651,7 +667,7 @@ class TestReducedFunctional:
         dgrad_cd = norm_dprops/(2*h)*(
             assem_grad(props+h*unit_dprops) - assem_grad(props-h*unit_dprops)
         )
-        dgrad_hvp = assem_hvp(props, dprops)
+        dgrad_hvp = assem_hvp(props, dprops, h)
         print(bla.norm(dgrad_hvp), bla.norm(dgrad_fd), bla.norm(dgrad_cd), bla.norm(dgrad_hvp-dgrad_fd))
 
 class TestOptGradManager:
