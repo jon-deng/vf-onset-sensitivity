@@ -65,7 +65,7 @@ PSUBS = np.arange(0, 1500, 50) * 10
 
 def setup_dyna_model(params: exputils.BaseParameters):
     """
-    Return the model corresponding to parameters
+    Return a dynamical model
     """
     mesh_name = params['MeshName']
     mesh_path = path.join('./mesh', mesh_name+'.msh')
@@ -77,9 +77,8 @@ def setup_dyna_model(params: exputils.BaseParameters):
 
 def setup_tran_model(params: exputils.BaseParameters):
     """
-    Return the model corresponding to parameters
+    Return a transient model
     """
-
     mesh_name = params['MeshName']
     mesh_path = path.join('./mesh', mesh_name+'.msh')
 
@@ -92,19 +91,21 @@ def setup_tran_model(params: exputils.BaseParameters):
     return model
 
 def setup_props(
-        model: Union[tbase.BaseTransientModel, dbase.BaseDynamicalModel],
-        params: exputils.BaseParameters
+        params: exputils.BaseParameters,
+        model: Union[tbase.BaseTransientModel, dbase.BaseDynamicalModel]
     ):
     """
-    Return the properties vector
+    Return a properties vector
     """
     props = model.props.copy()
-
     region_to_dofs = process_celllabel_to_dofs_from_forms(
-        model.res.solid.forms, model.res.solid.forms['fspace.scalar_dg0'].dofmap()
+        model.res.solid.forms,
+        model.res.solid.forms['fspace.scalar_dg0'].dofmap()
     )
-
-    props = set_props(props, model, region_to_dofs, params['Ecov'], params['Ebod'])
+    props = set_props(
+        props, model, region_to_dofs,
+        params['Ecov'], params['Ebod']
+    )
     return props
 
 def set_props(props, hopf, celllabel_to_dofs, emod_cov, emod_bod):
@@ -123,11 +124,11 @@ def set_props(props, hopf, celllabel_to_dofs, emod_cov, emod_bod):
     return props
 
 def setup_functional(
-        model: dbase.BaseDynamicalModel,
-        params: exputils.BaseParameters
+        params: exputils.BaseParameters,
+        model: dbase.BaseDynamicalModel
     ):
     """
-    Return the specified functional
+    Return a functional
     """
     func_onset_pressure = libfuncs.OnsetPressureFunctional(model)
     func_onset_frequency = libfuncs.AbsOnsetFrequencyFunctional(model)
@@ -167,6 +168,9 @@ def setup_opt_options(
         params: exputils.BaseParameters,
         parameterization
     ):
+    """
+    Return optimizer options
+    """
     _lb = parameterization.x.copy()
     _ub = parameterization.x.copy()
     _lb[:] = -np.inf
@@ -256,11 +260,14 @@ def setup_exp_params(study_name: str):
     else:
         raise ValueError("Unknown `study_name` '{study_name}'")
 
-def setup_redu_functional(params):
+def setup_reduced_functional(params):
+    """
+    Return a reduced functional + additional stuff
+    """
     ## Load the model and set model properties
     hopf, *_ = setup_dyna_model(params)
 
-    _props = setup_props(hopf, params)
+    _props = setup_props(params, hopf)
 
     if params['ParamOption'] == 'const_shape':
         const_vals = {key: subvec for key, subvec in _props.sub_items()}
@@ -290,9 +297,6 @@ def setup_redu_functional(params):
     hopf.set_state(xhopf_n)
 
     ## Load the functional/objective function and gradient
-    # params = params.substitute(
-    #     {'Functional/omega': xhopf_n['omega'][0]}
-    # )
     _params = params.substitute({})
     if isinstance(params['Functional'], FrequencyPenaltyFuncParam):
         if params['Functional/omega'] == -1:
@@ -303,16 +307,19 @@ def setup_redu_functional(params):
                     'beta': 1000.0
                 }
             })
-    func = setup_functional(hopf, _params)
+    func = setup_functional(_params, hopf)
 
-    redu_functional = libhopf.ReducedFunctional(func, libhopf.ReducedHopfModel(hopf))
+    redu_functional = libhopf.ReducedFunctional(
+        func,
+        libhopf.ReducedHopfModel(hopf)
+    )
     return redu_functional, hopf, xhopf_n, p, parameterization
 
 def run_minimize_functional(params, output_dir='out/minimization'):
     """
     Run an experiment where a functional is minimized
     """
-    redu_grad, hopf, xhopf_n, p0, parameterization = setup_redu_functional(params)
+    redu_grad, hopf, xhopf_n, p0, parameterization = setup_reduced_functional(params)
 
     ## Run the minimizer
     # Set optimizer options/callback
@@ -342,7 +349,7 @@ def run_functional_sensitivity(params, output_dir='out/sensitivity'):
     """
     Run an experiment where the sensitivity of a functional is saved
     """
-    rfunc, hopf, xhopf_n, p0, parameterization = setup_redu_functional(params)
+    rfunc, hopf, xhopf_n, p0, parameterization = setup_reduced_functional(params)
 
     ## Compute 1st order sensitivity of the functional
     rfunc.set_props(parameterization.apply(p0))
