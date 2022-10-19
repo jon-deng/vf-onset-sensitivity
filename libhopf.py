@@ -1449,11 +1449,16 @@ class ReducedFunctionalHessianContext:
     def __init__(
             self,
             reduced_functional: ReducedFunctional,
-            parameterization: paramzn.BaseParameterization
+            parameterization: paramzn.BaseParameterization,
+            norm: Optional[Callable[[bvec.BlockVector], float]]=None,
+            step_size: Optional[float]=None
         ):
         self.rfunctional = reduced_functional
         self.parameterization = parameterization
         self.params = parameterization.x.copy()
+
+        self._norm = norm
+        self._step_size = step_size
 
     def set_params(self, params: bvec.BlockVector):
         self.params[:] = params
@@ -1467,7 +1472,9 @@ class ReducedFunctionalHessianContext:
 
         # Use the parameterization to convert parameter -> model properties
         dprops = self.parameterization.apply_jvp(self.params, bx)
-        hy = self.rfunctional.assem_d2g_dprops2(dprops)
+        hy = self.rfunctional.assem_d2g_dprops2(
+            dprops, norm=self._norm, h=self._step_size
+        )
         # Convert dual properties -> dual parameter
         by = self.parameterization.apply_vjp(self.params, hy)
 

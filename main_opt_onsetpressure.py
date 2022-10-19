@@ -226,7 +226,7 @@ def setup_exp_params(study_name: str):
             'OnsetPressure',
             'OnsetPressureStrainEnergy'
         ]
-        param_options = ['const_shape', 'all']
+        param_options = ['const_shape', 'traction_shape']
 
         paramss = (
             DEFAULT_PARAMS_PENALTY.substitute({
@@ -260,6 +260,45 @@ def setup_exp_params(study_name: str):
     else:
         raise ValueError("Unknown `study_name` '{study_name}'")
 
+def setup_parameterization(params, hopf, props):
+    """
+    Return a parameterization
+    """
+    const_vals = {key: subvec for key, subvec in props.sub_items()}
+    scale = {
+        'emod': 1e4,
+        'umesh': 1e-1
+    }
+
+    parameterization = None
+    if params['ParamOption'] == 'const_shape':
+        const_vals.pop('emod')
+
+        # scale = {'emod'}
+        parameterization = pzn.ConstantSubset(
+            hopf.res,
+            const_vals=const_vals,
+            scale=scale
+        )
+    elif params['ParamOption'] == 'all':
+        const_vals.pop('emod')
+        const_vals.pop('umesh')
+
+        # scale = {'emod'}
+        parameterization = pzn.ConstantSubset(
+            hopf.res,
+            const_vals=const_vals,
+            scale=scale
+        )
+    elif params['ParamOption'] == 'traction_shape':
+        parameterization = pzn.TractionShape(
+            hopf.res, lame_lambda=1.0e4, lame_mu=1.0e4
+        )
+    else:
+        raise ValueError(f"Unknown 'ParamOption': {params['ParamOption']}")
+
+    return parameterization
+
 def setup_reduced_functional(params):
     """
     Return a reduced functional + additional stuff
@@ -268,22 +307,8 @@ def setup_reduced_functional(params):
     hopf, *_ = setup_dyna_model(params)
 
     _props = setup_props(params, hopf)
+    parameterization = setup_parameterization(params, hopf, _props)
 
-    if params['ParamOption'] == 'const_shape':
-        const_vals = {key: subvec for key, subvec in _props.sub_items()}
-        const_vals.pop('emod')
-
-        # scale = {'emod'}
-        parameterization = pzn.ConstantSubset(
-            hopf.res,
-            const_vals=const_vals
-        )
-    elif params['ParamOption'] == 'all':
-        parameterization = pzn.TractionShape(
-            hopf.res, lame_lambda=1.0e4, lame_mu=1.0e4
-        )
-    else:
-        raise ValueError(f"Unknown 'ParamOption': {params['ParamOption']}")
     p = parameterization.x.copy()
     for key, subvec in _props.items():
         if key in p:
@@ -357,8 +382,21 @@ def run_functional_sensitivity(params, output_dir='out/sensitivity'):
     grad_params = parameterization.apply_vjp(p0, grad_props)
 
     ## Compute 2nd order sensitivity of the functional
+    _scale = hopf.props.copy()
+    _scale[:] = 1
+    _scale['umesh'][:] = 1e-1
+    _scale['emod'][:] = 1e4
+    def norm(x):
+        """
+        Return a scaled norm
+
+        This norm roughly accounts for the difference in scale between
+        modulus, shape changes, etc.
+        """
+        return bvec.norm(x/_scale)
+
     redu_hess_context = libhopf.ReducedFunctionalHessianContext(
-        rfunc, parameterization
+        rfunc, parameterization, norm=norm, step_size=1e-3
     )
     redu_hess_context.set_params(p0)
     mat = PETSc.Mat().createPython(p0.mshape*2)
