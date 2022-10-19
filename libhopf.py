@@ -1,27 +1,28 @@
 """
 Contains code to create and solve Hopf system
 
-The hopf system represents the conditions satisified at a Hopf bifurcation. Consider a nonlinear
-dynamical system (the `res` model) defined by
-F(x_t, x; ...) ,
+The hopf system represents the conditions satisified at a Hopf bifurcation.
+Consider a nonlinear dynamical system (the `res` model) defined by
+    F(x_t, x; ...) ,
 where x_t is the state time derivative and x is the state.
 
 The first condition is a fixed point:
-F(x_t, x; ...) = 0
+    F(x_t, x; ...) = 0
 
-The second condition is the linearized dynamics are periodic and neutrally stable. The linearized
-dynamics are given by
-d_x_t F delta x_t + d_x delta x = 0.
+The second condition is the linearized dynamics are periodic and neutrally
+stable.
+The linearized dynamics are given by
+    d_x_t F delta x_t + d_x delta x = 0.
 Assuming an ansatz of
-delta x_t = exp(omega_r + 1j*omega_i) * zeta
-and substituting in the above
-will get the mode shape conditions. Note that this is a different sign convention from that
-adopted by Griewank and Reddien where they assume
-delta x_t = exp(omega_r - 1j*omega_i) * zeta
+    delta x_t = exp(omega_r + 1j*omega_i) * zeta
+and substituting the above will get the mode shape conditions.
+Note that this uses a different sign convention from that in
+Griewank and Reddien where they assume
+    delta x_t = exp(omega_r - 1j*omega_i) * zeta
 so the Hopf equations below are slightly different.
 """
 
-from typing import Tuple, List, Dict, Optional
+from typing import Callable, Tuple, List, Dict, Optional
 import itertools
 import functools
 import operator
@@ -1210,17 +1211,24 @@ class ReducedFunctional:
             self.props
         )
 
-    def assem_d2g_dprops2(self, dprops: bvec.BlockVector, h=1) -> bvec.BlockVector:
+    def assem_d2g_dprops2(
+            self,
+            dprops: bvec.BlockVector,
+            norm: Optional[Callable[[bvec.BlockVector], float]]=None,
+            h: float=1
+        ) -> bvec.BlockVector:
         """
         Return the functional hessian-vector product
         """
-        # Make sure that the input dprops has the right subvector types
-        _dprops = self.props.copy()
-        _dprops[:] = dprops
-        dprops = _dprops
+        if norm is None:
+            norm = bla.norm
 
-        norm_dprops = bla.norm(dprops)
-        unit_dprops = dprops/norm_dprops
+        # Make sure that the input dprops has the right subvector types
+        unit_dprops = self.props.copy()
+        unit_dprops[:] = dprops
+
+        norm_dprops = bla.norm(unit_dprops)
+        unit_dprops = unit_dprops/norm_dprops
 
         # Approximate the HVP with a central difference
         def assem_grad(hopf_props):

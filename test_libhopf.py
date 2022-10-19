@@ -607,14 +607,22 @@ class TestReducedFunctional:
         return propss
 
     @pytest.fixture()
-    def step_size(self, dprops_dir):
-        prop_key, prop_value = dprops_dir
+    def norm(self, dprops):
+        """
+        Return a scaled norm
 
-        key_to_h = {
-            'emod': 1,
-            'umesh': 1e-5
-        }
-        return key_to_h.get(prop_key, 1.0e-3)
+        This is used to generate reasonable step sizes for
+        finite differences.
+        """
+        scale = dprops.copy()
+        scale[:] = 1
+        scale['emod'][:] = 1e4
+        scale['umesh'][:] = 0.1
+
+        def scaled_norm(x):
+            return bla.norm(x/scale)
+
+        return scaled_norm
 
     def test_set_props(self, rfunctional, props_list):
         """
@@ -635,15 +643,15 @@ class TestReducedFunctional:
             print(bla.norm(hopf.assem_res()))
 
     def test_assem_d2g_dprops2(
-            self, rfunctional, xhopf_props, dprops, step_size
+            self, rfunctional, xhopf_props, dprops, norm
         ):
         """
         Test `ReducedFunctional.assem_d2g_dprops2`
         """
-        h = step_size
+        h = 1e-3
         xhopf, props = xhopf_props
 
-        norm_dprops = bla.norm(dprops)
+        norm_dprops = norm(dprops)
         unit_dprops = dprops/norm_dprops
         # unit_dprops.print_summary()
 
@@ -652,10 +660,10 @@ class TestReducedFunctional:
             rfunctional.set_props(props)
             return rfunctional.assem_dg_dprops().copy()
 
-        def assem_hvp(props, dprops, h):
+        def assem_hvp(props, dprops):
             # print(bla.norm(props))
             rfunctional.set_props(props)
-            return rfunctional.assem_d2g_dprops2(dprops, h=h).copy()
+            return rfunctional.assem_d2g_dprops2(dprops, h=h, norm=norm).copy()
 
         # breakpoint()
         # rfunctional.set_props(props)
@@ -667,7 +675,7 @@ class TestReducedFunctional:
         dgrad_cd = norm_dprops/(2*h)*(
             assem_grad(props+h*unit_dprops) - assem_grad(props-h*unit_dprops)
         )
-        dgrad_hvp = assem_hvp(props, dprops, h)
+        dgrad_hvp = assem_hvp(props, dprops)
         print(bla.norm(dgrad_hvp), bla.norm(dgrad_fd), bla.norm(dgrad_cd), bla.norm(dgrad_hvp-dgrad_fd))
 
 class TestOptGradManager:
