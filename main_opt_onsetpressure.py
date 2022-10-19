@@ -264,7 +264,7 @@ def setup_parameterization(params, hopf, props):
     """
     Return a parameterization
     """
-    const_vals = {key: subvec for key, subvec in props.sub_items()}
+    const_vals = {key: np.array(subvec) for key, subvec in props.sub_items()}
     scale = {
         'emod': 1e4,
         'umesh': 1e-1
@@ -297,7 +297,7 @@ def setup_parameterization(params, hopf, props):
     else:
         raise ValueError(f"Unknown 'ParamOption': {params['ParamOption']}")
 
-    return parameterization
+    return parameterization, scale
 
 def setup_reduced_functional(params):
     """
@@ -307,14 +307,23 @@ def setup_reduced_functional(params):
     hopf, *_ = setup_dyna_model(params)
 
     _props = setup_props(params, hopf)
-    parameterization = setup_parameterization(params, hopf, _props)
+
+    ## Setup the linearization/initial guess parameters
+    parameterization, scale = setup_parameterization(params, hopf, _props)
 
     p = parameterization.x.copy()
     for key, subvec in _props.items():
         if key in p:
             p[key][:] = subvec
 
-    hopf.set_props(parameterization.apply(p))
+    # Apply the scaling that's used for `ConstantSubset`
+    if isinstance(parameterization, pzn.ConstantSubset):
+        for key, val in scale.items():
+            p[key][:] = p.sub[key]/val
+
+    props = parameterization.apply(p)
+    hopf.set_props(props)
+    assert np.isclose(bvec.norm(props-_props), 0)
 
     ## Solve for the Hopf bifurcation
     xhopf_0 = libhopf.gen_hopf_initial_guess(hopf, PSUBS, tol=100.0)
@@ -423,7 +432,7 @@ def run_functional_sensitivity(params, output_dir='out/sensitivity'):
         eigvals.append(eigval)
         eigvecs.append(eigvec)
 
-    breakpoint()
+    # breakpoint()
     fpath = path.join(output_dir, params.to_str()+'.h5')
     if not path.isfile(fpath):
         with h5py.File(fpath, mode='w') as f:
