@@ -560,7 +560,10 @@ class TestFunctionalGradient:
             func.set_state(x)
             func.set_props(props)
 
-            return bla.dot(libhopf.solve_reduced_gradient(func, hopf), dprops)
+            return bla.dot(
+                libhopf.solve_reduced_gradient(func, hopf. xhopf. props),
+                dprops
+            )
 
         taylor_convergence(
             props, dprops, res, jac,
