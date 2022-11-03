@@ -326,8 +326,8 @@ def setup_reduced_functional(params):
     assert np.isclose(bvec.norm(props-_props), 0)
 
     ## Solve for the Hopf bifurcation
-    xhopf_0 = libhopf.gen_hopf_initial_guess(hopf, PSUBS, tol=100.0)
-    xhopf_n, info = libhopf.solve_hopf_newton(hopf, xhopf_0)
+    xhopf_0 = libhopf.gen_xhopf_0(hopf, PSUBS, tol=100.0)
+    xhopf_n, info = libhopf.solve_hopf_by_newton(hopf, xhopf_0)
     hopf.set_state(xhopf_n)
 
     ## Load the functional/objective function and gradient

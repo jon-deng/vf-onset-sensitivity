@@ -234,7 +234,6 @@ class TestHopfModel:
 
         hopf = hopf_model
         state, props = xhopf_props
-        dprops = dprops
         hopf.set_state(state)
 
         def hopf_res(x):
@@ -263,7 +262,6 @@ class TestHopfModel:
         """
         hopf = hopf_model
         state, props = xhopf_props
-        dprops = dprops
         hopf.set_state(state)
         hopf.set_props(props)
 
@@ -304,57 +302,50 @@ class TestHopfUtilities:
     Test utility functions for the Hopf bifurcation system
     """
     @pytest.fixture()
-    def setup_bound_pairs(self):
+    def bound_pairs(self):
         """Return lower/upper subglottal pressure bounds"""
         lbs = [400.0*10]
         ubs = [600.0*10]
         return (lbs, ubs)
 
-    def test_bound_hopf_bifurcations(self, hopf_model, props, setup_bound_pairs):
+    def test_bound_hopf_bifurcations(self, hopf_model, props, bound_pairs):
         """Test `bound_hopf_bifurcations`"""
         hopf = hopf_model
-        bound_pairs = setup_bound_pairs
-        props = props
         hopf.set_props(props)
 
-        bounds, omegas = libhopf.bound_hopf_bifurcations(hopf.res, bound_pairs)
+        dyn_model = hopf.res
+        dyn_props = hopf.res.props
+        dyn_control = hopf.res.control
+
+        bounds, omegas = libhopf.bound_ponset(
+            dyn_model, dyn_control, dyn_props, bound_pairs
+        )
         print(f"Hopf bifurcations between {bounds[0]} and {bounds[1]}")
         print(f"with growth rates between {omegas[0]} and {omegas[1]}")
 
-    def test_gen_hopf_initial_guess_from_bounds(self, hopf_model, props, setup_bound_pairs):
+    def test_gen_hopf_initial_guess_from_bounds(self, hopf_model, props, bound_pairs):
         """Test `gen_hopf_initial_guess_from_bounds`"""
         hopf = hopf_model
-        bound_pairs = setup_bound_pairs
-        props = props
-        hopf.set_props(props)
 
-        eref = hopf.res.state.copy()
-        eref[:] = 1.0
+        xhopf_0 = libhopf.gen_xhopf_0_from_bounds(hopf, props, bound_pairs)
 
-        xhopf_0 = libhopf.gen_hopf_initial_guess_from_bounds(hopf, bound_pairs)
-
-        xhopf_n, info = libhopf.solve_hopf_newton(hopf, xhopf_0)
+        xhopf_n, info = libhopf.solve_hopf_by_newton(hopf, xhopf_0, props)
         print(f"Solved Hopf system from automatic initial guess with info {info}")
 
     @pytest.fixture()
-    def setup_xhopf_0(self, hopf_model, props, setup_bound_pairs):
+    def setup_xhopf_0(self, hopf_model, props, bound_pairs):
         """Return an initial guess for the hopf state"""
         hopf = hopf_model
-        bound_pairs = setup_bound_pairs
-        props = props
-        hopf.set_props(props)
 
-        xhopf_0 = libhopf.gen_hopf_initial_guess_from_bounds(hopf, bound_pairs)
+        xhopf_0 = libhopf.gen_xhopf_0_from_bounds(hopf, props, bound_pairs)
         return xhopf_0
 
     def test_solve_hopf_newton(self, hopf_model, props, setup_xhopf_0):
         """Test `solve_hopf_newton`"""
         xhopf_0 = setup_xhopf_0
         hopf = hopf_model
-        props = props
-        hopf.set_props(props)
 
-        xhopf, info = libhopf.solve_hopf_newton(hopf, xhopf_0)
+        xhopf, info = libhopf.solve_hopf_by_newton(hopf, xhopf_0, props)
 
 @pytest.fixture(
     params=[
@@ -411,8 +402,8 @@ def solve_linearization(hopf, props):
     """
     hopf.set_props(props)
     psubs = np.arange(100, 1000, 100)*10
-    xhopf_0 = libhopf.gen_hopf_initial_guess(hopf, psubs)
-    xhopf, info = libhopf.solve_hopf_newton(hopf, xhopf_0)
+    xhopf_0 = libhopf.gen_xhopf_0(hopf, props, psubs)
+    xhopf, info = libhopf.solve_hopf_by_newton(hopf, xhopf_0, props)
     return xhopf, info
 
 @pytest.fixture()
@@ -484,19 +475,16 @@ class TestFunctionalGradient:
 
         hopf = hopf_model
         xhopf, props = xhopf_props
-        dprops = dprops
 
-        def res(y):
-            hopf.set_props(y)
-            x, info = libhopf.solve_hopf_newton(hopf, xhopf)
+        def res(props):
+            x, info = libhopf.solve_hopf_by_newton(hopf, xhopf, props)
             # print(info)
             assert info['status'] == 0
             return x
 
-        def jac(y, dy):
+        def jac(props, dprops):
             # Set the linearization point
-            hopf.set_props(y)
-            x, info = libhopf.solve_hopf_newton(hopf, xhopf)
+            x, info = libhopf.solve_hopf_by_newton(hopf, xhopf, props)
             assert info['status'] == 0
             # print(info)
             hopf.set_state(x)
@@ -504,7 +492,7 @@ class TestFunctionalGradient:
             # Compute the jacobian action
             dres_dprops = hopf.assem_dres_dprops()
             hopf.zero_rows_dirichlet_bmat(dres_dprops)
-            dres = bla.mult_mat_vec(dres_dprops, dy)
+            dres = bla.mult_mat_vec(dres_dprops, dprops)
             _dres = dres.to_mono_petsc()
 
             dstate = hopf.state.copy()
@@ -545,7 +533,7 @@ class TestFunctionalGradient:
 
         def res(props):
             hopf.set_props(props)
-            x, info = libhopf.solve_hopf_newton(hopf, xhopf)
+            x, info = libhopf.solve_hopf_by_newton(hopf, xhopf, props)
             assert info['status'] == 0
 
             func.set_state(x)
@@ -554,7 +542,7 @@ class TestFunctionalGradient:
 
         def jac(props, dprops):
             hopf.set_props(props)
-            x, info = libhopf.solve_hopf_newton(hopf, xhopf)
+            x, info = libhopf.solve_hopf_by_newton(hopf, xhopf, props)
 
             hopf.set_state(x)
             func.set_state(x)

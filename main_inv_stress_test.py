@@ -149,12 +149,12 @@ def run_solve_hopf(fpath, emod_cov, emod_bod):
             print(f"Case {lsa_fname} has a Hopf bifurcation between {PSUBS[idx_hopf]} {PSUBS[idx_hopf+1]} dPa")
             print(f"Real eigenvalue components are {omegas_real}")
 
-            xhopf_0 = libhopf.gen_hopf_initial_guess(
+            xhopf_0 = libhopf.gen_xhopf_0(
                 RES_HOPF,
                 PSUBS[idx_hopf:idx_hopf+2],
                 tol=100
             )
-            xhopf_n, info = libhopf.solve_hopf_newton(RES_HOPF, xhopf_0)
+            xhopf_n, info = libhopf.solve_hopf_by_newton(RES_HOPF, xhopf_0)
 
             bh5utils.create_resizable_block_vector_group(f.require_group('state'), xhopf_n.labels, xhopf_n.bshape)
             bh5utils.append_block_vector_to_group(f['state'], xhopf_n)

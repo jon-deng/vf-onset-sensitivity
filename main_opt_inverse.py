@@ -45,8 +45,8 @@ if __name__ == '__main__':
     hopf.set_props(props)
 
     PSUBS = np.linspace(0, 1000, 11)*10
-    xhopf_0 = libhopf.gen_hopf_initial_guess(hopf, PSUBS, tol=100.0)
-    xhopf_0, _info = libhopf.solve_hopf_newton(hopf, xhopf_0)
+    xhopf_0 = libhopf.gen_xhopf_0(hopf, PSUBS, tol=100.0)
+    xhopf_0, _info = libhopf.solve_hopf_by_newton(hopf, xhopf_0)
     hopf.set_state(xhopf_0)
 
     ## Load the synthetic measured glottal width + frequency
