@@ -561,7 +561,7 @@ class TestFunctionalGradient:
             func.set_props(props)
 
             return bla.dot(
-                libhopf.solve_reduced_gradient(func, hopf. xhopf. props),
+                libhopf.solve_reduced_gradient(func, hopf, xhopf, props),
                 dprops
             )
 
