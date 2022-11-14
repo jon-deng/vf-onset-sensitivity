@@ -699,6 +699,7 @@ def solve_fp(
         res: dyncoup.BaseDynamicalFSIModel,
         control: bvec.BlockVector,
         props: bvec.BlockVector,
+        xfp_0: Optional[bvec.BlockVector]=None,
         psub_incr: float=5000,
         n_max: int=10,
         method='newton',
@@ -717,8 +718,11 @@ def solve_fp(
     # using the previous fixed-point as the initial guess for the next
     # fixed-point solve
     control_n = control.copy()
-    xfp_n = res.state.copy()
-    xfp_n[:] = 0.0
+    if xfp_0 is None:
+        xfp_n = res.state.copy()
+        xfp_n[:] = 0.0
+    else:
+        xfp_n = xfp_0
 
     n = 0
     psub_n = 0.0
@@ -750,6 +754,13 @@ def solve_fp(
             psub_n = _psub
 
     info['load_steps.num_iter'] = n
+
+    if info['status'] != 0:
+        warnings.warn(
+            "Fixed-point solver did not converge with (status, message): "
+            f"({info['status']}, {info['message']})"
+        )
+
     return xfp_n, info
 
 def solve_fp_by_newton(
@@ -925,6 +936,7 @@ def solve_least_stable_mode(
         model: dynbase.BaseDynamicalModel,
         control: bvec.BlockVector,
         props: bvec.BlockVector,
+        xfp_0: Optional[bvec.BlockVector]=None,
         fp_method='newton',
         fp_params=None
     ) -> Tuple[float, bvec.BlockVector, bvec.BlockVector, bvec.BlockVector]:
@@ -937,7 +949,9 @@ def solve_least_stable_mode(
     """
     # Solve the for the fixed point
     xfp, _info = solve_fp(
-        model, control, props, method=fp_method, iter_params=fp_params
+        model, control, props,
+        xfp_0=xfp_0, method=fp_method, iter_params=fp_params,
+        psub_incr=250*10
     )
 
     # Solve for linear stability around the fixed point
