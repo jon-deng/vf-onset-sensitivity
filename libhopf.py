@@ -1,24 +1,38 @@
-"""
+r"""
 Contains code to create and solve the Hopf system given in [Griewank1983]
 
 The Hopf bifurcation system represents the conditions for a Hopf bifurcation.
-Consider a nonlinear dynamical system (the `res` model) defined by
-    F(x_t, x; ...) ,
-where x_t is the state time derivative and x is the state.
+The model dynamical system here is given by:
+
+.. math::
+    $F(x_t, x; ...) = 0,
+
+where :math:`x_t` is the state time derivative and :math:`x`$` is the state.
 
 The first condition is a fixed point:
+
+.. math::
     F(x_t, x; ...) = 0
 
 The second condition is the linearized dynamics are periodic and neutrally
 stable.
 The linearized dynamics are given by
-    d_x_t F delta x_t + d_x delta x = 0.
+
+.. math::
+    \frac{d}{dt}F \delta x_t + \frac{dF}{dx} \delta x = 0.
+
 Assuming an ansatz of
-    delta x_t = exp(omega_r + 1j*omega_i) * zeta
+
+.. math::
+    \delta x_t = exp(\omega_r + 1j*\omega_i) * \zeta
+
 and substituting the above will get the mode shape conditions.
 Note that this uses a different sign convention from that in
 Griewank and Reddien where they assume
-    delta x_t = exp(omega_r - 1j*omega_i) * zeta
+
+.. math::
+    \delta x_t = exp(\omega_r - 1j*\omega_i) * \zeta
+
 so the Hopf equations below are slightly different.
 
 
