@@ -326,10 +326,10 @@ class StrainEnergyFunctional(BaseFunctional):
     def __init__(self, model: 'libhopf.HopfModel'):
         super().__init__(model)
 
-        from femvf.models.equations.solid.solidforms import form_inf_strain
+        from femvf.models.equations.solid.solidforms import form_strain_inf
         forms = model.res.solid.forms
         dis = forms['coeff.state.u1']
-        inf_strain = form_inf_strain(dis)
+        inf_strain = form_strain_inf(dis)
 
         emod = forms['coeff.prop.emod']
         cauchy_stress = forms['expr.stress_elastic']
