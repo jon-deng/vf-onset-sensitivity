@@ -722,8 +722,7 @@ def solve_fp(
     """
     Solve for a fixed-point
 
-    This high-level solver uses intermediate loading steps with the to find the
-    fixed-point.
+    This high-level solver uses intermediate loading steps in `psub`.
     """
     # The target final subglottal pressure
     psub_final = float(control.sub['psub'][0])
@@ -731,6 +730,8 @@ def solve_fp(
     # Solve for fixed-points at a sequence of intermediate subglottal pressures
     # using the previous fixed-point as the initial guess for the next
     # fixed-point solve
+    n = 0
+    psub_n = 0.0
     control_n = control.copy()
     if xfp_0 is None:
         xfp_n = res.state.copy()
@@ -738,14 +739,11 @@ def solve_fp(
     else:
         xfp_n = xfp_0
 
-    n = 0
-    psub_n = 0.0
     info = {}
-    while psub_n < psub_final:
-        n += 1
 
-        _psub = psub_n + min(psub_incr, psub_final-psub_n)
-        control_n['psub'] = _psub
+    load_steps_complete = False
+    while not load_steps_complete:
+        control_n['psub'] = psub_n
 
         if method == 'newton':
             xfp_n, info = solve_fp_by_newton(
@@ -760,12 +758,21 @@ def solve_fp(
         else:
             raise ValueError(f"Unknown `method` {method}")
 
-        if info['status'] != 0:
+        # Decide what to do if the fixed point for current loading step converges
+        if np.isclose(psub_n, psub_final):
+            load_steps_complete = True
+        elif n >= n_max:
+            load_steps_complete = True
+        elif info['status'] != 0:
+            # doesn't converge: half the loading step and try again
             psub_incr = psub_incr/2
             if n > n_max:
                 break
         else:
-            psub_n = _psub
+            # does converge: increment to the next loading step
+            psub_n = psub_n + min(psub_incr, psub_final-psub_n)
+
+        n += 1
 
     info['load_steps.num_iter'] = n
 
