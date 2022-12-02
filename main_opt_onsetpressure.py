@@ -13,6 +13,11 @@ import numpy as np
 from scipy import optimize
 from petsc4py import PETSc
 from slepc4py import SLEPc
+# NOTE: Importing `dolfin` after `scipy.optimize` is important!
+# Importing it after seems to cause segfaults
+import dolfin as dfn
+dfn.set_log_level(50)
+
 from blockarray import blockvec as bvec, h5utils
 from femvf import load
 from femvf.models.transient import (
@@ -30,10 +35,6 @@ import libfunctionals as libfuncs
 
 import exputils
 
-# NOTE: Import `dolfin` after `scipy.optimize` is important!
-# Importing it after seems to lead to segfaults!
-import dolfin as dfn
-dfn.set_log_level(50)
 # pylint: disable=redefined-outer-name
 
 ptypes = {
