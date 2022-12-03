@@ -442,7 +442,8 @@ def run_functional_sensitivity(params, output_dir='out/sensitivity'):
                     [grad_props, grad_params]
                 ):
                 h5utils.create_resizable_block_vector_group(
-                    f.require_group(key), vec.labels, vec.bshape
+                    f.require_group(key), vec.labels, vec.bshape,
+                    dataset_kwargs={'dtype': 'f8'}
                 )
                 h5utils.append_block_vector_to_group(
                     f[key], vec
@@ -456,7 +457,8 @@ def run_functional_sensitivity(params, output_dir='out/sensitivity'):
                 ):
                 if len(vecs) > 0:
                     h5utils.create_resizable_block_vector_group(
-                        f.require_group(key), vecs[0].labels, vecs[0].bshape
+                        f.require_group(key), vecs[0].labels, vecs[0].bshape,
+                        dataset_kwargs={'dtype': 'f8'}
                     )
                     for vec in vecs:
                         h5utils.append_block_vector_to_group(
@@ -466,7 +468,8 @@ def run_functional_sensitivity(params, output_dir='out/sensitivity'):
             ## Write out the state, control, properties vector
             for (key, vec) in zip(['state', 'props'], [hopf.state, hopf.props]):
                 h5utils.create_resizable_block_vector_group(
-                    f.require_group(key), vec.labels, vec.bshape
+                    f.require_group(key), vec.labels, vec.bshape,
+                    dataset_kwargs={'dtype': 'f8'}
                 )
                 h5utils.append_block_vector_to_group(
                     f[key], vec
