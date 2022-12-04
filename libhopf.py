@@ -1333,7 +1333,7 @@ class ReducedFunctional:
         unit_dprops = self.props.copy()
         unit_dprops[:] = dprops
 
-        norm_dprops = bla.norm(unit_dprops)
+        norm_dprops = norm(unit_dprops)
         unit_dprops = unit_dprops/norm_dprops
 
         # Approximate the HVP with a central difference
