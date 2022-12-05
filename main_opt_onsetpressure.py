@@ -244,7 +244,7 @@ def setup_exp_params(study_name: str):
         functional_names = [
             'OnsetPressure',
             'OnsetFrequency',
-            'OnsetPressureStrainEnergy'
+            # 'OnsetPressureStrainEnergy'
         ]
         param_options = ['const_shape', 'all']
         paramss = (
@@ -385,56 +385,56 @@ def run_functional_sensitivity(params, output_dir='out/sensitivity'):
     """
     rfunc, hopf, xhopf_n, p0, parameterization = setup_reduced_functional(params)
 
-    ## Compute 1st order sensitivity of the functional
-    rfunc.set_props(parameterization.apply(p0))
-    grad_props = rfunc.assem_dg_dprops()
-    grad_params = parameterization.apply_vjp(p0, grad_props)
-
-    ## Compute 2nd order sensitivity of the functional
-    _scale = hopf.props.copy()
-    _scale[:] = 1
-    _scale['umesh'][:] = 1e-1
-    _scale['emod'][:] = 1e4
-    def norm(x):
-        """
-        Return a scaled norm
-
-        This norm roughly accounts for the difference in scale between
-        modulus, shape changes, etc.
-        """
-        return bvec.norm(x/_scale)
-
-    redu_hess_context = libhopf.ReducedFunctionalHessianContext(
-        rfunc, parameterization, norm=norm, step_size=1e-3
-    )
-    redu_hess_context.set_params(p0)
-    mat = PETSc.Mat().createPython(p0.mshape*2)
-    mat.setPythonContext(redu_hess_context)
-    mat.setUp()
-
-    eps = SLEPc.EPS().create()
-    eps.setOperators(mat)
-    eps.setDimensions(5, 20)
-    eps.setProblemType(SLEPc.EPS.ProblemType.HEP)
-    eps.setWhichEigenpairs(SLEPc.EPS.Which.LARGEST_MAGNITUDE)
-    eps.setUp()
-
-    eps.solve()
-
-    neig = eps.getConverged()
-    eigvecs = []
-    eigvals = []
-    _real_evec = mat.getVecRight()
-    for n in range(neig):
-        eigval = eps.getEigenpair(n, _real_evec)
-        eigvec = parameterization.x.copy()
-        eigvec.set_mono(_real_evec)
-        eigvals.append(eigval)
-        eigvecs.append(eigvec)
-
-    # breakpoint()
     fpath = path.join(output_dir, params.to_str()+'.h5')
     if not path.isfile(fpath):
+        ## Compute 1st order sensitivity of the functional
+        rfunc.set_props(parameterization.apply(p0))
+        grad_props = rfunc.assem_dg_dprops()
+        grad_params = parameterization.apply_vjp(p0, grad_props)
+
+        ## Compute 2nd order sensitivity of the functional
+        _scale = hopf.props.copy()
+        _scale[:] = 1
+        _scale['umesh'][:] = 1e-1
+        _scale['emod'][:] = 1e4
+        def norm(x):
+            """
+            Return a scaled norm
+
+            This norm roughly accounts for the difference in scale between
+            modulus, shape changes, etc.
+            """
+            return bvec.norm(x/_scale)
+
+        redu_hess_context = libhopf.ReducedFunctionalHessianContext(
+            rfunc, parameterization, norm=norm, step_size=1e-2
+        )
+        redu_hess_context.set_params(p0)
+        mat = PETSc.Mat().createPython(p0.mshape*2)
+        mat.setPythonContext(redu_hess_context)
+        mat.setUp()
+
+        eps = SLEPc.EPS().create()
+        eps.setOperators(mat)
+        eps.setDimensions(5, 20)
+        eps.setProblemType(SLEPc.EPS.ProblemType.HEP)
+        eps.setWhichEigenpairs(SLEPc.EPS.Which.LARGEST_MAGNITUDE)
+        eps.setUp()
+
+        eps.solve()
+
+        neig = eps.getConverged()
+        eigvecs = []
+        eigvals = []
+        _real_evec = mat.getVecRight()
+        for n in range(neig):
+            eigval = eps.getEigenpair(n, _real_evec)
+            eigvec = parameterization.x.copy()
+            eigvec.set_mono(_real_evec)
+            eigvals.append(eigval)
+            eigvecs.append(eigvec)
+
+        ## Write sensitivities to an h5 file
         with h5py.File(fpath, mode='w') as f:
             ## Write out the gradient vectors
             for (key, vec) in zip(
@@ -452,8 +452,7 @@ def run_functional_sensitivity(params, output_dir='out/sensitivity'):
             ## Write out the hessian eigenvalues and vectors
             f.create_dataset('eigvals', data=np.array(eigvals).real)
             for (key, vecs) in zip(
-                    ['hess_props'],
-                    [eigvecs]
+                    ['hess_param'], [eigvecs]
                 ):
                 if len(vecs) > 0:
                     h5utils.create_resizable_block_vector_group(
@@ -465,15 +464,13 @@ def run_functional_sensitivity(params, output_dir='out/sensitivity'):
                             f[key], vec
                         )
 
-            ## Write out the state, control, properties vector
+            ## Write out the state + properties vectors
             for (key, vec) in zip(['state', 'props'], [hopf.state, hopf.props]):
                 h5utils.create_resizable_block_vector_group(
                     f.require_group(key), vec.labels, vec.bshape,
                     dataset_kwargs={'dtype': 'f8'}
                 )
-                h5utils.append_block_vector_to_group(
-                    f[key], vec
-                )
+                h5utils.append_block_vector_to_group(f[key], vec)
     else:
         print(f"Skipping existing file '{fpath}'")
 
