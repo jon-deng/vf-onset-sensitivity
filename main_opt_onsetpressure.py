@@ -465,7 +465,10 @@ def run_functional_sensitivity(params, output_dir='out/sensitivity'):
                         )
 
             ## Write out the state + properties vectors
-            for (key, vec) in zip(['state', 'props'], [hopf.state, hopf.props]):
+            for (key, vec) in zip(
+                    ['state', 'props', 'param'],
+                    [hopf.state, hopf.props, p0]
+                ):
                 h5utils.create_resizable_block_vector_group(
                     f.require_group(key), vec.labels, vec.bshape,
                     dataset_kwargs={'dtype': 'f8'}
