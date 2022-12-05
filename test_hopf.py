@@ -29,7 +29,8 @@ def taylor_convergence(x0, dx, res, jac, norm=None):
     if norm is None:
         norm = bla.norm
 
-    alphas = 2**np.arange(4)[::-1] # start with the largest step and move to original
+    # Step sizes go from largest to smallest
+    alphas = 2**np.arange(4)[::-1]
     res_ns = [res(x0+alpha*dx).copy() for alpha in alphas]
     res_0 = res(x0).copy()
 
@@ -52,7 +53,7 @@ def taylor_convergence(x0, dx, res, jac, norm=None):
     print(f"||dres_linear||, ||dres_exact|| = {norm(dres_linear)}, {norm(dres_exacts[-1])}")
     print("Relative errors: ", rel_errs)
     print("Convergence rates: ", np.array(conv_rates))
-    return errs, magnitudes, conv_rates
+    return alphas, errs, magnitudes, conv_rates
 
 def test_assem_dres_dstate(hopf, state0, dstate):
 

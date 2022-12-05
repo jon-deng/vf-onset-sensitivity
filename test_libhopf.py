@@ -639,11 +639,11 @@ class TestReducedFunctional:
         """
         Test `ReducedFunctional.assem_d2g_dprops2`
         """
-        h = 1e-3
+        h = 1e-2
         xhopf, props = xhopf_props
 
-        norm_dprops = norm(dprops)
-        unit_dprops = dprops/norm_dprops
+        # norm_dprops = norm(dprops)
+        # unit_dprops = dprops/norm_dprops
         # unit_dprops.print_summary()
 
         def assem_grad(props):
@@ -656,18 +656,11 @@ class TestReducedFunctional:
             rfunctional.set_props(props)
             return rfunctional.assem_d2g_dprops2(dprops, h=h, norm=norm).copy()
 
-        # breakpoint()
-        # rfunctional.set_props(props)
-        dgrad_fd = norm_dprops/(h)*(
-            assem_grad(props+h*unit_dprops) - assem_grad(props)
+        alphas, errs, mags, conv_rates = taylor_convergence(
+            props, dprops, assem_grad, assem_hvp, norm=bla.norm
         )
 
-        # rfunctional.set_props(props)
-        dgrad_cd = norm_dprops/(2*h)*(
-            assem_grad(props+h*unit_dprops) - assem_grad(props-h*unit_dprops)
-        )
-        dgrad_hvp = assem_hvp(props, dprops)
-        print(bla.norm(dgrad_hvp), bla.norm(dgrad_fd), bla.norm(dgrad_cd), bla.norm(dgrad_hvp-dgrad_fd))
+        breakpoint()
 
 class TestOptGradManager:
     """
