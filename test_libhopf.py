@@ -660,8 +660,6 @@ class TestReducedFunctional:
             props, dprops, assem_grad, assem_hvp, norm=bla.norm
         )
 
-        breakpoint()
-
 class TestOptGradManager:
     """
     Test the `OptGradManager` class
