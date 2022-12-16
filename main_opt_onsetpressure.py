@@ -253,9 +253,11 @@ def setup_exp_params(study_name: str):
         emod_covs = np.concatenate([
             2*np.arange(1, 10, 2),
             1*np.arange(1, 10, 2),
+            1/3*np.arange(1, 10, 2),
             0.5*np.arange(1, 10, 2)
         ]) * 10 * 1e3
         emod_bods = np.concatenate([
+            2*np.arange(1, 10, 2),
             2*np.arange(1, 10, 2),
             2*np.arange(1, 10, 2),
             2*np.arange(1, 10, 2)
