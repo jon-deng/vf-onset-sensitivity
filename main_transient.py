@@ -55,9 +55,9 @@ region_to_dofs = process_celllabel_to_dofs_from_forms(
 )
 
 ## Set model properties to nominal values
-props = model.props.copy()
-props = libsetup.set_default_props(props, model.solid.forms['mesh.mesh'])
-model.set_props(props)
+prop = model.prop.copy()
+prop = libsetup.set_default_props(prop, model.solid.forms['mesh.mesh'])
+model.set_prop(prop)
 
 # # geometric properties related to the symmetry/contact planes
 y_gap = 0.01
@@ -82,7 +82,7 @@ def run(psub):
     # Compute the static configuration for the initial state if needed
     if INIT_STATE_TYPE == 'static':
         model.set_control(controls[0])
-        x_static, info = static_coupled_configuration_picard(model, controls[0], model.props)
+        x_static, info = static_coupled_configuration_picard(model, controls[0], model.prop)
         print(f"Solved for equilibrium state: {info}")
         ini_state[['u', 'q', 'p']] = x_static[['u', 'q', 'p']]
 
@@ -103,7 +103,7 @@ def run(psub):
 
     if not isfile(file_path):
         with sf.StateFile(model, file_path, mode='w') as f:
-            forward.integrate(model, f, ini_state, controls, props, times, use_tqdm=True)
+            forward.integrate(model, f, ini_state, controls, prop, times, use_tqdm=True)
     else:
         print(f"Skipped existing simulation file {file_path}")
 

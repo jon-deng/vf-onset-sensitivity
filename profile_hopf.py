@@ -34,11 +34,11 @@ if __name__ == '__main__':
     hopf, res, dres = load_hopf_model(mesh_path, sep_method='smoothmin', sep_vert_label='separation-inf')
 
     xhopf = hopf.state.copy()
-    props = hopf.props.copy()
-    set_default_props(props, res.solid.forms['mesh.mesh'])
+    prop = hopf.prop.copy()
+    set_default_props(prop, res.solid.forms['mesh.mesh'])
 
     # hopf.set_state(xhopf)
-    hopf.set_props(props)
+    hopf.set_prop(prop)
     hopf.assem_res()
     hopf.assem_dres_dstate()
 

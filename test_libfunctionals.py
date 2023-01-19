@@ -84,28 +84,28 @@ def setup_linearization(setup_func, setup_hopf_model):
     dstate['psub'] = 1.0
     hopf.apply_dirichlet_bvec(dstate)
 
-    props0 = hopf.props.copy()
+    props0 = hopf.prop.copy()
     set_default_props(props0, hopf.res.solid.forms['mesh.mesh'])
-    dprops = props0.copy()
-    dprops[:] = 0
-    dprops['emod'] = 1.0
+    dprop = props0.copy()
+    dprop[:] = 0
+    dprop['emod'] = 1.0
 
 
-    return (state0, props0), (dstate, dprops)
+    return (state0, props0), (dstate, dprop)
 
-def set_linearization(setup_func, state, props):
+def set_linearization(setup_func, state, prop):
     """
     Set the linearization point for a functional
     """
     func = setup_func
     func.set_state(state)
-    func.set_props(props)
+    func.set_prop(prop)
 
 def test_assem_dg_dstate(setup_func, setup_linearization):
     """Test the functional `state` derivative"""
     func = setup_func
-    (state, props), (dstate, dprops) = setup_linearization
-    set_linearization(func, state, props)
+    (state, prop), (dstate, dprop) = setup_linearization
+    set_linearization(func, state, prop)
 
     def res(x):
         func.set_state(x)
@@ -118,20 +118,20 @@ def test_assem_dg_dstate(setup_func, setup_linearization):
     _test_taylor(state, dstate, res, jac, norm=lambda x: (x**2)**0.5)
 
 def test_assem_dg_dprops(setup_func, setup_linearization):
-    """Test the functional `props` derivative"""
+    """Test the functional `prop` derivative"""
     func = setup_func
-    (state, props), (dstate, dprops) = setup_linearization
-    set_linearization(func, state, props)
+    (state, prop), (dstate, dprop) = setup_linearization
+    set_linearization(func, state, prop)
 
     def res(x):
-        func.set_props(x)
+        func.set_prop(x)
         return func.assem_g()
 
     def jac(x, dx):
-        func.set_props(x)
+        func.set_prop(x)
         return bla.dot(func.assem_dg_dprops(), dx)
 
-    _test_taylor(props, dprops, res, jac, norm=lambda x: (x**2)**0.5)
+    _test_taylor(prop, dprop, res, jac, norm=lambda x: (x**2)**0.5)
 
 
 @pytest.fixture(

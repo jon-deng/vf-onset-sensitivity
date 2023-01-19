@@ -79,30 +79,30 @@ ECOV = 5e3*10
 EBODY = 5e3*10
 PSUB = 450 * 10
 
-def set_default_props(props, mesh):
+def set_default_props(prop, mesh):
     """
     Set the model properties
     """
-    # VF material props
-    props['emod'][:] =  ECOV
-    props['emod'][:] =  EBODY
+    # VF material prop
+    prop['emod'][:] =  ECOV
+    prop['emod'][:] =  EBODY
 
-    props = set_constant_props(props, mesh)
+    prop = set_constant_props(prop, mesh)
 
-    return props
+    return prop
 
-def set_constant_props(props, mesh):
-    props['eta'][:] =  5.0
-    props['rho'][:] =  1.0
-    props['nu'][:] =  0.45
+def set_constant_props(prop, mesh):
+    prop['eta'][:] =  5.0
+    prop['rho'][:] =  1.0
+    prop['nu'][:] =  0.45
 
-    # Fluid separation smoothing props
-    if all(key in props for key in ['zeta_min', 'zeta_sep']):
-        props['zeta_min'][:] =  1.0e-4
-        props['zeta_sep'][:] =  1.0e-4
+    # Fluid separation smoothing prop
+    if all(key in prop for key in ['zeta_min', 'zeta_sep']):
+        prop['zeta_min'][:] =  1.0e-4
+        prop['zeta_sep'][:] =  1.0e-4
 
-    if 'r_sep' in props:
-        props['r_sep'][:] =  1.0
+    if 'r_sep' in prop:
+        prop['r_sep'][:] =  1.0
 
     # Contact and midline symmetry properties
     # y_gap = 0.5 / 10 # Set y gap to 0.5 mm
@@ -112,10 +112,10 @@ def set_constant_props(props, mesh):
     y_max = mesh.coordinates()[:, 1].max()
     y_mid = y_max + y_gap
     y_contact = y_mid - y_contact_offset
-    props['ycontact'][:] =  y_contact
-    props['kcontact'][:] =  1e16
-    props['ymid'][:] =  y_mid
+    prop['ycontact'][:] =  y_contact
+    prop['kcontact'][:] =  1e16
+    prop['ymid'][:] =  y_mid
 
-    props['rho_air'][:] =  1.293e-3
+    prop['rho_air'][:] =  1.293e-3
 
-    return props
+    return prop

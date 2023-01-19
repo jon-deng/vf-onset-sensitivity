@@ -98,20 +98,20 @@ def setup_props(
     """
     Return a properties vector
     """
-    props = model.props.copy()
+    prop = model.prop.copy()
     region_to_dofs = process_celllabel_to_dofs_from_forms(
         model.res.solid.forms,
         model.res.solid.forms['fspace.scalar_dg0'].dofmap()
     )
-    props = set_props(
-        props, model, region_to_dofs,
+    prop = set_prop(
+        prop, model, region_to_dofs,
         params['Ecov'], params['Ebod']
     )
-    return props
+    return prop
 
-def set_props(props, hopf, celllabel_to_dofs, emod_cov, emod_bod):
+def set_prop(prop, hopf, celllabel_to_dofs, emod_cov, emod_bod):
     # Set any constant properties
-    props = libsetup.set_default_props(props, hopf.res.solid.forms['mesh.mesh'])
+    prop = libsetup.set_default_props(prop, hopf.res.solid.forms['mesh.mesh'])
 
     # Set cover and body layer properties
     dofs_cov = np.array(celllabel_to_dofs['cover'], dtype=np.int32)
@@ -119,10 +119,10 @@ def set_props(props, hopf, celllabel_to_dofs, emod_cov, emod_bod):
     dofs_share = set(dofs_cov) & set(dofs_bod)
     dofs_share = np.array(list(dofs_share), dtype=np.int32)
 
-    props['emod'][dofs_cov] = emod_cov
-    props['emod'][dofs_bod] = emod_bod
-    props['emod'][dofs_share] = 1/2*(emod_cov + emod_bod)
-    return props
+    prop['emod'][dofs_cov] = emod_cov
+    prop['emod'][dofs_bod] = emod_bod
+    prop['emod'][dofs_share] = 1/2*(emod_cov + emod_bod)
+    return prop
 
 def setup_functional(
         params: exputils.BaseParameters,
@@ -280,11 +280,11 @@ def setup_exp_params(study_name: str):
     else:
         raise ValueError("Unknown `study_name` '{study_name}'")
 
-def setup_parameterization(params, hopf, props):
+def setup_parameterization(params, hopf, prop):
     """
     Return a parameterization
     """
-    const_vals = {key: np.array(subvec) for key, subvec in props.sub_items()}
+    const_vals = {key: np.array(subvec) for key, subvec in prop.sub_items()}
     scale = {
         'emod': 1e4,
         'umesh': 1e-1
@@ -341,12 +341,12 @@ def setup_reduced_functional(params):
         for key, val in scale.items():
             p[key][:] = p.sub[key]/val
 
-    props = parameterization.apply(p)
-    assert np.isclose(bvec.norm(props-_props), 0)
+    prop = parameterization.apply(p)
+    assert np.isclose(bvec.norm(prop-_props), 0)
 
     ## Solve for the Hopf bifurcation
-    xhopf_0 = libhopf.gen_xhopf_0(hopf, props, PSUBS, tol=100.0)
-    xhopf_n, info = libhopf.solve_hopf_by_newton(hopf, xhopf_0, props)
+    xhopf_0 = libhopf.gen_xhopf_0(hopf, prop, PSUBS, tol=100.0)
+    xhopf_n, info = libhopf.solve_hopf_by_newton(hopf, xhopf_0, prop)
     hopf.set_state(xhopf_n)
 
     ## Load the functional/objective function and gradient
@@ -407,12 +407,12 @@ def run_functional_sensitivity(params, output_dir='out/sensitivity'):
     fpath = path.join(output_dir, params.to_str()+'.h5')
     if not path.isfile(fpath):
         ## Compute 1st order sensitivity of the functional
-        rfunc.set_props(parameterization.apply(p0))
+        rfunc.set_prop(parameterization.apply(p0))
         grad_props = rfunc.assem_dg_dprops()
         grad_params = parameterization.apply_vjp(p0, grad_props)
 
         ## Compute 2nd order sensitivity of the functional
-        _scale = hopf.props.copy()
+        _scale = hopf.prop.copy()
         _scale[:] = 1
         _scale['umesh'][:] = 1e-1
         _scale['emod'][:] = 1e4
@@ -485,8 +485,8 @@ def run_functional_sensitivity(params, output_dir='out/sensitivity'):
 
             ## Write out the state + properties vectors
             for (key, vec) in zip(
-                    ['state', 'props', 'param'],
-                    [hopf.state, hopf.props, p0]
+                    ['state', 'prop', 'param'],
+                    [hopf.state, hopf.prop, p0]
                 ):
                 h5utils.create_resizable_block_vector_group(
                     f.require_group(key), vec.labels, vec.bshape,

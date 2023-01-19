@@ -53,9 +53,9 @@ mesh_path = path.join('./mesh', mesh_name+'.msh')
 RES_LAMP = libsetup.load_transient_model(mesh_path, sep_method='arearatio', sep_vert_label='separation-inf')
 RES_HOPF, RES_DYN, DRES_DYN = libsetup.load_hopf_model(mesh_path, sep_method='fixed', sep_vert_label='separation-inf')
 
-def set_props(props, celllabel_to_dofs, emod_cov, emod_bod):
+def set_prop(prop, celllabel_to_dofs, emod_cov, emod_bod):
     # Set any constant properties
-    props = libsetup.set_default_props(props, RES_DYN.solid.forms['mesh.mesh'])
+    prop = libsetup.set_default_props(prop, RES_DYN.solid.forms['mesh.mesh'])
 
     # Set cover and body layer properties
 
@@ -64,16 +64,16 @@ def set_props(props, celllabel_to_dofs, emod_cov, emod_bod):
     dofs_share = set(dofs_cov) & set(dofs_bod)
     dofs_share = np.array(list(dofs_share), dtype=np.int32)
 
-    if hasattr(props['emod'], 'array'):
-        props['emod'].array[dofs_cov] = emod_cov
-        props['emod'].array[dofs_bod] = emod_bod
-        props['emod'].array[dofs_share] = 1/2*(emod_cov + emod_bod)
+    if hasattr(prop['emod'], 'array'):
+        prop['emod'].array[dofs_cov] = emod_cov
+        prop['emod'].array[dofs_bod] = emod_bod
+        prop['emod'].array[dofs_share] = 1/2*(emod_cov + emod_bod)
     else:
-        props['emod'][dofs_cov] = emod_cov
-        props['emod'][dofs_bod] = emod_bod
-        props['emod'][dofs_share] = 1/2*(emod_cov + emod_bod)
+        prop['emod'][dofs_cov] = emod_cov
+        prop['emod'][dofs_bod] = emod_bod
+        prop['emod'][dofs_share] = 1/2*(emod_cov + emod_bod)
 
-    return props
+    return prop
 
 def _skip_existing_path(func):
     def dec_func(fpath, *args, **kwargs):
@@ -91,8 +91,8 @@ def run_lsa(fpath, emod_cov, emod_bod):
     # Get the cover/body layer DOFs
     _forms = RES_DYN.solid.forms
     celllabel_to_dofs = meshutils.process_celllabel_to_dofs_from_forms(_forms, _forms['fspace.scalar'])
-    props = set_props(RES_DYN.props, celllabel_to_dofs, emod_cov, emod_bod)
-    RES_DYN.set_props(props)
+    prop = set_prop(RES_DYN.prop, celllabel_to_dofs, emod_cov, emod_bod)
+    RES_DYN.set_prop(prop)
 
     eigs_info = [libhopf.solve_least_stable_mode(RES_DYN, psub) for psub in PSUBS]
 
@@ -126,8 +126,8 @@ def run_solve_hopf(fpath, emod_cov, emod_bod):
     # Set the cover/body layer properties
     _forms = RES_HOPF.res.solid.forms
     celllabel_to_dofs = meshutils.process_celllabel_to_dofs_from_forms(_forms, _forms['fspace.scalar'])
-    props = set_props(RES_HOPF.props, celllabel_to_dofs, emod_cov, emod_bod)
-    RES_HOPF.set_props(props)
+    prop = set_prop(RES_HOPF.prop, celllabel_to_dofs, emod_cov, emod_bod)
+    RES_HOPF.set_prop(prop)
 
     # Read the max real eigenvalue information from the LSA to determine if Hopf
     # bifurcations occur and a good starting point
@@ -159,8 +159,8 @@ def run_solve_hopf(fpath, emod_cov, emod_bod):
             bh5utils.create_resizable_block_vector_group(f.require_group('state'), xhopf_n.labels, xhopf_n.bshape)
             bh5utils.append_block_vector_to_group(f['state'], xhopf_n)
 
-            bh5utils.create_resizable_block_vector_group(f.require_group('props'), props.labels, props.bshape)
-            bh5utils.append_block_vector_to_group(f['props'], props)
+            bh5utils.create_resizable_block_vector_group(f.require_group('prop'), prop.labels, prop.bshape)
+            bh5utils.append_block_vector_to_group(f['prop'], prop)
 
 @_skip_existing_path
 def run_large_amp_model(fpath, emod_cov, emod_bod):
@@ -170,8 +170,8 @@ def run_large_amp_model(fpath, emod_cov, emod_bod):
     # Set the cover/body layer properties
     _forms = RES_LAMP.solid.forms
     celllabel_to_dofs = meshutils.process_celllabel_to_dofs_from_forms(_forms, _forms['fspace.scalar'])
-    props = set_props(RES_LAMP.props, celllabel_to_dofs, emod_cov, emod_bod)
-    RES_LAMP.set_props(props)
+    prop = set_prop(RES_LAMP.prop, celllabel_to_dofs, emod_cov, emod_bod)
+    RES_LAMP.set_prop(prop)
 
     # Load the onset pressure from the Hopf simulation
     h_fname = f'Hopf_ecov{emod_cov:.2e}_ebody{emod_bod:.2e}'
@@ -200,7 +200,7 @@ def run_large_amp_model(fpath, emod_cov, emod_bod):
         control = RES_LAMP.control.copy()
         control['psub'][:] = ponset + 200.0*10
         with sf.StateFile(RES_LAMP, fpath, mode='a') as f:
-            forward.integrate(RES_LAMP, f, ini_state, [control], RES_LAMP.props, times, use_tqdm=True)
+            forward.integrate(RES_LAMP, f, ini_state, [control], RES_LAMP.prop, times, use_tqdm=True)
     else:
         print(f"Skipping large amplitude simulation of {fname} because no Hopf bifurcation is detected")
 
@@ -234,8 +234,8 @@ def run_inv_opt(fpath, emod_cov, emod_bod, gw_ref, omega_ref, alpha=0.0, opt_opt
     ## Set the Hopf system properties
     _forms = RES_HOPF.res.solid.forms
     celllabel_to_dofs = meshutils.process_celllabel_to_dofs_from_forms(_forms, _forms['fspace.scalar'])
-    props = set_props(RES_HOPF.props, celllabel_to_dofs, emod_cov, emod_bod)
-    RES_HOPF.set_props(props)
+    prop = set_prop(RES_HOPF.prop, celllabel_to_dofs, emod_cov, emod_bod)
+    RES_HOPF.set_prop(prop)
 
     ## Form the log posterior functional
     std_omega = 10.0
@@ -254,12 +254,12 @@ def run_inv_opt(fpath, emod_cov, emod_bod, gw_ref, omega_ref, alpha=0.0, opt_opt
         func, RES_HOPF, hopf_psub_intervals=PSUBS
     )
 
-    redu_grad.set_props(props)
+    redu_grad.set_prop(prop)
 
     ## Run the optimizer
     # Form the initial guess
     camp0 = optimize_comp_amp(func_gw_err)
-    x0 = bv.concatenate_vec([props, camp0])
+    x0 = bv.concatenate_vec([prop, camp0])
 
     def opt_callback(xk):
         print("In callback")

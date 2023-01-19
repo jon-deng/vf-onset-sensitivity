@@ -124,9 +124,9 @@ class DerivedFunctional(GenericFunctional):
         for func in self.funcs:
             func.set_state(state)
 
-    def set_props(self, props):
+    def set_prop(self, prop):
         for func in self.funcs:
-            func.set_props(props)
+            func.set_prop(prop)
 
 class BinaryFunctional(DerivedFunctional):
     def __init__(self, a: GenericFunctional, b: GenericFunctional):
@@ -206,7 +206,7 @@ class BaseFunctional(GenericFunctional):
         self.model = model
 
         self.state = self.model.state
-        self.props = self.model.props
+        self.prop = self.model.prop
 
         # TODO: Use this snippet for A Hopf model that has 'camp' added into the properties vector
         # self.camp = bvec.convert_subtype_to_petsc(
@@ -216,8 +216,8 @@ class BaseFunctional(GenericFunctional):
     def set_state(self, state):
         self.model.set_state(state)
 
-    def set_props(self, props):
-        self.model.set_props(props)
+    def set_prop(self, prop):
+        self.model.set_prop(prop)
 
 class OnsetPressureFunctional(BaseFunctional):
     """
@@ -238,7 +238,7 @@ class OnsetPressureFunctional(BaseFunctional):
         return dg_dstate
 
     def assem_dg_dprops(self):
-        dg_dprops = self.props.copy()
+        dg_dprops = self.prop.copy()
         dg_dprops[:] = 0
         return dg_dprops
 
@@ -257,7 +257,7 @@ class OnsetFrequencyFunctional(BaseFunctional):
         return dg_dstate
 
     def assem_dg_dprops(self):
-        dg_dprops = self.props.copy()
+        dg_dprops = self.prop.copy()
         dg_dprops[:] = 0
         return dg_dprops
 
@@ -276,7 +276,7 @@ class AbsOnsetFrequencyFunctional(BaseFunctional):
         return dg_dstate
 
     def assem_dg_dprops(self):
-        dg_dprops = self.props.copy()
+        dg_dprops = self.prop.copy()
         dg_dprops[:] = 0
         return dg_dprops
 
@@ -298,8 +298,8 @@ class GlottalWidthErrorFunctional(BaseFunctional):
 
         eval_gw = libsignal.make_glottal_width(model, gw_ref.size)
 
-        def _err(state, props):
-            gw_hopf = eval_gw(state, props)
+        def _err(state, prop):
+            gw_hopf = eval_gw(state, prop)
             return jnp.sum(weights*(gw_ref - gw_hopf)**2)
 
         self._err = _err
@@ -307,17 +307,17 @@ class GlottalWidthErrorFunctional(BaseFunctional):
         self._grad_props_err = jax.grad(_err, argnums=1)
 
     def assem_g(self):
-        return self._err(self.state.to_mono_ndarray(), self.props.to_mono_ndarray())
+        return self._err(self.state.to_mono_ndarray(), self.prop.to_mono_ndarray())
 
     def assem_dg_dstate(self):
-        _dg_dstate = self._grad_state_err(self.state.to_mono_ndarray(), self.props.to_mono_ndarray())
+        _dg_dstate = self._grad_state_err(self.state.to_mono_ndarray(), self.prop.to_mono_ndarray())
         dg_dstate = self.state.copy()
         dg_dstate.set_mono(_dg_dstate)
         return dg_dstate
 
     def assem_dg_dprops(self):
-        _dg_dprops = self._grad_props_err(self.state.to_mono_ndarray(), self.props.to_mono_ndarray())
-        dg_dprops = self.props.copy()
+        _dg_dprops = self._grad_props_err(self.state.to_mono_ndarray(), self.prop.to_mono_ndarray())
+        dg_dprops = self.prop.copy()
         dg_dprops.set_mono(_dg_dprops)
         return dg_dprops
 
@@ -353,7 +353,7 @@ class StrainEnergyFunctional(BaseFunctional):
         return dg_dstate
 
     def assem_dg_dprops(self):
-        dg_dprops = self.props.copy()
+        dg_dprops = self.prop.copy()
         dg_dprops[:] = 0
         dg_demod = self.assem_dstrain_energy_demod.assemble()
         dg_dprops['emod'] = dg_demod
@@ -384,7 +384,7 @@ class ModulusGradientNormSqr(BaseFunctional):
         return dg_dstate
 
     def assem_dg_dprops(self):
-        dg_dprops = self.props.copy()
+        dg_dprops = self.prop.copy()
         dg_dprops[:] = 0
         dg_dprops['emod'][:] = dfn.assemble(
             self._dfunctional_demod, tensor=dfn.PETScVector()

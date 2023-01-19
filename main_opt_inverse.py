@@ -40,9 +40,9 @@ if __name__ == '__main__':
         mesh_path, sep_method='smoothmin', sep_vert_label='separation-inf'
     )
 
-    props = hopf.props.copy()
-    props = libsetup.set_default_props(props, hopf.res.solid.forms['mesh.mesh'])
-    hopf.set_props(props)
+    prop = hopf.prop.copy()
+    prop = libsetup.set_default_props(prop, hopf.res.solid.forms['mesh.mesh'])
+    hopf.set_prop(prop)
 
     PSUBS = np.linspace(0, 1000, 11)*10
     xhopf_0 = libhopf.gen_xhopf_0(hopf, PSUBS, tol=100.0)

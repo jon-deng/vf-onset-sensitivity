@@ -71,18 +71,18 @@ def test_assem_dres_dstate(hopf, state0, dstate):
 
     _test_taylor(state0, dstate, hopf_res, hopf_jac)
 
-def test_assem_dres_dprops(hopf, props0, dprops):
+def test_assem_dres_dprops(hopf, props0, dprop):
     def hopf_res(x):
-        hopf.set_props(x)
+        hopf.set_prop(x)
         return hopf.assem_res()
 
     def hopf_jac(x):
-        hopf.set_props(x)
+        hopf.set_prop(x)
         dres_dprops = hopf.assem_dres_dprops()
         hopf.zero_rows_dirichlet_bmat(dres_dprops)
         return dres_dprops
 
-    _test_taylor(props0, dprops, hopf_res, hopf_jac)
+    _test_taylor(props0, dprop, hopf_res, hopf_jac)
 
 
 if __name__ == '__main__':
@@ -100,8 +100,8 @@ if __name__ == '__main__':
     #     res.solid.forms['fspace.scalar']
     # )
 
-    props = model.props.copy()
-    props = set_default_props(props, res.solid.forms['mesh.mesh'])
+    prop = model.prop.copy()
+    prop = set_default_props(prop, res.solid.forms['mesh.mesh'])
 
     ## Test sensitivities of the Hopf model residual w.r.t each block of
     ## `Hopf.state`
@@ -133,12 +133,12 @@ if __name__ == '__main__':
         test_assem_dres_dstate(model, x0, dx)
 
     ## Test sensitivities of the Hopf model residual w.r.t each block of
-    ## `Hopf.props`
-    # TODO: This only checks one block `Hopf.props` right now
-    props0 = props.copy()
-    dprops = props0.copy()
-    dprops[:] = 0.0
-    dprops['emod'] = 1.0
+    ## `Hopf.prop`
+    # TODO: This only checks one block `Hopf.prop` right now
+    props0 = prop.copy()
+    dprop = props0.copy()
+    dprop[:] = 0.0
+    dprop['emod'] = 1.0
     print("\n -- Checking Hopf jacobian along emod --")
-    test_assem_dres_dprops(model, props0, dprops)
+    test_assem_dres_dprops(model, props0, dprop)
 

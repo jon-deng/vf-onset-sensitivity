@@ -26,9 +26,9 @@ if __name__ == '__main__':
         sep_vert_label='separation-inf'
     )
 
-    props0 = hopf.props.copy()
+    props0 = hopf.prop.copy()
     libsetup.set_default_props(props0, hopf.res.solid.forms['mesh.mesh'])
-    hopf.set_props(props0)
+    hopf.set_prop(props0)
     res = hopf.res
 
     psubs = np.arange(0, 1500, 100)*10
