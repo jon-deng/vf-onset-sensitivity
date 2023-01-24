@@ -41,7 +41,7 @@ References
 [Griewank1983]: "The Calculation of Hopf Points by a Direct Method", A. Griewank and G. Reddien, 1983
 """
 
-from typing import Callable, Tuple, List, Dict, Optional
+from typing import Callable, Tuple, List, Dict, Optional, Mapping, Any
 import itertools
 import functools
 import operator
@@ -64,6 +64,12 @@ import libfunctionals as libfunc
 
 # pylint: disable=invalid-name
 ListPair = Tuple[List[float], List[float]]
+
+SolverInfo = Mapping[str, Any]
+FixedPointSolver = Callable[
+    [dynbase.BaseDynamicalModel, bvec.BlockVector, bvec.BlockVector],
+    Tuple[bvec.BlockVector, SolverInfo]
+]
 
 
 class HopfModel:
@@ -416,6 +422,7 @@ def bound_ponset(
         prop: bvec.BlockVector,
         bound_pairs: ListPair,
         omega_pairs: ListPair=None,
+        solve_fp_r: Optional[FixedPointSolver]=None,
         nsplit: int=2,
         tol: float=100.0
     ) -> Tuple[ListPair, ListPair]:
@@ -449,8 +456,18 @@ def bound_ponset(
 
     if omega_pairs is None:
         omega_pairs = (
-            [solve_least_stable_mode(model, _set(control, lb), prop)[0].real for lb in lbs],
-            [solve_least_stable_mode(model, _set(control, ub), prop)[0].real for ub in ubs],
+            [
+                solve_least_stable_mode(
+                    model, _set(control, lb),
+                    prop, solve_fp_r=solve_fp_r
+                )[0].real for lb in lbs
+            ],
+            [
+                solve_least_stable_mode(
+                    model, _set(control, ub), prop,
+                    solve_fp_r=solve_fp_r
+                )[0].real for ub in ubs
+            ],
         )
 
     # Filter bound pairs so only pairs that contain Hopf bifurcations are present
@@ -483,7 +500,10 @@ def bound_ponset(
         ]
         bounds_omegas = [
             [
-                solve_least_stable_mode(model, _set(control, psub), prop)[0].real
+                solve_least_stable_mode(
+                    model, _set(control, psub), prop,
+                    solve_fp_r=solve_fp_r
+                )[0].real
                 for psub in psubs
             ]
             for psubs in bounds_points
@@ -518,6 +538,7 @@ def gen_xhopf_0_from_bounds(
         evec_ref: bvec.BlockVector,
         bound_pairs: ListPair,
         omega_pairs: Optional[ListPair]=None,
+        solve_fp_r: Optional[FixedPointSolver]=None,
         nsplit: int=2,
         tol: float=100.0
     ) -> bvec.BlockVector:
@@ -548,7 +569,7 @@ def gen_xhopf_0_from_bounds(
     # Find lower/upper bounds for the Hopf bifurcation point
     (lbs, ubs), _ = bound_ponset(
         dyn_model, control, prop, bound_pairs, omega_pairs=omega_pairs,
-        nsplit=nsplit, tol=tol
+        nsplit=nsplit, tol=tol, solve_fp_r=solve_fp_r
     )
 
     if len(ubs) > 1:
@@ -606,7 +627,8 @@ def gen_xhopf_0(
         prop: bvec.BlockVector,
         evec_ref: bvec.BlockVector,
         psubs: np.ndarray,
-        tol: float=100.0
+        tol: float=100.0,
+        solve_fp_r: Optional[FixedPointSolver]=None
     ) -> bvec.BlockVector:
     """
     Generate an initial guess for the Hopf problem over a range of pressures
@@ -632,7 +654,8 @@ def gen_xhopf_0(
 
     omegas_max = [
         solve_least_stable_mode(
-            dyn_model, _set(dyn_control, psub), prop
+            dyn_model, _set(dyn_control, psub), prop,
+            solve_fp_r=solve_fp_r
         )[0].real
         for psub in psubs
     ]
@@ -949,13 +972,12 @@ def solve_fp_by_picard(
     xfp_n, info = nleq.iterative_solve(xfp_0, linear_subproblem_fp, norm=bvec.norm, params=params)
     return xfp_n, info
 
+
 def solve_least_stable_mode(
         model: dynbase.BaseDynamicalModel,
         control: bvec.BlockVector,
         prop: bvec.BlockVector,
-        xfp_0: Optional[bvec.BlockVector]=None,
-        fp_method='newton',
-        fp_params=None
+        solve_fp_r: Optional[FixedPointSolver]=None
     ) -> Tuple[float, bvec.BlockVector, bvec.BlockVector, bvec.BlockVector]:
     """
     Return modal information for the least stable mode of a dynamical system
@@ -963,13 +985,20 @@ def solve_least_stable_mode(
     Parameters
     ----------
     model : femvf.models.dynamical.base.BaseDynamicalModel
+    control, prop : bvec.BlockVector
+        The control and property vectors
+    solve_fp_r :
+        A callable that solves for a fixed point from only a control and
+        property vector. This differs from `solve_fp` which requires more
+        information.
     """
+    if solve_fp_r is None:
+        solve_fp_r = lambda model, control, prop: solve_fp(
+            model, control, prop, psub_incr=250*10
+        )
+
     # Solve the for the fixed point
-    xfp, _info = solve_fp(
-        model, control, prop,
-        xfp_0=xfp_0, method=fp_method, iter_params=fp_params,
-        psub_incr=250*10
-    )
+    xfp, _info = solve_fp_r(model, control, prop)
 
     # Solve for linear stability around the fixed point
     omegas, eigvecs_real, eigvecs_imag = solve_linear_stability(
