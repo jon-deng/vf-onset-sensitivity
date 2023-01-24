@@ -425,7 +425,7 @@ def bound_ponset(
     Parameters
     ----------
     model :
-        The Hopf model
+        The dynamical model
     bound_pairs :
         A tuple of lower bounds (lbs) and upper bounds (ubs) of the bifurcation
         parameter (psub) to test if a Hopf bifurcation occurs. Each interval
@@ -475,8 +475,8 @@ def bound_ponset(
     else:
         # Split the pairs into `nsplit` segments and calculate important stuff
         # at the interior points separating segments
-        # This is a nested list containing, for each lb/ub pair, a list of interior
-        # segments
+        # This is a nested list containing a list of interior
+        # segments for each lb/ub pair
         bounds_points = [
             list(np.linspace(lb, ub, nsplit+1)[1:-1])
             for lb, ub in zip(_lbs, _ubs)
@@ -513,8 +513,9 @@ def bound_ponset(
         )
 
 def gen_xhopf_0_from_bounds(
-        hopf: HopfModel,
+        dyn_model: dynbase.BaseDynamicalModel,
         prop: bvec.BlockVector,
+        evec_ref: bvec.BlockVector,
         bound_pairs: ListPair,
         omega_pairs: Optional[ListPair]=None,
         nsplit: int=2,
@@ -525,13 +526,13 @@ def gen_xhopf_0_from_bounds(
 
     Parameters
     ----------
-    hopf :
-        The Hopf model
+    dyn_model :
+        The dynamical system model
     bound_pairs :
-        A tuple of lower bounds (lbs) and upper bounds (ubs) of the bifurcation
-        parameter (psub) to test if a Hopf bifurcation occurs. Each interval
-        between `lbs[i]` to `ubs[i]` is tested to see if an eigenvalue switches
-        sign indicating a Hopf bifurcation.
+        A tuple of lower (lbs) and upper bounds (ubs) of `psub` intervals.
+        Each interval is used to test if a Hopf bifurcation occurs.
+        i.e. the interval between `lbs[i]` to `ubs[i]` is tested to see if an
+        eigenvalue switches sign which indicates a Hopf bifurcation.
     omega_pairs :
         The corresponding maximum real eigenvalue components at the lower/upper
         bounds.
@@ -541,13 +542,12 @@ def gen_xhopf_0_from_bounds(
     tol :
         The tolerance on the lower/upper bound range.
     """
-    hopf.set_prop(prop)
-    res = hopf.res
-    control = res.control.copy()
+    dyn_model.set_prop(prop)
+    control = dyn_model.control.copy()
 
     # Find lower/upper bounds for the Hopf bifurcation point
     (lbs, ubs), _ = bound_ponset(
-        res, control, prop, bound_pairs, omega_pairs=omega_pairs,
+        dyn_model, control, prop, bound_pairs, omega_pairs=omega_pairs,
         nsplit=nsplit, tol=tol
     )
 
@@ -559,20 +559,21 @@ def gen_xhopf_0_from_bounds(
             f" ({bound_pairs[0]}, {bound_pairs[1]})"
         )
 
-    # Use the upper bound to generate an initial guess for the bifurcation
+    # Use the avg. of lower and upper bounds to generate an initial guess for
+    # the bifurcation
     # First set the model subglottal pressure to the upper bound
-    psub = ubs[0]
+    psub = 1/2 * (lbs[0] + ubs[0])
     control['psub'] = psub
-    prop = hopf.prop
+    prop = dyn_model.prop
 
     # Solve for the fixed point
     # x_fp0 = res.state.copy()
     # x_fp0[:] = 0.0
-    x_fp, _info = solve_fp(res, control, prop)
+    x_fp, _info = solve_fp(dyn_model, control, prop)
 
     # Solve for linear stability around the fixed point
     omegas, eigvecs_real, eigvecs_imag = solve_linear_stability(
-        res, x_fp, control, prop
+        dyn_model, x_fp, control, prop
     )
     idx_max = np.argmax(omegas.real)
 
@@ -580,7 +581,7 @@ def gen_xhopf_0_from_bounds(
     x_mode_imag = eigvecs_imag[idx_max]
 
     x_mode_real, x_mode_imag = normalize_eigvec_by_hopf(
-        x_mode_real, x_mode_imag, hopf.E_MODE
+        x_mode_real, x_mode_imag, evec_ref
     )
 
     x_omega = bvec.convert_subtype_to_petsc(
@@ -594,18 +595,16 @@ def gen_xhopf_0_from_bounds(
     )
 
     # TODO: Use `bvec.concatenate` to refactor
-    x_hopf = hopf.state.copy()
-    for labels, subvector in zip(
-            hopf.labels_hopf_components,
-            [x_fp, x_mode_real, x_mode_imag, x_psub, x_omega]
-        ):
-        x_hopf[labels] = subvector
-
+    sub_bvecs = [x_fp, x_mode_real, x_mode_imag, x_psub, x_omega]
+    x_hopf = bvec.concatenate_vec(
+        sub_bvecs, labels=((),)
+    )
     return x_hopf
 
 def gen_xhopf_0(
-        hopf: HopfModel,
+        dyn_model: dynbase.BaseDynamicalModel,
         prop: bvec.BlockVector,
+        evec_ref: bvec.BlockVector,
         psubs: np.ndarray,
         tol: float=100.0
     ) -> bvec.BlockVector:
@@ -623,11 +622,8 @@ def gen_xhopf_0(
     tol :
         The tolerance to determine the subglottal pressure to
     """
-    hopf.set_prop(prop)
-
-    dyn_model = hopf.res
-    dyn_control = hopf.res.control.copy()
-    dyn_props = hopf.res.prop.copy()
+    dyn_model.set_prop(prop)
+    dyn_control = dyn_model.control.copy()
 
     # Determine the least stable mode growth rate for each psub
     def _set(control, psub):
@@ -636,7 +632,7 @@ def gen_xhopf_0(
 
     omegas_max = [
         solve_least_stable_mode(
-            dyn_model, _set(dyn_control, psub), dyn_props
+            dyn_model, _set(dyn_control, psub), prop
         )[0].real
         for psub in psubs
     ]
@@ -667,7 +663,7 @@ def gen_xhopf_0(
     omega_ubs = [omegas_max[idx_bif+1]]
     omega_pairs = (omega_lbs, omega_ubs)
     xhopf_0 = gen_xhopf_0_from_bounds(
-        hopf, prop, bounds, omega_pairs, tol=tol
+        dyn_model, prop, evec_ref, bounds, omega_pairs, tol=tol
     )
     return xhopf_0
 
@@ -1096,6 +1092,10 @@ def solve_hopf_by_newton(
 
     if out is None:
         out = xhopf_0.copy()
+
+    xhopf_0 = bvec.BlockVector(
+        xhopf_0.larray, labels=hopf.state.labels
+    )
 
     def linear_subproblem(xhopf_n):
         """Linear subproblem of a Newton solver"""

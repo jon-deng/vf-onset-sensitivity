@@ -326,8 +326,12 @@ class TestHopfUtilities:
     def test_gen_hopf_initial_guess_from_bounds(self, hopf_model, prop, bound_pairs):
         """Test `gen_hopf_initial_guess_from_bounds`"""
         hopf = hopf_model
+        hopf.set_prop(prop)
 
-        xhopf_0 = libhopf.gen_xhopf_0_from_bounds(hopf, prop, bound_pairs)
+        dyn_model = hopf.res
+        dyn_prop = dyn_model.prop
+
+        xhopf_0 = libhopf.gen_xhopf_0_from_bounds(dyn_model, dyn_prop, hopf.E_MODE, bound_pairs)
 
         xhopf_n, info = libhopf.solve_hopf_by_newton(hopf, xhopf_0, prop)
         print(f"Solved Hopf system from automatic initial guess with info {info}")
@@ -336,8 +340,14 @@ class TestHopfUtilities:
     def setup_xhopf_0(self, hopf_model, prop, bound_pairs):
         """Return an initial guess for the hopf state"""
         hopf = hopf_model
+        hopf.set_prop(prop)
 
-        xhopf_0 = libhopf.gen_xhopf_0_from_bounds(hopf, prop, bound_pairs)
+        dyn_model = hopf.res
+        dyn_prop = dyn_model.prop
+
+        xhopf_0 = libhopf.gen_xhopf_0_from_bounds(
+            dyn_model, dyn_prop, hopf.E_MODE, bound_pairs
+        )
         return xhopf_0
 
     def test_solve_hopf_newton(self, hopf_model, prop, setup_xhopf_0):
