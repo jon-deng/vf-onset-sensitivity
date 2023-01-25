@@ -1272,13 +1272,13 @@ class ReducedFunctional:
     Represent a reduced functional of a Hopf bifurcation system
 
     Consider a functional
-        g(x; p)
+        $$g(x; p)$$
     where x, p are the state vector, and parameters respectively.
     Also consider the Hopf system defined by
-        F(x; p) = 0.
+        $$F(x; p) = 0.$$
     The reduced functional is
-        \hat{g}(p) = g(x(p), p)
-    where x is implicitly set by solving the Hopf system.
+        $$\\hat{g}(p) = g(x(p), p),$$
+    where $x$ is implicitly defined by solving the Hopf system.
 
     The reduced gradient is difficult to solve for since solution of the Hopf
     system is not straightforward without a good initial guess for a given
