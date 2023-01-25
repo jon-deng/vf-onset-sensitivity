@@ -29,7 +29,7 @@ class GenericFunctional:
     def assem_dg_dstate(self):
         raise NotImplementedError()
 
-    def assem_dg_dprops(self):
+    def assem_dg_dprop(self):
         raise NotImplementedError()
 
     def __pos__(self):
@@ -150,8 +150,8 @@ class Sum(BinaryFunctional):
     def assem_dg_dstate(self):
         return self.a.assem_dg_dstate() + self.b.assem_dg_dstate()
 
-    def assem_dg_dprops(self):
-        return self.a.assem_dg_dprops() + self.b.assem_dg_dprops()
+    def assem_dg_dprop(self):
+        return self.a.assem_dg_dprop() + self.b.assem_dg_dprop()
 
 class Product(BinaryFunctional):
     def assem_g(self):
@@ -160,8 +160,8 @@ class Product(BinaryFunctional):
     def assem_dg_dstate(self):
         return self.a.assem_g()*self.b.assem_dg_dstate() + self.a.assem_dg_dstate()*self.b.assem_g()
 
-    def assem_dg_dprops(self):
-        return self.a.assem_g()*self.b.assem_dg_dprops() + self.a.assem_dg_dprops()*self.b.assem_g()
+    def assem_dg_dprop(self):
+        return self.a.assem_g()*self.b.assem_dg_dprop() + self.a.assem_dg_dprop()*self.b.assem_g()
 
 class ScalarSum(UnaryFunctional):
     def assem_g(self):
@@ -170,8 +170,8 @@ class ScalarSum(UnaryFunctional):
     def assem_dg_dstate(self):
         return self.a.assem_dg_dstate()
 
-    def assem_dg_dprops(self):
-        return self.a.assem_dg_dprops()
+    def assem_dg_dprop(self):
+        return self.a.assem_dg_dprop()
 
 class ScalarPower(UnaryFunctional):
     def assem_g(self):
@@ -180,8 +180,8 @@ class ScalarPower(UnaryFunctional):
     def assem_dg_dstate(self):
         return self.C * self.a.assem_g()**(self.C-1) * self.a.assem_dg_dstate()
 
-    def assem_dg_dprops(self):
-        return self.C * self.a.assem_g()**(self.C-1) * self.a.assem_dg_dprops()
+    def assem_dg_dprop(self):
+        return self.C * self.a.assem_g()**(self.C-1) * self.a.assem_dg_dprop()
 
 class ScalarProduct(UnaryFunctional):
     def assem_g(self):
@@ -190,8 +190,8 @@ class ScalarProduct(UnaryFunctional):
     def assem_dg_dstate(self):
         return self.C * self.a.assem_dg_dstate()
 
-    def assem_dg_dprops(self):
-        return self.C * self.a.assem_dg_dprops()
+    def assem_dg_dprop(self):
+        return self.C * self.a.assem_dg_dprop()
 
 
 class BaseFunctional(GenericFunctional):
@@ -237,7 +237,7 @@ class OnsetPressureFunctional(BaseFunctional):
         dg_dstate['psub'][0] = 1.0
         return dg_dstate
 
-    def assem_dg_dprops(self):
+    def assem_dg_dprop(self):
         dg_dprops = self.prop.copy()
         dg_dprops[:] = 0
         return dg_dprops
@@ -256,7 +256,7 @@ class OnsetFrequencyFunctional(BaseFunctional):
         dg_dstate['omega'][0] = 1.0
         return dg_dstate
 
-    def assem_dg_dprops(self):
+    def assem_dg_dprop(self):
         dg_dprops = self.prop.copy()
         dg_dprops[:] = 0
         return dg_dprops
@@ -275,7 +275,7 @@ class AbsOnsetFrequencyFunctional(BaseFunctional):
         dg_dstate['omega'][0] = np.sign(self.state['omega'][0])
         return dg_dstate
 
-    def assem_dg_dprops(self):
+    def assem_dg_dprop(self):
         dg_dprops = self.prop.copy()
         dg_dprops[:] = 0
         return dg_dprops
@@ -315,7 +315,7 @@ class GlottalWidthErrorFunctional(BaseFunctional):
         dg_dstate.set_mono(_dg_dstate)
         return dg_dstate
 
-    def assem_dg_dprops(self):
+    def assem_dg_dprop(self):
         _dg_dprops = self._grad_props_err(self.state.to_mono_ndarray(), self.prop.to_mono_ndarray())
         dg_dprops = self.prop.copy()
         dg_dprops.set_mono(_dg_dprops)
@@ -352,7 +352,7 @@ class StrainEnergyFunctional(BaseFunctional):
         dg_dstate['u'] = dstrain_energy_du
         return dg_dstate
 
-    def assem_dg_dprops(self):
+    def assem_dg_dprop(self):
         dg_dprops = self.prop.copy()
         dg_dprops[:] = 0
         dg_demod = self.assem_dstrain_energy_demod.assemble()
@@ -383,7 +383,7 @@ class ModulusGradientNormSqr(BaseFunctional):
         dg_dstate[:] = 0.0
         return dg_dstate
 
-    def assem_dg_dprops(self):
+    def assem_dg_dprop(self):
         dg_dprops = self.prop.copy()
         dg_dprops[:] = 0
         dg_dprops['emod'][:] = dfn.assemble(

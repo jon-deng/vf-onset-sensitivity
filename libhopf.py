@@ -335,7 +335,7 @@ class HopfModel:
         ret_bmat = bmat.concatenate_mat(ret_mats, labels=ret_labels)
         return ret_bmat
 
-    def assem_dres_dprops(self):
+    def assem_dres_dprop(self):
         """Return the Hopf system jacobian wrt. model properties"""
         # Bind commonly used local vars
         res, dres = self.res, self.dres
@@ -351,15 +351,15 @@ class HopfModel:
         # Assemble the matrix by rows
         omega = self.state['omega'][0]
 
-        row0 = [res.assem_dres_dprops().copy()]
+        row0 = [res.assem_dres_dprop().copy()]
 
         dres.set_dstate(mode_real)
         dres.set_dstatet(-float(omega)*mode_imag)
-        row1 = [dres.assem_dres_dprops().copy()]
+        row1 = [dres.assem_dres_dprop().copy()]
 
         dres.set_dstate(mode_imag)
         dres.set_dstatet(float(omega)*mode_real)
-        row2 = [dres.assem_dres_dprops().copy()]
+        row2 = [dres.assem_dres_dprop().copy()]
 
         _mats = [subops.zero_mat(1, m) for m in self.prop.bshape[0]]
         row3 = [
@@ -1340,7 +1340,7 @@ class ReducedFunctional:
         """
         return self.func.assem_g()
 
-    def assem_dg_dprops(self):
+    def assem_dg_dprop(self):
         """
         Return the functional gradient
         """
@@ -1351,7 +1351,7 @@ class ReducedFunctional:
             self.prop
         )
 
-    def assem_d2g_dprops2(
+    def assem_d2g_dprop2(
             self,
             dprop: bvec.BlockVector,
             norm: Optional[Callable[[bvec.BlockVector], float]]=None,
@@ -1413,7 +1413,7 @@ def solve_reduced_gradient(
         obj.set_state(state)
         obj.set_prop(prop)
 
-    dg_dprops = functional.assem_dg_dprops()
+    dg_dprops = functional.assem_dg_dprop()
     dg_dx = functional.assem_dg_dstate()
     hopf.apply_dirichlet_bvec(dg_dx)
     _dg_dx = dg_dx.to_mono_petsc()
@@ -1430,7 +1430,7 @@ def solve_reduced_gradient(
     dg_dres.set_mono(_dg_dres)
 
     # Compute the reduced gradient
-    dres_dprops = hopf.assem_dres_dprops()
+    dres_dprops = hopf.assem_dres_dprop()
     return bla.mult_mat_vec(dres_dprops.transpose(), -dg_dres) + dg_dprops
 
 
@@ -1563,7 +1563,7 @@ class OptGradManager:
 
             # Solve the gradient of the objective function
             _dg_dprops = self.param.y.copy()
-            _dg_dprops[:] = self.redu_grad.assem_dg_dprops()
+            _dg_dprops[:] = self.redu_grad.assem_dg_dprop()
             _dg_dprops['rho_air'] = 0.0
 
             self.param.x.set_mono(p)
@@ -1612,7 +1612,7 @@ class ReducedFunctionalHessianContext:
 
         # Use the parameterization to convert parameter -> model properties
         dprop = self.parameterization.apply_jvp(self.params, bx)
-        hy = self.rfunctional.assem_d2g_dprops2(
+        hy = self.rfunctional.assem_d2g_dprop2(
             dprop, norm=self._norm, h=self._step_size
         )
         # Convert dual properties -> dual parameter
