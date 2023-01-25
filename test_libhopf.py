@@ -24,6 +24,7 @@ from petsc4py import PETSc
 def hopf_model():
     """Return a Hopf bifurcation model"""
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
+    mesh_name = 'M5_CB_GA1_CL1.00'
     mesh_path = path.join('./mesh', mesh_name+'.msh')
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore')

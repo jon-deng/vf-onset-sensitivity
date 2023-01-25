@@ -529,7 +529,7 @@ def bound_ponset(
             ]
         return bound_ponset(
             model, control, prop, (ret_lbs, ret_ubs), (ret_lomegas, ret_uomegas),
-            nsplit=nsplit, tol=tol
+            nsplit=nsplit, tol=tol, solve_fp_r=solve_fp_r
         )
 
 def gen_xhopf_0_from_bounds(
@@ -686,7 +686,8 @@ def gen_xhopf_0(
     omega_ubs = [omegas_max[idx_bif+1]]
     omega_pairs = (omega_lbs, omega_ubs)
     xhopf_0 = gen_xhopf_0_from_bounds(
-        dyn_model, prop, evec_ref, bounds, omega_pairs, tol=tol
+        dyn_model, prop, evec_ref, bounds, omega_pairs,
+        tol=tol, solve_fp_r=solve_fp_r
     )
     return xhopf_0
 

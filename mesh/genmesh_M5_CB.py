@@ -51,8 +51,8 @@ if __name__ == '__main__':
     for medial_angle in [0, 1, 2, 3]:
         proc_M5(medial_angle)
         gmsh.model.mesh.generate(2)
-        gmsh.write(f'M5_CB_GA{medial_angle:d}_{clscale:.2f}.msh')
+        gmsh.write(f'M5_CB_GA{medial_angle:d}_CL{clscale:.2f}.msh')
 
         proc_M5_split(medial_angle)
         gmsh.model.mesh.generate(2)
-        gmsh.write(f'M5_CB_GA{medial_angle:d}_{clscale:.2f}_split.msh')
+        gmsh.write(f'M5_CB_GA{medial_angle:d}_CL{clscale:.2f}_split.msh')
