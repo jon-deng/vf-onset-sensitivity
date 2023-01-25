@@ -6,6 +6,8 @@ import argparse
 import os.path as path
 from pprint import pprint
 import itertools
+import warnings
+from tqdm import tqdm
 from typing import Union
 
 import h5py
@@ -62,7 +64,8 @@ ptypes = {
 }
 ExpParamBasic = exputils.make_parameters(ptypes)
 
-PSUBS = np.arange(0, 1500, 50) * 10
+CLSCALE = 0.5
+PSUBS = np.arange(0, 800, 50) * 10
 
 def setup_dyna_model(params: exputils.BaseParameters):
     """
@@ -197,7 +200,7 @@ def setup_exp_params(study_name: str):
     """
 
     DEFAULT_PARAMS_PENALTY = ExpParamFreqPenalty({
-        'MeshName': 'M5_CB_GA3',
+        'MeshName': f'M5_CB_GA3_CL{CLSCALE:.2f}',
         'Ecov': 2.5*10*1e3,
         'Ebod': 2.5*10*1e3,
         'ParamOption': 'all',
@@ -209,7 +212,7 @@ def setup_exp_params(study_name: str):
     })
 
     DEFAULT_PARAMS_BASIC = ExpParamBasic({
-        'MeshName': 'M5_CB_GA3',
+        'MeshName': f'M5_CB_GA3_CL{CLSCALE:.2f}',
         'Ecov': 2.5*10*1e3,
         'Ebod': 2.5*10*1e3,
         'ParamOption': 'all',
@@ -345,9 +348,18 @@ def setup_reduced_functional(params):
     assert np.isclose(bvec.norm(prop-_props), 0)
 
     ## Solve for the Hopf bifurcation
-    xhopf_0 = libhopf.gen_xhopf_0(hopf, prop, PSUBS, tol=100.0)
+    xhopf_0 = hopf.state.copy()
+    xhopf_0[:] = libhopf.gen_xhopf_0(hopf.res, prop, hopf.E_MODE, PSUBS, tol=100.0)
     xhopf_n, info = libhopf.solve_hopf_by_newton(hopf, xhopf_0, prop)
     hopf.set_state(xhopf_n)
+
+    # Throw a warning if the Hopf system solution didn't converge
+    if info['status'] == -1:
+        warnings.warn(
+            "Hopf system solution didn't converge with solver info: "
+            f"{info}",
+            RuntimeWarning
+        )
 
     ## Load the functional/objective function and gradient
     _params = params.substitute({})
@@ -408,7 +420,7 @@ def run_functional_sensitivity(params, output_dir='out/sensitivity'):
     if not path.isfile(fpath):
         ## Compute 1st order sensitivity of the functional
         rfunc.set_prop(parameterization.apply(p0))
-        grad_props = rfunc.assem_dg_dprops()
+        grad_props = rfunc.assem_dg_dprop()
         grad_params = parameterization.apply_vjp(p0, grad_props)
 
         ## Compute 2nd order sensitivity of the functional
@@ -509,7 +521,7 @@ if __name__ == '__main__':
     if clargs.study_type == 'none':
         pass
     elif clargs.study_type == 'sensitivity':
-        for params in paramss:
+        for params in tqdm(paramss):
             run_functional_sensitivity(params, output_dir='out/sensitivity')
     elif clargs.study_type == 'minimization':
         for params in paramss:
