@@ -590,6 +590,10 @@ def gen_xhopf_0_from_bounds(
     # Solve for the fixed point
     # x_fp0 = res.state.copy()
     # x_fp0[:] = 0.0
+    if solve_fp_r is None:
+        solve_fp_r = lambda model, control, prop: solve_fp(
+            model, control, prop, psub_incr=250*10
+        )
     x_fp, _info = solve_fp_r(dyn_model, control, prop)
 
     # Solve for linear stability around the fixed point
