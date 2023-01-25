@@ -590,7 +590,7 @@ def gen_xhopf_0_from_bounds(
     # Solve for the fixed point
     # x_fp0 = res.state.copy()
     # x_fp0[:] = 0.0
-    x_fp, _info = solve_fp(dyn_model, control, prop)
+    x_fp, _info = solve_fp_r(dyn_model, control, prop)
 
     # Solve for linear stability around the fixed point
     omegas, eigvecs_real, eigvecs_imag = solve_linear_stability(
