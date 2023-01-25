@@ -26,12 +26,6 @@ def proc_M5(medial_angle):
     gmsh.model.add_physical_group(0, [10], name='separation-inf')
     gmsh.model.add_physical_group(0, [9], name='separation-sup')
 
-    # gmsh.option.set_number('Mesh.MshFileVersion', MSH_VER)
-    # gmsh.option.set_number('Mesh.MeshSizeFactor', SIZE_FACTOR)
-
-    gmsh.model.mesh.generate(2)
-    gmsh.write(f'M5_CB_GA{medial_angle:d}.msh')
-
 def proc_M5_split(medial_angle):
     """
     Generate a mesh for the M5_CB_GA*_split.STEP geometry
@@ -52,13 +46,13 @@ def proc_M5_split(medial_angle):
     gmsh.model.add_physical_group(0, [3], name='separation-mid')
     gmsh.model.add_physical_group(0, [14], name='separation-sup')
 
-    # gmsh.option.set_number('Mesh.MshFileVersion', MSH_VER)
-    # gmsh.option.set_number('Mesh.MeshSizeFactor', SIZE_FACTOR)
-
-    gmsh.model.mesh.generate(2)
-    gmsh.write(f'M5_CB_GA{medial_angle:d}_split.msh')
-
 if __name__ == '__main__':
+    clscale = gmsh.option.get_number('Mesh.MeshSizeFactor')
     for medial_angle in [0, 1, 2, 3]:
         proc_M5(medial_angle)
+        gmsh.model.mesh.generate(2)
+        gmsh.write(f'M5_CB_GA{medial_angle:d}_{clscale:.2f}.msh')
+
         proc_M5_split(medial_angle)
+        gmsh.model.mesh.generate(2)
+        gmsh.write(f'M5_CB_GA{medial_angle:d}_{clscale:.2f}_split.msh')
