@@ -225,13 +225,13 @@ class TestHopfModel:
         print(f"Testing along direction {label}")
         return dprop
 
-    def test_assem_dres_dprops(
+    def test_assem_dres_dprop(
             self,
             hopf_model,
             xhopf_props,
             dprop
         ):
-        """Test `HopfModel.assem_dres_dprops`"""
+        """Test `HopfModel.assem_dres_dprop`"""
 
         hopf = hopf_model
         state, prop = xhopf_props
@@ -245,19 +245,19 @@ class TestHopfModel:
 
         def hopf_jac(x, dx):
             hopf.set_prop(x)
-            dres_dprops = hopf.assem_dres_dprops()
-            hopf.zero_rows_dirichlet_bmat(dres_dprops)
-            return bla.mult_mat_vec(dres_dprops, dx)
+            dres_dprop = hopf.assem_dres_dprop()
+            hopf.zero_rows_dirichlet_bmat(dres_dprop)
+            return bla.mult_mat_vec(dres_dprop, dx)
         taylor_convergence(prop, dprop, hopf_res, hopf_jac)
 
-    def test_assem_dres_dprops_adjoint(
+    def test_assem_dres_dprop_adjoint(
             self,
             hopf_model,
             xhopf_props,
             dprop
         ):
         """
-        Test the adjoint of `HopfModel.assem_dres_dprops`
+        Test the adjoint of `HopfModel.assem_dres_dprop`
 
         This should be true as long as the tranpose is computed correctly.
         """
@@ -266,17 +266,17 @@ class TestHopfModel:
         hopf.set_state(state)
         hopf.set_prop(prop)
 
-        dres_dprops = hopf.assem_dres_dprops()
+        dres_dprop = hopf.assem_dres_dprop()
 
         dres_adj = state.copy()
         dres_adj[:] = 1
         # dres_adj['psub'] = 1
         hopf.apply_dirichlet_bvec(dres_adj)
 
-        dres_dprops_adj = dres_dprops.transpose()
+        dres_dprop_adj = dres_dprop.transpose()
 
         self._test_operator_adjoint(
-            dres_dprops, dres_dprops_adj,
+            dres_dprop, dres_dprop_adj,
             dprop, dres_adj
         )
 
@@ -442,17 +442,17 @@ def xhopf_params(hopf_model, params):
         ('umesh', 1.0e-4)
     ]
 )
-def dprops_dir(request):
+def dprop_dir(request):
     return request.param
 
 @pytest.fixture()
-def dprop(prop, dprops_dir):
+def dprop(prop, dprop_dir):
     """Return a `prop` perturbation"""
 
     dprop = prop.copy()
     dprop[:] = 0
 
-    key, val = dprops_dir
+    key, val = dprop_dir
     dprop[key] = val
     return dprop
 
@@ -476,7 +476,7 @@ class TestFunctionalGradient:
     # The below operators represent 'reduced' operators on the residual
     # This operator represents the map between property changes and state
     # through the implicit function theorem on the Hopf system residual
-    def test_dstate_dprops(
+    def test_dstate_dprop(
             self,
             hopf_model,
             xhopf_props,
@@ -501,9 +501,9 @@ class TestFunctionalGradient:
             hopf.set_state(x)
 
             # Compute the jacobian action
-            dres_dprops = hopf.assem_dres_dprops()
-            hopf.zero_rows_dirichlet_bmat(dres_dprops)
-            dres = bla.mult_mat_vec(dres_dprops, dprop)
+            dres_dprop = hopf.assem_dres_dprop()
+            hopf.zero_rows_dirichlet_bmat(dres_dprop)
+            dres = bla.mult_mat_vec(dres_dprop, dprop)
             _dres = dres.to_mono_petsc()
 
             dstate = hopf.state.copy()
@@ -517,7 +517,7 @@ class TestFunctionalGradient:
             return dstate
         taylor_convergence(prop, dprop, res, jac)
 
-    # def test_dstate_dprops_adjoint():
+    # def test_dstate_dprop_adjoint():
 
     def test_solve_reduced_gradient(
             self,
@@ -644,28 +644,28 @@ class TestReducedFunctional:
             hopf.set_prop(rfunctional.rhopf_model.prop)
             print(bla.norm(hopf.assem_res()))
 
-    def test_assem_d2g_dprops2(
+    def test_assem_d2g_dprop2(
             self, rfunctional, xhopf_props, dprop, norm
         ):
         """
-        Test `ReducedFunctional.assem_d2g_dprops2`
+        Test `ReducedFunctional.assem_d2g_dprop2`
         """
         h = 1e-2
         xhopf, prop = xhopf_props
 
-        # norm_dprops = norm(dprop)
-        # unit_dprops = dprop/norm_dprops
-        # unit_dprops.print_summary()
+        # norm_dprop = norm(dprop)
+        # unit_dprop = dprop/norm_dprop
+        # unit_dprop.print_summary()
 
         def assem_grad(prop):
             # print(bla.norm(prop))
             rfunctional.set_prop(prop)
-            return rfunctional.assem_dg_dprops().copy()
+            return rfunctional.assem_dg_dprop().copy()
 
         def assem_hvp(prop, dprop):
             # print(bla.norm(prop))
             rfunctional.set_prop(prop)
-            return rfunctional.assem_d2g_dprops2(dprop, h=h, norm=norm).copy()
+            return rfunctional.assem_d2g_dprop2(dprop, h=h, norm=norm).copy()
 
         alphas, errs, mags, conv_rates = taylor_convergence(
             prop, dprop, assem_grad, assem_hvp, norm=bla.norm
