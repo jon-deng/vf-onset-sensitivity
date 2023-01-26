@@ -24,7 +24,7 @@ from petsc4py import PETSc
 def hopf_model():
     """Return a Hopf bifurcation model"""
     mesh_name = 'BC-dcov5.00e-02-cl1.00'
-    mesh_name = 'M5_CB_GA1_CL1.00'
+    mesh_name = 'M5_CB_GA3_CL0.50'
     mesh_path = path.join('./mesh', mesh_name+'.msh')
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore')
@@ -412,8 +412,9 @@ def solve_linearization(hopf, prop):
     `prop` - the Hopf model properties
     """
     hopf.set_prop(prop)
-    psubs = np.arange(100, 1000, 100)*10
-    xhopf_0 = libhopf.gen_xhopf_0(hopf, prop, psubs)
+    psubs = np.arange(1, 1000, 100)*10
+    xhopf_0 = hopf.state.copy()
+    xhopf_0[:] = libhopf.gen_xhopf_0(hopf.res, prop, hopf.E_MODE, psubs)
     xhopf, info = libhopf.solve_hopf_by_newton(hopf, xhopf_0, prop)
     return xhopf, info
 
