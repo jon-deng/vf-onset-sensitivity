@@ -282,7 +282,8 @@ def setup_exp_params(study_name: str):
         return paramss
     elif study_name == 'test_sensitivity':
         functional_names = [
-            'OnsetPressure'
+            'OnsetPressure',
+            'OnsetFrequency'
         ]
         param_options = [
             'const_shape'
