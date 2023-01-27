@@ -609,7 +609,7 @@ class TestReducedFunctional:
         return propss
 
     @pytest.fixture()
-    def norm(self, dprop):
+    def norm(self, hopf_model, dprop):
         """
         Return a scaled norm
 
@@ -619,10 +619,28 @@ class TestReducedFunctional:
         scale = dprop.copy()
         scale[:] = 1
         scale['emod'][:] = 1e4
-        scale['umesh'][:] = 0.1
+        scale['umesh'][:] = 1e-6
+
+        # Mass matrices for the different vector spaces
+        forms = hopf_model.res.solid.forms
+        import dolfin as dfn
+        dx = forms['measure.dx']
+        u = dfn.TrialFunction(forms['coeff.prop.emod'].function_space())
+        v = dfn.TestFunction(forms['coeff.prop.emod'].function_space())
+        M_EMOD = dfn.assemble(dfn.inner(u, v)*dx, tensor=dfn.PETScMatrix()).mat()
+
+        # The `...[0]` is hard-coded because I did something weird with storing the
+        # mesh displacement/shape property
+        u = dfn.TrialFunction(forms['coeff.prop.umesh'][0].function_space())
+        v = dfn.TestFunction(forms['coeff.prop.umesh'][0].function_space())
+        M_SHAPE = dfn.assemble(dfn.inner(u, v)*dx, tensor=dfn.PETScMatrix()).mat()
 
         def scaled_norm(x):
-            return bla.norm(x/scale)
+            xs = x/scale
+            dxs = xs.copy()
+            dxs['emod'] = M_EMOD * xs.sub['emod']
+            dxs['umesh'] = M_SHAPE * xs.sub['umesh']
+            return bla.dot(x, dxs)
 
         return scaled_norm
 
@@ -670,6 +688,7 @@ class TestReducedFunctional:
         alphas, errs, mags, conv_rates = taylor_convergence(
             prop, dprop, assem_grad, assem_hvp, norm=bla.norm
         )
+        # print(alphas, errs, mags, conv_rates)
 
 class TestOptGradManager:
     """
