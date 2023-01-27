@@ -21,7 +21,7 @@ from slepc4py import SLEPc
 import dolfin as dfn
 dfn.set_log_level(50)
 
-from blockarray import blockvec as bvec, h5utils
+from blockarray import blockvec as bvec, linalg as bla, h5utils
 from femvf import load
 from femvf.models.transient import (
     solid as tsld, fluid as tfld, base as tbase
@@ -434,6 +434,56 @@ def run_minimize_functional(params, output_dir='out/minimization'):
     else:
         print(f"Skipping existing file '{fpath}'")
 
+def setup_norm(hopf_model):
+    """
+    Return a norm for property vectors
+
+    This norm should scale property vectors so that characteristic changes
+    in the stiffness and shape properties (and others in general) are all
+    scaled the same.
+    """
+    # NOTE: This is the old strategy
+    # _scale = hopf_model.prop.copy()
+    # _scale[:] = 1
+    # _scale['umesh'][:] = 1e-1
+    # _scale['emod'][:] = 1e4
+    # def norm(x):
+    #     return bvec.norm(x/_scale)
+
+    scale = hopf_model.prop.copy()
+    scale[:] = 1
+    scale['emod'][:] = 1e4
+    scale['umesh'][:] = 1e-6
+
+    # Mass matrices for the different vector spaces
+    forms = hopf_model.res.solid.forms
+    import dolfin as dfn
+    dx = forms['measure.dx']
+    u = dfn.TrialFunction(forms['coeff.prop.emod'].function_space())
+    v = dfn.TestFunction(forms['coeff.prop.emod'].function_space())
+    M_EMOD = dfn.assemble(dfn.inner(u, v)*dx, tensor=dfn.PETScMatrix()).mat()
+
+    # The `...[0]` is hard-coded because I did something weird with storing the
+    # mesh displacement/shape property
+    u = dfn.TrialFunction(forms['coeff.prop.umesh'][0].function_space())
+    v = dfn.TestFunction(forms['coeff.prop.umesh'][0].function_space())
+    M_SHAPE = dfn.assemble(dfn.inner(u, v)*dx, tensor=dfn.PETScMatrix()).mat()
+
+    def norm(x):
+        """
+        Return a scaled norm
+
+        This norm roughly accounts for the difference in scale between
+        modulus, shape changes, etc.
+        """
+        xs = x/scale
+        dxs = xs.copy()
+        dxs['emod'] = M_EMOD * xs.sub['emod']
+        dxs['umesh'] = M_SHAPE * xs.sub['umesh']
+        return bla.dot(x, dxs)
+
+    return norm
+
 def run_functional_sensitivity(params, output_dir='out/sensitivity'):
     """
     Run an experiment where the sensitivity of a functional is saved
@@ -448,19 +498,7 @@ def run_functional_sensitivity(params, output_dir='out/sensitivity'):
         grad_params = parameterization.apply_vjp(p0, grad_props)
 
         ## Compute 2nd order sensitivity of the functional
-        _scale = hopf.prop.copy()
-        _scale[:] = 1
-        _scale['umesh'][:] = 1e-1
-        _scale['emod'][:] = 1e4
-        def norm(x):
-            """
-            Return a scaled norm
-
-            This norm roughly accounts for the difference in scale between
-            modulus, shape changes, etc.
-            """
-            return bvec.norm(x/_scale)
-
+        norm = setup_norm(hopf)
         redu_hess_context = libhopf.ReducedFunctionalHessianContext(
             rfunc, parameterization, norm=norm, step_size=1e-2
         )
