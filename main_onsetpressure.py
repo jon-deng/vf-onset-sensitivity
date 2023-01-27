@@ -280,6 +280,30 @@ def setup_exp_params(study_name: str):
             in itertools.product(functional_names, emods, param_options)
         )
         return paramss
+    elif study_name == 'test_sensitivity':
+        functional_names = [
+            'OnsetPressure'
+        ]
+        param_options = [
+            'const_shape'
+        ]
+        emod_covs = 1e4 * np.array([2])
+        emod_bods = 1e4 * np.array([2])
+
+        assert len(emod_covs) == len(emod_bods)
+
+        emods = [(ecov, ebod) for ecov, ebod in zip(emod_covs, emod_bods)]
+        paramss = (
+            DEFAULT_PARAMS_BASIC.substitute({
+                'Functional': func_name,
+                'Ecov': emod_cov,
+                'Ebod': emod_bod,
+                'ParamOption': param_option
+            })
+            for func_name, (emod_cov, emod_bod), param_option
+            in itertools.product(functional_names, emods, param_options)
+        )
+        return paramss
     else:
         raise ValueError("Unknown `study_name` '{study_name}'")
 
