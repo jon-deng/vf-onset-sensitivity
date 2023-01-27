@@ -619,7 +619,6 @@ def gen_xhopf_0_from_bounds(
         bvec.BlockVector([np.array([psub])], labels=(('psub',),))
     )
 
-    # TODO: Use `bvec.concatenate` to refactor
     sub_bvecs = [x_fp, x_mode_real, x_mode_imag, x_psub, x_omega]
     x_hopf = bvec.concatenate_vec(
         sub_bvecs, labels=((),)
@@ -1245,8 +1244,9 @@ class ReducedHopfModel:
                 category=RuntimeWarning
             )
             xhopf_0 = gen_xhopf_0(
-                self.hopf, prop, self.PSUB_INTERVALS, tol=100.0
+                self.hopf.res, prop, self.hopf.E_MODE, self.PSUB_INTERVALS, tol=100.0
             )
+            xhopf_0 = bvec.BlockVector(xhopf_0.blocks, labels=self.hopf.state.labels)
 
             # Retry the Newton solver with the better initial guess
             xhopf_n, info = solve_hopf_by_newton(
@@ -1568,10 +1568,6 @@ class OptGradManager:
 
             self.param.x.set_mono(p)
             _dg_dp = self.param.apply_vjp(self.param.x, _dg_dprops)
-
-            # TODO: Use a generic conversion method to handle optimizing subsets of parameters
-            # This is a hardcoded fix to make sure that the optimizer doesn't change 'rho_air' since
-            # the gradient w.r.t this parameter is not zero
             dg_dp = _dg_dp.to_mono_ndarray()
 
         # Record the current objective function and gradient

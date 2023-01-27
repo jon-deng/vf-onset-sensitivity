@@ -28,7 +28,7 @@ def hopf_model():
     mesh_path = path.join('./mesh', mesh_name+'.msh')
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore')
-        hopf, res, dres = libsetup.load_hopf_model(
+        hopf, *_ = libsetup.load_hopf_model(
             mesh_path,
             sep_method='smoothmin', sep_vert_label='separation'
         )
@@ -601,7 +601,6 @@ class TestReducedFunctional:
         ):
         """Return an iterable of `Hopf.prop` vectors"""
         _, prop = xhopf_props
-        dprop = dprop
 
         propss = [
             bv.concatenate_vec([prop + alpha*dprop])
