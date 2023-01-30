@@ -542,7 +542,7 @@ def run_functional_sensitivity(params, output_dir='out/sensitivity'):
         ## Compute 2nd order sensitivity of the functional
         norm = setup_norm(hopf)
         redu_hess_context = libhopf.ReducedFunctionalHessianContext(
-            rfunc, parameterization, norm=norm, step_size=1e-3
+            rfunc, parameterization, norm=norm, step_size=params['H']
         )
         redu_hess_context.set_params(p0)
         mat = PETSc.Mat().createPython(p0.mshape*2)
