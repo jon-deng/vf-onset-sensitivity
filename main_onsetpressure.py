@@ -481,7 +481,7 @@ def setup_norm(hopf_model):
         dxs = xs.copy()
         dxs['emod'] = M_EMOD * xs.sub['emod']
         dxs['umesh'] = M_SHAPE * xs.sub['umesh']
-        return bla.dot(x, dxs)
+        return bla.dot(x, dxs) ** 0.5
 
     return norm
 
