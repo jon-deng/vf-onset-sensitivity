@@ -50,7 +50,7 @@ class TestHopfModel:
     """
 
     @pytest.fixture()
-    def xhopf_props(self, hopf_model, prop):
+    def xhopf_prop(self, hopf_model, prop):
         """
         Return a linearization point for the Hopf model
 
@@ -118,13 +118,13 @@ class TestHopfModel:
     def test_assem_dres_dstate(
             self,
             hopf_model,
-            xhopf_props,
+            xhopf_prop,
             setup_dstate
         ):
         """Test `HopfModel.assem_dres_dstate`"""
 
         hopf = hopf_model
-        state, prop = xhopf_props
+        state, prop = xhopf_prop
         dstate = setup_dstate
         hopf.set_prop(prop)
 
@@ -145,7 +145,7 @@ class TestHopfModel:
     def test_assem_dres_dstate_adjoint(
             self,
             hopf_model,
-            xhopf_props,
+            xhopf_prop,
             setup_dstate
         ):
         """
@@ -155,7 +155,7 @@ class TestHopfModel:
         """
 
         hopf = hopf_model
-        state, prop = xhopf_props
+        state, prop = xhopf_prop
         dstate = setup_dstate
         hopf.set_state(state)
         hopf.set_prop(prop)
@@ -180,13 +180,13 @@ class TestHopfModel:
     def test_assem_dres_dstate_inv(
             self,
             hopf_model,
-            xhopf_props,
+            xhopf_prop,
             setup_dstate
         ):
         """Test `HopfModel.assem_dres_dstate`"""
 
         hopf = hopf_model
-        state, prop = xhopf_props
+        state, prop = xhopf_prop
         dstate = setup_dstate
         hopf.set_state(state)
         hopf.set_prop(prop)
@@ -228,13 +228,13 @@ class TestHopfModel:
     def test_assem_dres_dprop(
             self,
             hopf_model,
-            xhopf_props,
+            xhopf_prop,
             dprop
         ):
         """Test `HopfModel.assem_dres_dprop`"""
 
         hopf = hopf_model
-        state, prop = xhopf_props
+        state, prop = xhopf_prop
         hopf.set_state(state)
 
         def hopf_res(x):
@@ -253,7 +253,7 @@ class TestHopfModel:
     def test_assem_dres_dprop_adjoint(
             self,
             hopf_model,
-            xhopf_props,
+            xhopf_prop,
             dprop
         ):
         """
@@ -262,7 +262,7 @@ class TestHopfModel:
         This should be true as long as the tranpose is computed correctly.
         """
         hopf = hopf_model
-        state, prop = xhopf_props
+        state, prop = xhopf_prop
         hopf.set_state(state)
         hopf.set_prop(prop)
 
@@ -315,11 +315,11 @@ class TestHopfUtilities:
         hopf.set_prop(prop)
 
         dyn_model = hopf.res
-        dyn_props = hopf.res.prop
+        dyn_prop = hopf.res.prop
         dyn_control = hopf.res.control
 
         bounds, omegas = libhopf.bound_ponset(
-            dyn_model, dyn_control, dyn_props, bound_pairs
+            dyn_model, dyn_control, dyn_prop, bound_pairs
         )
         print(f"Hopf bifurcations between {bounds[0]} and {bounds[1]}")
         print(f"with growth rates between {omegas[0]} and {omegas[1]}")
@@ -419,7 +419,7 @@ def solve_linearization(hopf, prop):
     return xhopf, info
 
 @pytest.fixture()
-def xhopf_props(hopf_model, prop):
+def xhopf_prop(hopf_model, prop):
     """
     Return a linearization point corresponding to a Hopf bifurcation
     """
@@ -480,13 +480,13 @@ class TestFunctionalGradient:
     def test_dstate_dprop(
             self,
             hopf_model,
-            xhopf_props,
+            xhopf_prop,
             dprop
         ):
         """Test a combined operator of `HopfModel`"""
 
         hopf = hopf_model
-        xhopf, prop = xhopf_props
+        xhopf, prop = xhopf_prop
 
         def res(prop):
             x, info = libhopf.solve_hopf_by_newton(hopf, xhopf, prop)
@@ -524,7 +524,7 @@ class TestFunctionalGradient:
             self,
             functional,
             hopf_model,
-            xhopf_props,
+            xhopf_prop,
             dprop
         ):
         """
@@ -536,11 +536,11 @@ class TestFunctionalGradient:
             The functional to compute the gradient of
         hopf :
             The Hopf model
-        xhopf_props: (xhopf, prop, dprop)
+        xhopf_prop: (xhopf, prop, dprop)
         """
         hopf = hopf_model
         func = functional
-        xhopf, prop = xhopf_props
+        xhopf, prop = xhopf_prop
         # dprop = dprop
 
         def res(prop):
@@ -594,19 +594,19 @@ class TestReducedFunctional:
         return libhopf.ReducedFunctional(func, rhopf)
 
     @pytest.fixture()
-    def props_list(
+    def props(
             self,
-            xhopf_props,
+            xhopf_prop,
             dprop
         ):
         """Return an iterable of `Hopf.prop` vectors"""
-        _, prop = xhopf_props
+        _, prop = xhopf_prop
 
-        propss = [
+        props = [
             bv.concatenate_vec([prop + alpha*dprop])
             for alpha in np.linspace(0, 100, 3)
         ]
-        return propss
+        return props
 
     @pytest.fixture()
     def norm(self, hopf_model, dprop):
@@ -644,12 +644,12 @@ class TestReducedFunctional:
 
         return scaled_norm
 
-    def test_set_props(self, rfunctional, props_list):
+    def test_set_prop(self, rfunctional, props):
         """
         Test `ReducedFunctional.set_prop` solves for a Hopf bifurcation
         """
         hopf = rfunctional.rhopf_model.hopf
-        for prop in props_list:
+        for prop in props:
             # For each property in a list of properties to test, set the properties
             # of the ReducedFunctional; the ReducedFunctional should handle solving the
             # Hopf system implictly
@@ -663,13 +663,13 @@ class TestReducedFunctional:
             print(bla.norm(hopf.assem_res()))
 
     def test_assem_d2g_dprop2(
-            self, rfunctional, xhopf_props, dprop, norm
+            self, rfunctional, xhopf_prop, dprop, norm
         ):
         """
         Test `ReducedFunctional.assem_d2g_dprop2`
         """
         h = 1e-3
-        xhopf, prop = xhopf_props
+        xhopf, prop = xhopf_prop
 
         # norm_dprop = norm(dprop)
         # unit_dprop = dprop/norm_dprop
@@ -696,11 +696,11 @@ class TestOptGradManager:
     """
 
     @pytest.fixture()
-    def params(self, parameterization, xhopf_props, dprop):
+    def params(self, parameterization, xhopf_prop, dprop):
         """
         Return a sequence of parameters
         """
-        xhopf, prop = xhopf_props
+        xhopf, prop = xhopf_prop
 
         p0 = parameterization.x.copy()
         for key, subvec in prop.items():
