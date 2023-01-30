@@ -52,7 +52,8 @@ ptypes = {
     'Ecov': float,
     'Ebod': float,
     'ParamOption': str,
-    'Functional': FrequencyPenaltyFuncParam
+    'Functional': FrequencyPenaltyFuncParam,
+    'H': float
 }
 ExpParamFreqPenalty = exputils.make_parameters(ptypes)
 
@@ -61,7 +62,8 @@ ptypes = {
     'Ecov': float,
     'Ebod': float,
     'ParamOption': str,
-    'Functional': str
+    'Functional': str,
+    'H': float
 }
 ExpParamBasic = exputils.make_parameters(ptypes)
 
@@ -208,7 +210,8 @@ def setup_exp_params(study_name: str):
             'Name': 'OnsetPressure',
             'omega': -1,
             'beta': 1000
-        }
+        },
+        'H': 1e-3
     })
 
     DEFAULT_PARAMS_BASIC = ExpParamBasic({
@@ -216,7 +219,8 @@ def setup_exp_params(study_name: str):
         'Ecov': 2.5*10*1e3,
         'Ebod': 2.5*10*1e3,
         'ParamOption': 'all',
-        'Functional': 'OnsetPressure'
+        'Functional': 'OnsetPressure',
+        'H': 1e-3
     })
 
     emods = np.arange(2.5, 20, 2.5) * 10 * 1e3
@@ -303,6 +307,43 @@ def setup_exp_params(study_name: str):
             })
             for func_name, (emod_cov, emod_bod), param_option
             in itertools.product(functional_names, emods, param_options)
+        )
+        return paramss
+    elif study_name == 'independence':
+        functional_names = [
+            'OnsetPressure'
+        ]
+
+        param_options = [
+            'const_shape'
+        ]
+
+        emod_covs = 1e4 * np.array([2])
+        emod_bods = 1e4 * np.array([6])
+        assert len(emod_covs) == len(emod_bods)
+        emods = [(ecov, ebod) for ecov, ebod in zip(emod_covs, emod_bods)]
+
+        hs = np.array([1e-2, 1e-3, 1e-4, 1e-5])
+        mesh_names = [
+            f'M5_CB_GA3_CL{clscale:.2f}' for clscale in (0.5, 0.25, 0.125)
+        ]
+        paramss = (
+            DEFAULT_PARAMS_BASIC.substitute({
+                'MeshName': mesh_name,
+                'Functional': func_name,
+                'Ecov': emod_cov,
+                'Ebod': emod_bod,
+                'ParamOption': param_option,
+                'H': h
+            })
+            for mesh_name, h, func_name, (emod_cov, emod_bod), param_option
+            in itertools.product(
+                mesh_names,
+                hs,
+                functional_names,
+                emods,
+                param_options
+            )
         )
         return paramss
     else:
