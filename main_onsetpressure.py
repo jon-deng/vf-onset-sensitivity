@@ -454,7 +454,7 @@ def setup_norm(hopf_model):
     scale = hopf_model.prop.copy()
     scale[:] = 1
     scale['emod'][:] = 1e4
-    scale['umesh'][:] = 1e-6
+    scale['umesh'][:] = 1e-3
 
     # Mass matrices for the different vector spaces
     forms = hopf_model.res.solid.forms
@@ -501,7 +501,7 @@ def run_functional_sensitivity(params, output_dir='out/sensitivity'):
         ## Compute 2nd order sensitivity of the functional
         norm = setup_norm(hopf)
         redu_hess_context = libhopf.ReducedFunctionalHessianContext(
-            rfunc, parameterization, norm=norm, step_size=1e-2
+            rfunc, parameterization, norm=norm, step_size=1e-3
         )
         redu_hess_context.set_params(p0)
         mat = PETSc.Mat().createPython(p0.mshape*2)

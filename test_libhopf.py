@@ -619,7 +619,7 @@ class TestReducedFunctional:
         scale = dprop.copy()
         scale[:] = 1
         scale['emod'][:] = 1e4
-        scale['umesh'][:] = 1e-6
+        scale['umesh'][:] = 1e-3
 
         # Mass matrices for the different vector spaces
         forms = hopf_model.res.solid.forms
@@ -668,7 +668,7 @@ class TestReducedFunctional:
         """
         Test `ReducedFunctional.assem_d2g_dprop2`
         """
-        h = 1e-2
+        h = 1e-3
         xhopf, prop = xhopf_props
 
         # norm_dprop = norm(dprop)
