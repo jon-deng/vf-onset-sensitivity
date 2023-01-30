@@ -621,6 +621,7 @@ if __name__ == '__main__':
     argparser.add_argument('--study-type', type=str, default='none')
     argparser.add_argument('--num-proc', type=int, default=1)
     argparser.add_argument('--clscale', type=float, default=1)
+    argparser.add_argument('--output-dir', type=str, default='')
     clargs = argparser.parse_args()
     CLSCALE = clargs.clscale
 
@@ -628,19 +629,29 @@ if __name__ == '__main__':
 
     run = None
     if clargs.study_type == 'sensitivity':
+        if clargs.output_dir != '':
+            output_dir = clargs.output_dir
+        else:
+            output_dir = 'out/sensitivity'
+
         def run(param_dict):
             # TODO: Note the conversion of parameter dictionary to
             # `Parameter` object here is hard-coded; you'll have to change this
             # in the future if you change the study types.
             param = ExpParamBasic(param_dict)
             return run_functional_sensitivity(
-                param, output_dir='out/sensitivity'
+                param, output_dir=output_dir
             )
     elif clargs.study_type == 'minimization':
+        if clargs.output_dir != '':
+                output_dir = clargs.output_dir
+        else:
+            output_dir = 'out/minimization'
+
         def run(param_dict):
             param = ExpParamFreqPenalty(param_dict)
             return run_minimize_functional(
-                param, output_dir='out/minimization'
+                param, output_dir=output_dir
             )
     else:
         raise ValueError(f"Unknown '--study-type' {clargs.study_type}")
