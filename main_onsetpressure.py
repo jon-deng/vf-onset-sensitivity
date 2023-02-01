@@ -322,12 +322,15 @@ def setup_exp_params(study_name: str):
             'const_shape'
         ]
 
-        eig_target_options = [
+        eig_targets = [
             'LARGEST_MAGNITUDE'
         ]
 
         emod_covs = 1e4 * np.array([6, 2])
         emod_bods = 1e4 * np.array([6, 6])
+
+        emod_covs = 1e4 * np.array([6])
+        emod_bods = 1e4 * np.array([6])
         assert len(emod_covs) == len(emod_bods)
         emods = [(ecov, ebod) for ecov, ebod in zip(emod_covs, emod_bods)]
 
@@ -335,7 +338,10 @@ def setup_exp_params(study_name: str):
         mesh_names = [
             f'M5_CB_GA3_CL{clscale:.2f}' for clscale in (0.5,)
         ]
-        sep_points = ['separation-inf', 'separation-sup']
+        sep_points = [
+            # 'separation-inf',
+            'separation-sup'
+        ]
         paramss = (
             DEFAULT_PARAMS_BASIC.substitute({
                 'MeshName': mesh_name,
@@ -354,7 +360,7 @@ def setup_exp_params(study_name: str):
                 functional_names,
                 emods,
                 param_options,
-                eig_target_options,
+                eig_targets,
                 sep_points
             )
         )
@@ -368,7 +374,7 @@ def setup_exp_params(study_name: str):
             'const_shape'
         ]
 
-        eig_target_options = [
+        eig_targets = [
             'LARGEST_MAGNITUDE',
             'LARGEST_REAL'
         ]
@@ -399,7 +405,7 @@ def setup_exp_params(study_name: str):
                 functional_names,
                 emods,
                 param_options,
-                eig_target_options
+                eig_targets
             )
         )
         return paramss
