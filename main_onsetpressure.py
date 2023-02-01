@@ -409,6 +409,50 @@ def setup_exp_params(study_name: str):
             )
         )
         return paramss
+    elif study_name == 'eig_target_effect':
+        functional_names = [
+            'OnsetPressure'
+        ]
+
+        param_options = [
+            'const_shape'
+        ]
+
+        eig_targets = [
+            'LARGEST_MAGNITUDE',
+            'LARGEST_REAL'
+        ]
+
+        emod_covs = 1e4 * np.array([2])
+        emod_bods = 1e4 * np.array([6])
+        assert len(emod_covs) == len(emod_bods)
+        emods = [(ecov, ebod) for ecov, ebod in zip(emod_covs, emod_bods)]
+
+        hs = np.array([1e-3])
+        mesh_names = [
+            f'M5_CB_GA3_CL{clscale:.2f}' for clscale in (0.5, 0.25, 0.125)
+        ]
+        paramss = (
+            DEFAULT_PARAMS_BASIC.substitute({
+                'MeshName': mesh_name,
+                'Functional': func_name,
+                'Ecov': emod_cov,
+                'Ebod': emod_bod,
+                'ParamOption': param_option,
+                'H': h,
+                'EigTarget': eig_target
+            })
+            for mesh_name, h, func_name, (emod_cov, emod_bod), param_option, eig_target
+            in itertools.product(
+                mesh_names,
+                hs,
+                functional_names,
+                emods,
+                param_options,
+                eig_targets
+            )
+        )
+        return paramss
     else:
         raise ValueError("Unknown `study_name` '{study_name}'")
 
