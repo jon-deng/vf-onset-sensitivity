@@ -321,7 +321,7 @@ def setup_exp_params(study_name: str):
         ]
 
         eig_target_options = [
-            # 'LARGEST_MAGNITUDE',
+            'LARGEST_MAGNITUDE',
             'LARGEST_REAL'
         ]
 
