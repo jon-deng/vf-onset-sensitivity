@@ -63,7 +63,8 @@ ptypes = {
     'Ebod': float,
     'ParamOption': str,
     'Functional': str,
-    'H': float
+    'H': float,
+    'EigTarget': str
 }
 ExpParamBasic = exputils.make_parameters(ptypes)
 
@@ -220,7 +221,8 @@ def setup_exp_params(study_name: str):
         'Ebod': 2.5*10*1e3,
         'ParamOption': 'all',
         'Functional': 'OnsetPressure',
-        'H': 1e-3
+        'H': 1e-3,
+        'EigTarget': 'LargestMagnitude'
     })
 
     emods = np.arange(2.5, 20, 2.5) * 10 * 1e3
@@ -318,12 +320,17 @@ def setup_exp_params(study_name: str):
             'const_shape'
         ]
 
+        eig_target_options = [
+            # 'LARGEST_MAGNITUDE',
+            'LARGEST_REAL'
+        ]
+
         emod_covs = 1e4 * np.array([6, 2])
         emod_bods = 1e4 * np.array([6, 6])
         assert len(emod_covs) == len(emod_bods)
         emods = [(ecov, ebod) for ecov, ebod in zip(emod_covs, emod_bods)]
 
-        hs = np.array([1e-2, 1e-3, 1e-4, 1e-5])
+        hs = np.array([1e-3, 1e-4])
         mesh_names = [
             f'M5_CB_GA3_CL{clscale:.2f}' for clscale in (0.5, 0.25, 0.125)
         ]
@@ -334,15 +341,17 @@ def setup_exp_params(study_name: str):
                 'Ecov': emod_cov,
                 'Ebod': emod_bod,
                 'ParamOption': param_option,
-                'H': h
+                'H': h,
+                'EigTarget': eig_target
             })
-            for mesh_name, h, func_name, (emod_cov, emod_bod), param_option
+            for mesh_name, h, func_name, (emod_cov, emod_bod), param_option, eig_target
             in itertools.product(
                 mesh_names,
                 hs,
                 functional_names,
                 emods,
-                param_options
+                param_options,
+                eig_target_options
             )
         )
         return paramss
@@ -553,7 +562,14 @@ def run_functional_sensitivity(params, output_dir='out/sensitivity'):
         eps.setOperators(mat)
         eps.setDimensions(5, 20)
         eps.setProblemType(SLEPc.EPS.ProblemType.HEP)
-        eps.setWhichEigenpairs(SLEPc.EPS.Which.LARGEST_MAGNITUDE)
+
+        if params['EigTarget'] == 'LARGEST_MAGNITUDE':
+            which_eig = SLEPc.EPS.Which.LARGEST_MAGNITUDE
+        elif params['EigTarget'] == 'LARGEST_REAL':
+            which_eig = SLEPc.EPS.Which.LARGEST_REAL
+        else:
+            raise ValueError(f"Unknown `params['EigTarget']` key {params['EigTarget']}")
+        eps.setWhichEigenpairs(which_eig)
         eps.setUp()
 
         eps.solve()
