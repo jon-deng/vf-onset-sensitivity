@@ -64,7 +64,8 @@ ptypes = {
     'ParamOption': str,
     'Functional': str,
     'H': float,
-    'EigTarget': str
+    'EigTarget': str,
+    'SepPoint': str
 }
 ExpParamBasic = exputils.make_parameters(ptypes)
 
@@ -78,7 +79,7 @@ def setup_dyna_model(params: exputils.BaseParameters):
     mesh_path = path.join('./mesh', mesh_name+'.msh')
 
     hopf, res, dres = libsetup.load_hopf_model(
-        mesh_path, sep_method='fixed', sep_vert_label='separation-inf'
+        mesh_path, sep_method='fixed', sep_vert_label=params['SepPoint']
     )
     return hopf, res, dres
 
@@ -222,7 +223,8 @@ def setup_exp_params(study_name: str):
         'ParamOption': 'all',
         'Functional': 'OnsetPressure',
         'H': 1e-3,
-        'EigTarget': 'LargestMagnitude'
+        'EigTarget': 'LargestMagnitude',
+        'SepPoint': 'separation-inf'
     })
 
     emods = np.arange(2.5, 20, 2.5) * 10 * 1e3
@@ -309,6 +311,52 @@ def setup_exp_params(study_name: str):
             })
             for func_name, (emod_cov, emod_bod), param_option
             in itertools.product(functional_names, emods, param_options)
+        )
+        return paramss
+    elif study_name == 'separation_effect':
+        functional_names = [
+            'OnsetPressure'
+        ]
+
+        param_options = [
+            'const_shape'
+        ]
+
+        eig_target_options = [
+            'LARGEST_MAGNITUDE'
+        ]
+
+        emod_covs = 1e4 * np.array([6, 2])
+        emod_bods = 1e4 * np.array([6, 6])
+        assert len(emod_covs) == len(emod_bods)
+        emods = [(ecov, ebod) for ecov, ebod in zip(emod_covs, emod_bods)]
+
+        hs = np.array([1e-3])
+        mesh_names = [
+            f'M5_CB_GA3_CL{clscale:.2f}' for clscale in (0.5,)
+        ]
+        sep_points = ['separation-inf', 'separation-sup']
+        paramss = (
+            DEFAULT_PARAMS_BASIC.substitute({
+                'MeshName': mesh_name,
+                'Functional': func_name,
+                'Ecov': emod_cov,
+                'Ebod': emod_bod,
+                'ParamOption': param_option,
+                'H': h,
+                'EigTarget': eig_target,
+                'SepPoint': sep_point
+            })
+            for mesh_name, h, func_name, (emod_cov, emod_bod), param_option, eig_target, sep_point
+            in itertools.product(
+                mesh_names,
+                hs,
+                functional_names,
+                emods,
+                param_options,
+                eig_target_options,
+                sep_points
+            )
         )
         return paramss
     elif study_name == 'independence':
