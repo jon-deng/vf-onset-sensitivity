@@ -375,11 +375,11 @@ def setup_exp_params(study_name: str):
 
         hs = np.array([1e-3])
         mesh_names = [
-            f'M5_CB_GA3_CL{clscale:.2f}_split' for clscale in (0.5,)
+            f'M5_CB_GA3_CL{clscale:.2f}_split' for clscale in (0.5, 0.25, 0.125)
         ]
         sep_points = [
-            # 'separation-inf',
-            'separation-mid',
+            'separation-inf',
+            'separation-mid'
         ]
         paramss = (
             DEFAULT_PARAMS_BASIC.substitute({
