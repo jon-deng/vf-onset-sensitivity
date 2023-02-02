@@ -230,7 +230,7 @@ def setup_exp_params(study_name: str):
         'ParamOption': 'all',
         'Functional': 'OnsetPressure',
         'H': 1e-3,
-        'EigTarget': 'LargestMagnitude',
+        'EigTarget': 'LARGEST_MAGNITUDE',
         'SepPoint': 'separation-inf'
     })
 
