@@ -306,16 +306,16 @@ def setup_exp_params(study_name: str):
             # 'all'
         ]
         emod_covs = np.concatenate([
-            2*np.arange(1, 10, 2),
+            2*np.arange(1, 9, 2),
             # 1*np.arange(1, 10, 2),
-            2/3*np.arange(1, 10, 2),
-            0.5*np.arange(1, 10, 2)
+            2/3*np.arange(1, 9, 2),
+            0.5*np.arange(1, 9, 2)
         ]) * 10 * 1e3
         emod_bods = np.concatenate([
-            2*np.arange(1, 10, 2),
+            2*np.arange(1, 9, 2),
             # 2*np.arange(1, 10, 2),
-            2*np.arange(1, 10, 2),
-            2*np.arange(1, 10, 2)
+            2*np.arange(1, 9, 2),
+            2*np.arange(1, 9, 2)
         ]) * 10 * 1e3
 
         assert len(emod_covs) == len(emod_bods)
