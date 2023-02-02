@@ -295,6 +295,43 @@ def setup_exp_params(study_name: str):
             in itertools.product(functional_names, emods, param_options)
         )
         return paramss
+    elif study_name == 'main_coarse_sensitivity':
+        functional_names = [
+            'OnsetPressure',
+            'OnsetFrequency',
+            # 'OnsetPressureStrainEnergy'
+        ]
+        param_options = [
+            'const_shape',
+            # 'all'
+        ]
+        emod_covs = np.concatenate([
+            2*np.arange(1, 10, 2),
+            # 1*np.arange(1, 10, 2),
+            2/3*np.arange(1, 10, 2),
+            0.5*np.arange(1, 10, 2)
+        ]) * 10 * 1e3
+        emod_bods = np.concatenate([
+            2*np.arange(1, 10, 2),
+            # 2*np.arange(1, 10, 2),
+            2*np.arange(1, 10, 2),
+            2*np.arange(1, 10, 2)
+        ]) * 10 * 1e3
+
+        assert len(emod_covs) == len(emod_bods)
+
+        emods = [(ecov, ebod) for ecov, ebod in zip(emod_covs, emod_bods)]
+        paramss = (
+            DEFAULT_PARAMS_BASIC.substitute({
+                'Functional': func_name,
+                'Ecov': emod_cov,
+                'Ebod': emod_bod,
+                'ParamOption': param_option
+            })
+            for func_name, (emod_cov, emod_bod), param_option
+            in itertools.product(functional_names, emods, param_options)
+        )
+        return paramss
     elif study_name == 'test_sensitivity':
         functional_names = [
             'OnsetPressure',
