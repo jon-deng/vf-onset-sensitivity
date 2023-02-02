@@ -129,6 +129,13 @@ def set_prop(prop, hopf, celllabel_to_dofs, emod_cov, emod_bod):
     prop['emod'][dofs_cov] = emod_cov
     prop['emod'][dofs_bod] = emod_bod
     prop['emod'][dofs_share] = 1/2*(emod_cov + emod_bod)
+
+    mesh = hopf.res.solid.forms['mesh.mesh']
+    y_max = mesh.coordinate()[:, 1].max()
+    y_gap = 0.03
+    y_con_offset = 1/10*y_gap
+    prop['ymid'] = y_max + y_gap
+    prop['ycon'] = y_max + y_gap - y_con_offset
     return prop
 
 def setup_functional(
@@ -334,8 +341,8 @@ def setup_exp_params(study_name: str):
             f'M5_CB_GA3_CL{clscale:.2f}_split' for clscale in (0.5,)
         ]
         sep_points = [
+            # 'separation-inf',
             'separation-mid',
-            'separation-inf'
         ]
         paramss = (
             DEFAULT_PARAMS_BASIC.substitute({
