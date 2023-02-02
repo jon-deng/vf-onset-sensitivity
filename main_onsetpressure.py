@@ -526,14 +526,6 @@ def setup_reduced_functional(params):
     else:
         hopf.set_state(xhopf_n)
 
-    # Throw a warning if the Hopf system solution didn't converge
-    if info['status'] == -1:
-        warnings.warn(
-            "Hopf system solution didn't converge with solver info: "
-            f"{info}",
-            RuntimeWarning
-        )
-
     ## Load the functional/objective function and gradient
     _params = params.substitute({})
     if isinstance(params['Functional'], FrequencyPenaltyFuncParam):
