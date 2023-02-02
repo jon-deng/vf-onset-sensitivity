@@ -317,30 +317,25 @@ def setup_exp_params(study_name: str):
         functional_names = [
             'OnsetPressure'
         ]
-
         param_options = [
             'const_shape'
         ]
-
         eig_targets = [
             'LARGEST_MAGNITUDE'
         ]
 
-        emod_covs = 1e4 * np.array([6, 2])
-        emod_bods = 1e4 * np.array([6, 6])
-
-        emod_covs = 1e4 * np.array([6])
+        emod_covs = 1e4 * np.array([2])
         emod_bods = 1e4 * np.array([6])
         assert len(emod_covs) == len(emod_bods)
         emods = [(ecov, ebod) for ecov, ebod in zip(emod_covs, emod_bods)]
 
         hs = np.array([1e-3])
         mesh_names = [
-            f'M5_CB_GA3_CL{clscale:.2f}' for clscale in (0.5,)
+            f'M5_CB_GA3_CL{clscale:.2f}_split' for clscale in (0.5,)
         ]
         sep_points = [
-            # 'separation-inf',
-            'separation-sup'
+            'separation-mid',
+            'separation-inf'
         ]
         paramss = (
             DEFAULT_PARAMS_BASIC.substitute({
@@ -419,7 +414,7 @@ def setup_exp_params(study_name: str):
         ]
 
         eig_targets = [
-            'LARGEST_MAGNITUDE',
+            # 'LARGEST_MAGNITUDE',
             'LARGEST_REAL'
         ]
 
