@@ -39,12 +39,12 @@ def proc_M5_split(medial_angle):
     gmsh.model.add_physical_group(2, [3], name='body')
     gmsh.model.add_physical_group(2, [1, 2], name='cover')
 
-    gmsh.model.add_physical_group(1, [6, 5, 4, 3, 15, 14], name='pressure')
-    gmsh.model.add_physical_group(1, [13, 7, 16], name='fixed')
+    gmsh.model.add_physical_group(1, [10, 9, 8, 7, 1, 6], name='pressure')
+    gmsh.model.add_physical_group(1, [11, 16, 5], name='fixed')
 
-    gmsh.model.add_physical_group(0, [4], name='separation-inf')
-    gmsh.model.add_physical_group(0, [3], name='separation-mid')
-    gmsh.model.add_physical_group(0, [14], name='separation-sup')
+    gmsh.model.add_physical_group(0, [7], name='separation-inf')
+    gmsh.model.add_physical_group(0, [2], name='separation-mid')
+    gmsh.model.add_physical_group(0, [1], name='separation-sup')
 
 if __name__ == '__main__':
     clscale = gmsh.option.get_number('Mesh.MeshSizeFactor')
