@@ -227,7 +227,7 @@ def setup_exp_params(study_name: str):
         'MeshName': f'M5_CB_GA3_CL{CLSCALE:.2f}',
         'Ecov': 2.5*10*1e3,
         'Ebod': 2.5*10*1e3,
-        'ParamOption': 'all',
+        'ParamOption': 'const_shape',
         'Functional': 'OnsetPressure',
         'H': 1e-3,
         'EigTarget': 'LARGEST_MAGNITUDE',
@@ -239,7 +239,11 @@ def setup_exp_params(study_name: str):
     if study_name == 'none':
         return []
     elif study_name == 'test':
-        return [DEFAULT_PARAMS_BASIC]
+        params = [
+            DEFAULT_PARAMS_BASIC.substitute(
+                {'MeshName': f'M5_CB_GA3_CL{0.5:.2f}', 'Ecov': 1/4*6e4, 'Ebod': 6e4}
+            )]
+        return params
     elif study_name == 'main_minimization':
         functional_names = [
             'OnsetPressure',
@@ -561,7 +565,9 @@ def setup_reduced_functional(params):
 
     ## Solve for the Hopf bifurcation
     xhopf_0 = hopf.state.copy()
-    xhopf_0[:] = libhopf.gen_xhopf_0(hopf.res, prop, hopf.E_MODE, PSUBS, tol=100.0)
+    with warnings.catch_warnings() as _:
+        warnings.filterwarnings('always')
+        xhopf_0[:] = libhopf.gen_xhopf_0(hopf.res, prop, hopf.E_MODE, PSUBS, tol=100.0)
     xhopf_n, info = libhopf.solve_hopf_by_newton(hopf, xhopf_0, prop)
     if info['status'] != 0:
         raise RuntimeError(
