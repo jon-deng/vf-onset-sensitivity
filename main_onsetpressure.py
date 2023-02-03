@@ -59,6 +59,7 @@ ExpParamFreqPenalty = exputils.make_parameters(ptypes)
 
 ptypes = {
     'MeshName': str,
+    'LayerType': str,
     'Ecov': float,
     'Ebod': float,
     'ParamOption': str,
@@ -112,11 +113,12 @@ def setup_props(
     )
     prop = set_prop(
         prop, model, region_to_dofs,
-        params['Ecov'], params['Ebod']
+        params['Ecov'], params['Ebod'],
+        layer_type=params['LayerType']
     )
     return prop
 
-def set_prop(prop, hopf, celllabel_to_dofs, emod_cov, emod_bod):
+def set_prop(prop, hopf, celllabel_to_dofs, emod_cov, emod_bod, layer_type='discrete'):
     # Set any constant properties
     prop = libsetup.set_default_props(prop, hopf.res.solid.forms['mesh.mesh'])
 
@@ -126,9 +128,23 @@ def set_prop(prop, hopf, celllabel_to_dofs, emod_cov, emod_bod):
     dofs_share = set(dofs_cov) & set(dofs_bod)
     dofs_share = np.array(list(dofs_share), dtype=np.int32)
 
-    prop['emod'][dofs_cov] = emod_cov
-    prop['emod'][dofs_bod] = emod_bod
-    prop['emod'][dofs_share] = 1/2*(emod_cov + emod_bod)
+    emod = np.zeros(prop['emod'].shape)
+    if layer_type == 'discrete':
+        emod[dofs_cov] = emod_cov
+        emod[dofs_bod] = emod_bod
+        emod[dofs_share] = 1/2*(emod_cov + emod_bod)
+    elif layer_type == 'linear':
+        coord = hopf.res.solid.forms['coeff.prop.emod'].function_space().tabulate_dof_coordinates()
+        y = coord[:, 1]
+        ymax, ymin = y.max(), y.min()
+        emod[:] = (
+            emod_cov*(y-ymin)/(ymax-ymin)
+            + emod_bod*(ymax-y)/(ymax-ymin)
+        )
+    else:
+        raise ValueError(f"Unknown `layer_type` {layer_type}")
+
+    prop['emod'][:] = emod
 
     mesh = hopf.res.solid.forms['mesh.mesh']
     y_max = mesh.coordinates()[:, 1].max()
@@ -225,6 +241,7 @@ def setup_exp_params(study_name: str):
 
     DEFAULT_PARAMS_BASIC = ExpParamBasic({
         'MeshName': f'M5_CB_GA3_CL{CLSCALE:.2f}',
+        'LayerType': 'discrete',
         'Ecov': 2.5*10*1e3,
         'Ebod': 2.5*10*1e3,
         'ParamOption': 'const_shape',
@@ -235,14 +252,18 @@ def setup_exp_params(study_name: str):
     })
 
     emods = np.arange(2.5, 20, 2.5) * 10 * 1e3
-
     if study_name == 'none':
         return []
     elif study_name == 'test':
         params = [
             DEFAULT_PARAMS_BASIC.substitute(
-                {'MeshName': f'M5_CB_GA3_CL{0.5:.2f}', 'Ecov': 1/4*6e4, 'Ebod': 6e4}
-            )]
+                {
+                    'MeshName': f'M5_CB_GA3_CL{0.5:.2f}',
+                    'LayerType': 'linear',
+                    'Ecov': 1/2*6e4, 'Ebod': 6e4
+                }
+            )
+        ]
         return params
     elif study_name == 'main_minimization':
         functional_names = [
@@ -371,6 +392,9 @@ def setup_exp_params(study_name: str):
         eig_targets = [
             'LARGEST_MAGNITUDE'
         ]
+        layer_types = [
+            'discrete', 'linear'
+        ]
 
         emod_covs = 1e4 * np.array([2])
         emod_bods = 1e4 * np.array([6])
@@ -379,7 +403,7 @@ def setup_exp_params(study_name: str):
 
         hs = np.array([1e-3])
         mesh_names = [
-            f'M5_CB_GA3_CL{clscale:.2f}_split' for clscale in (0.5, 0.25, 0.125)
+            f'M5_CB_GA3_CL{clscale:.2f}_split' for clscale in (0.5, 0.25)
         ]
         sep_points = [
             'separation-inf',
@@ -388,6 +412,7 @@ def setup_exp_params(study_name: str):
         paramss = (
             DEFAULT_PARAMS_BASIC.substitute({
                 'MeshName': mesh_name,
+                'LayerType': layer_type,
                 'Functional': func_name,
                 'Ecov': emod_cov,
                 'Ebod': emod_bod,
@@ -396,9 +421,10 @@ def setup_exp_params(study_name: str):
                 'EigTarget': eig_target,
                 'SepPoint': sep_point
             })
-            for mesh_name, h, func_name, (emod_cov, emod_bod), param_option, eig_target, sep_point
+            for mesh_name, layer_type, h, func_name, (emod_cov, emod_bod), param_option, eig_target, sep_point
             in itertools.product(
                 mesh_names,
+                layer_types,
                 hs,
                 functional_names,
                 emods,
