@@ -598,6 +598,7 @@ def setup_reduced_functional(params):
     if info['status'] != 0:
         raise RuntimeError(
             f"Hopf solution at linearization point didn't converge with info: {info}"
+            f"; this happened for the parameter set {params}"
         )
     else:
         hopf.set_state(xhopf_n)
