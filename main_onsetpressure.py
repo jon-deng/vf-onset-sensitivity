@@ -259,8 +259,8 @@ def setup_exp_params(study_name: str):
             DEFAULT_PARAMS_BASIC.substitute(
                 {
                     'MeshName': f'M5_CB_GA3_CL{0.5:.2f}',
-                    'LayerType': 'linear',
-                    'Ecov': 1/2*6e4, 'Ebod': 6e4
+                    'LayerType': 'discrete',
+                    'Ecov': (1/3) * 7e4, 'Ebod': 7e4
                 }
             )
         ]
@@ -294,16 +294,16 @@ def setup_exp_params(study_name: str):
             # 'all'
         ]
         emod_covs = np.concatenate([
-            2*np.arange(1, 10, 2),
-            1*np.arange(1, 10, 2),
-            2/3*np.arange(1, 10, 2),
-            0.5*np.arange(1, 10, 2)
+            (  1)*np.arange(2, 18, 4),
+            (1/2)*np.arange(2, 18, 4),
+            (1/3)*np.arange(2, 18, 4),
+            (1/4)*np.arange(2, 18, 4),
         ]) * 10 * 1e3
         emod_bods = np.concatenate([
-            2*np.arange(1, 10, 2),
-            2*np.arange(1, 10, 2),
-            2*np.arange(1, 10, 2),
-            2*np.arange(1, 10, 2)
+            1*np.arange(2, 18, 4),
+            1*np.arange(2, 18, 4),
+            1*np.arange(2, 18, 4),
+            1*np.arange(2, 18, 4)
         ]) * 10 * 1e3
 
         assert len(emod_covs) == len(emod_bods)
@@ -331,16 +331,16 @@ def setup_exp_params(study_name: str):
             # 'all'
         ]
         emod_covs = np.concatenate([
-            2*np.arange(1, 9, 2),
-            # 1*np.arange(1, 10, 2),
-            2/3*np.arange(1, 9, 2),
-            0.5*np.arange(1, 9, 2)
+            (  1)*np.arange(2, 18, 4),
+            # (1/2)*np.arange(2, 18, 4),
+            (1/3)*np.arange(2, 18, 4),
+            (1/4)*np.arange(2, 18, 4),
         ]) * 10 * 1e3
         emod_bods = np.concatenate([
-            2*np.arange(1, 9, 2),
-            # 2*np.arange(1, 10, 2),
-            2*np.arange(1, 9, 2),
-            2*np.arange(1, 9, 2)
+            1*np.arange(2, 18, 4),
+            # 1*np.arange(2, 18, 4),
+            1*np.arange(2, 18, 4),
+            1*np.arange(2, 18, 4)
         ]) * 10 * 1e3
 
         assert len(emod_covs) == len(emod_bods)
