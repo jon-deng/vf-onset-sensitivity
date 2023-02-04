@@ -396,14 +396,14 @@ def setup_exp_params(study_name: str):
             'discrete', 'linear'
         ]
 
-        emod_covs = 1e4 * np.array([2])
-        emod_bods = 1e4 * np.array([6])
+        emod_covs = 1e4 * np.array([6, 2])
+        emod_bods = 1e4 * np.array([6, 6])
         assert len(emod_covs) == len(emod_bods)
         emods = [(ecov, ebod) for ecov, ebod in zip(emod_covs, emod_bods)]
 
         hs = np.array([1e-3])
         mesh_names = [
-            f'M5_CB_GA3_CL{clscale:.2f}_split' for clscale in (0.5, 0.25)
+            f'M5_CB_GA3_CL{clscale:.2f}_split' for clscale in (0.5, 0.25, 0.125)
         ]
         sep_points = [
             'separation-inf',
