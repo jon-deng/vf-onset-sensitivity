@@ -396,8 +396,8 @@ def setup_exp_params(study_name: str):
             'discrete', 'linear'
         ]
 
-        emod_covs = 1e4 * np.array([6, 2])
-        emod_bods = 1e4 * np.array([6, 6])
+        emod_covs = 1e4 * np.array([2, 6, 2])
+        emod_bods = 1e4 * np.array([2, 6, 6])
         assert len(emod_covs) == len(emod_bods)
         emods = [(ecov, ebod) for ecov, ebod in zip(emod_covs, emod_bods)]
 
