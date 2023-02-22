@@ -393,21 +393,35 @@ def setup_exp_params(study_name: str):
             'LARGEST_MAGNITUDE'
         ]
         layer_types = [
-            'discrete', 'linear'
+            'discrete'#, 'linear'
         ]
 
         emod_covs = 1e4 * np.array([2, 6, 2])
         emod_bods = 1e4 * np.array([2, 6, 6])
+
+        emod_covs = 1e4 * np.array([6, 2])
+        emod_bods = 1e4 * np.array([6, 6])
         assert len(emod_covs) == len(emod_bods)
         emods = [(ecov, ebod) for ecov, ebod in zip(emod_covs, emod_bods)]
 
         hs = np.array([1e-3])
+
+        clscales = (0.5, 0.25, 0.125)
+        clscales = (0.5,)
+        # mesh_names = [
+        #     f'M5_CB_GA3_CL{clscale:.2f}_split' for clscale in clscales
+        # ]
+        # sep_points = [
+        #     # 'separation-inf',
+        #     'sep1'
+        # ]
+
         mesh_names = [
-            f'M5_CB_GA3_CL{clscale:.2f}_split' for clscale in (0.5, 0.25, 0.125)
+            f'M5_CB_GA3_CL{clscale:.2f}_split6' for clscale in clscales
         ]
         sep_points = [
-            'separation-inf',
-            'separation-mid'
+            # 'separation-inf',
+            'sep1', 'sep2', 'sep3', 'sep4'
         ]
         paramss = (
             DEFAULT_PARAMS_BASIC.substitute({
@@ -707,7 +721,6 @@ def run_functional_sensitivity(params, output_dir='out/sensitivity'):
     Run an experiment where the sensitivity of a functional is saved
     """
     rfunc, hopf, xhopf_n, p0, parameterization = setup_reduced_functional(params)
-
     fpath = path.join(output_dir, params.to_str()+'.h5')
     if not path.isfile(fpath):
         ## Compute 1st order sensitivity of the functional
