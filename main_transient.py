@@ -76,8 +76,7 @@ def run(psub):
     _control['psub'] = psub
     controls = [_control]
 
-    _times = DT*np.arange(int(round(T_TOTAL/DT))+1)
-    times = bv.BlockVector((_times,), labels=[('times',)])
+    times = DT*np.arange(int(round(T_TOTAL/DT))+1)
 
     # Compute the static configuration for the initial state if needed
     if INIT_STATE_TYPE == 'static':

@@ -194,8 +194,7 @@ def run_large_amp_model(fpath, emod_cov, emod_bod):
         ini_state['a'][:] = 0.0
 
         dt = 5e-5
-        _times = dt*np.arange(0, int(round(0.5/dt))+1)
-        times = bv.BlockVector([_times], labels=(('times',),))
+        times = dt*np.arange(0, int(round(0.5/dt))+1)
 
         control = RES_LAMP.control.copy()
         control['psub'][:] = ponset + 200.0*10
