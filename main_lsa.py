@@ -17,8 +17,9 @@ import libhopf
 
 dfn.set_log_level(50)
 if __name__ == '__main__':
+    CLSCALE = 0.5
     # mesh_name = 'BC-dcov5.00e-02-cl1.00'
-    mesh_name = 'M5_CB_GA3'
+    mesh_name = f'M5_CB_GA3_CL{CLSCALE:.2f}'
     mesh_path = f'mesh/{mesh_name}.msh'
     hopf, *_ = libsetup.load_hopf_model(
         mesh_path,
@@ -27,14 +28,24 @@ if __name__ == '__main__':
     )
 
     props0 = hopf.prop.copy()
-    libsetup.set_default_props(props0, hopf.res.solid.forms['mesh.mesh'])
+    libsetup.set_default_props(props0, hopf.res.solid.residual.mesh())
     hopf.set_prop(props0)
     res = hopf.res
 
-    psubs = np.arange(0, 1500, 100)*10
+    psubs = np.arange(0, 1000, 100)*10
+
+    def make_control(psub):
+        control = res.control.copy()
+        control['psub'] = psub
+        return control
 
     least_stable_modes = [
-        libhopf.solve_least_stable_mode(res, psub)
+        libhopf.solve_least_stable_mode(
+            res,
+            libhopf.solve_fp(res, make_control(psub), props0)[0],
+            make_control(psub),
+            props0
+        )
         for psub in psubs
     ]
     least_stable_omegas = np.array([mode_info[0] for mode_info in least_stable_modes])
@@ -44,8 +55,9 @@ if __name__ == '__main__':
     axs[0].plot(psubs, least_stable_omegas.real)
     axs[1].plot(psubs, least_stable_omegas.imag)
 
-    axs[1].set_xlabel("$\omega_{real}$")
-    axs[1].set_xlabel("$\omega_{imag}$")
+
+    axs[0].set_ylabel("$\omega_{real}$")
+    axs[1].set_ylabel("$\omega_{imag}$")
     axs[1].set_xlabel("$p_{sub}$ [Pa]")
 
     fig.tight_layout()

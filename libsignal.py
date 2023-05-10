@@ -6,7 +6,7 @@ import numpy as np
 from jax import numpy as jnp
 
 # from femvf.models.dynamical.fluid import smooth_min_weight, wavg
-from femvf.models.equations.fluid.bernoulli import (
+from femvf.models.equations.bernoulli import (
     smooth_min_weight, wavg
 )
 

@@ -93,8 +93,8 @@ class HopfModel:
 
     def __init__(
             self,
-            res: dynbase.BaseDynamicalModel,
-            dres: dynbase.BaseDynamicalModel,
+            res: dyncoup.BaseDynamicalFSIModel,
+            dres: dyncoup.BaseLinearizedDynamicalFSIModel,
             e_mode: Optional[bvec.BlockVector]=None
         ):
         self.res = res
@@ -112,9 +112,10 @@ class HopfModel:
             self.labels_psub,
             self.labels_omega) = _component_labels
 
-        self.IDX_DIRICHLET = np.array(
-            list(res.solid.forms['bc.dirichlet'].get_boundary_values().keys()),
-            dtype=np.int32)
+        self.IDX_DIRICHLET = np.concatenate(
+            [list(bc.get_boundary_values().keys()) for bc in res.solid.residual.dirichlet_bcs],
+            dtype=np.int32
+        )
 
         if e_mode is None:
             e_mode = self.state[self.labels_fp].copy()
@@ -853,8 +854,13 @@ def solve_fp_by_newton(
     ZERO_STATET[:] = 0.0
     res.set_statet(ZERO_STATET)
 
-    IDX_DIRICHLET = np.array(
-        list(res.solid.forms['bc.dirichlet'].get_boundary_values().keys()),
+    # IDX_DIRICHLET = np.array(
+    #     list(res.solid.forms['bc.dirichlet'].get_boundary_values().keys()),
+    #     dtype=np.int32
+    # )
+
+    IDX_DIRICHLET = np.concatenate(
+        [list(bc.get_boundary_values().keys()) for bc in res.solid.residual.dirichlet_bcs],
         dtype=np.int32
     )
 
@@ -928,8 +934,8 @@ def solve_fp_by_picard(
     res.statet[:] = 0
     res.set_statet(res.statet)
 
-    IDX_DIRICHLET = np.array(
-        list(res.solid.forms['bc.dirichlet'].get_boundary_values().keys()),
+    IDX_DIRICHLET = np.concatenate(
+        [list(bc.get_boundary_values().keys()) for bc in res.solid.residual.dirichlet_bcs],
         dtype=np.int32
     )
 
@@ -1044,9 +1050,10 @@ def solve_linear_stability(
     res.statet[:] = 0.0
     res.set_statet(res.statet)
 
-    IDX_DIRICHLET = np.array(
-        list(res.solid.forms['bc.dirichlet'].get_boundary_values().keys()),
-        dtype=np.int32)
+    IDX_DIRICHLET = np.concatenate(
+        [list(bc.get_boundary_values().keys()) for bc in res.solid.residual.dirichlet_bcs],
+        dtype=np.int32
+    )
 
     def apply_dirichlet_bmat(mat, diag=1.0):
         """Applies the dirichlet BC to a matrix"""

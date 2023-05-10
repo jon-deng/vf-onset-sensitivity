@@ -30,7 +30,7 @@ from femvf.models.dynamical import (
     base as dbase
 )
 from femvf.parameters import parameterization as pzn
-from femvf.meshutils import process_celllabel_to_dofs_from_forms
+from femvf.meshutils import process_celllabel_to_dofs_from_residual
 
 import libsetup
 import libhopf
@@ -107,9 +107,9 @@ def setup_props(
     Return a properties vector
     """
     prop = model.prop.copy()
-    region_to_dofs = process_celllabel_to_dofs_from_forms(
-        model.res.solid.forms,
-        model.res.solid.forms['fspace.scalar_dg0'].dofmap()
+    region_to_dofs = process_celllabel_to_dofs_from_residual(
+        model.res.solid.residual,
+        model.res.solid.residual.form['coeff.prop.emod'].function_space().dofmap()
     )
     prop = set_prop(
         prop, model, region_to_dofs,
@@ -120,7 +120,7 @@ def setup_props(
 
 def set_prop(prop, hopf, celllabel_to_dofs, emod_cov, emod_bod, layer_type='discrete'):
     # Set any constant properties
-    prop = libsetup.set_default_props(prop, hopf.res.solid.forms['mesh.mesh'])
+    prop = libsetup.set_default_props(prop, hopf.res.solid.residual.mesh())
 
     # Set cover and body layer properties
     dofs_cov = np.array(celllabel_to_dofs['cover'], dtype=np.int32)
@@ -146,7 +146,7 @@ def set_prop(prop, hopf, celllabel_to_dofs, emod_cov, emod_bod, layer_type='disc
 
     prop['emod'][:] = emod
 
-    mesh = hopf.res.solid.forms['mesh.mesh']
+    mesh = hopf.res.solid.residual.mesh()
     y_max = mesh.coordinates()[:, 1].max()
     y_gap = 0.05
     y_con_offset = 1/10*y_gap
@@ -598,7 +598,8 @@ def setup_reduced_functional(params):
     # Apply the scaling that's used for `ConstantSubset`
     if isinstance(parameterization, pzn.ConstantSubset):
         for key, val in scale.items():
-            p[key][:] = p.sub[key]/val
+            if key in p:
+                p[key][:] = p.sub[key]/val
 
     prop = parameterization.apply(p)
     assert np.isclose(bvec.norm(prop-_props), 0)
