@@ -152,6 +152,8 @@ def set_prop(prop, hopf, celllabel_to_dofs, emod_cov, emod_bod, layer_type='disc
     y_con_offset = 1/10*y_gap
     prop['ymid'] = y_max + y_gap
     prop['ycontact'] = y_max + y_gap - y_con_offset
+
+    prop['ncontact'][:] = [0, 1]
     return prop
 
 def setup_functional(
