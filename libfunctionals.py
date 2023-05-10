@@ -12,6 +12,7 @@ import dolfin as dfn
 import ufl
 
 from femvf.models.assemblyutils import CachedFormAssembler
+from femvf.models.equations import solidforms
 from blockarray import blockvec  as bvec
 
 import libsignal
@@ -326,14 +327,15 @@ class StrainEnergyFunctional(BaseFunctional):
     def __init__(self, model: 'libhopf.HopfModel'):
         super().__init__(model)
 
-        from femvf.models.equations.solid.solidforms import form_strain_inf
-        forms = model.res.solid.forms
-        dis = forms['coeff.state.u1']
-        inf_strain = form_strain_inf(dis)
+        form = model.res.solid.residual.form
+        mesh = model.res.solid.residual.mesh()
 
-        emod = forms['coeff.prop.emod']
-        cauchy_stress = forms['expr.stress_elastic']
-        dx = forms['measure.dx']
+        emod = form['coeff.prop.emod']
+        nu = form['coeff.prop.nu']
+        dis = form['coeff.state.u1']
+        inf_strain = solidforms.form_strain_inf(dis)
+        cauchy_stress = solidforms.form_lin_iso_cauchy_stress(inf_strain, emod, nu)
+        dx = dfn.Measure('dx', mesh)
 
         strain_energy = ufl.inner(cauchy_stress, inf_strain)*dx
         self.assem_strain_energy = CachedFormAssembler(strain_energy)
@@ -367,13 +369,14 @@ class ModulusGradientNormSqr(BaseFunctional):
         super().__init__(model)
 
         # Define the modulus gradient
-        forms = model.res.solid.forms
-        E = forms['coeff.prop.emod']
-        dx = forms['measure.dx']
-        # TODO: This doesn't work if E is from a function space without a gradient! (DG0)
-        grad_E = ufl.grad(E)
-        self._functional = ufl.inner(grad_E, grad_E) * dx
-        self._dfunctional_demod = dfn.derivative(self._functional, E)
+        form = model.res.solid.residual.form
+        mesh = model.res.solid.residual.mesh()
+        emod = form['coeff.prop.emod']
+        dx = dfn.Measure('dx', mesh)
+        # TODO: This won't work if E is from a function space without a gradient! (for example, 'DG0')
+        grad_emod = ufl.grad(emod)
+        self._functional = ufl.inner(grad_emod, grad_emod) * dx
+        self._dfunctional_demod = dfn.derivative(self._functional, emod)
 
     def assem_g(self):
         return dfn.assemble(self._functional)
