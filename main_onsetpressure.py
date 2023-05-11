@@ -669,7 +669,7 @@ def run_minimize_functional(params, output_dir='out/minimization'):
     else:
         print(f"Skipping existing file '{fpath}'")
 
-def setup_norm(hopf_model):
+def setup_norm(hopf_model: libhopf.HopfModel):
     """
     Return a norm for property vectors
 
@@ -688,21 +688,23 @@ def setup_norm(hopf_model):
     scale = hopf_model.prop.copy()
     scale[:] = 1
     scale['emod'][:] = 1e4
-    scale['umesh'][:] = 1e-3
+    if 'umesh' in scale:
+        scale['umesh'][:] = 1e-3
 
     # Mass matrices for the different vector spaces
-    forms = hopf_model.res.solid.forms
+    form = hopf_model.res.solid.residual.form
     import dolfin as dfn
-    dx = forms['measure.dx']
-    u = dfn.TrialFunction(forms['coeff.prop.emod'].function_space())
-    v = dfn.TestFunction(forms['coeff.prop.emod'].function_space())
+    dx = hopf_model.res.solid.residual.measure('dx')
+    u = dfn.TrialFunction(form['coeff.prop.emod'].function_space())
+    v = dfn.TestFunction(form['coeff.prop.emod'].function_space())
     M_EMOD = dfn.assemble(dfn.inner(u, v)*dx, tensor=dfn.PETScMatrix()).mat()
 
     # The `...[0]` is hard-coded because I did something weird with storing the
     # mesh displacement/shape property
-    u = dfn.TrialFunction(forms['coeff.prop.umesh'][0].function_space())
-    v = dfn.TestFunction(forms['coeff.prop.umesh'][0].function_space())
-    M_SHAPE = dfn.assemble(dfn.inner(u, v)*dx, tensor=dfn.PETScMatrix()).mat()
+    if 'coeff.prop.umesh' in form:
+        u = dfn.TrialFunction(form['coeff.prop.umesh'][0].function_space())
+        v = dfn.TestFunction(form['coeff.prop.umesh'][0].function_space())
+        M_SHAPE = dfn.assemble(dfn.inner(u, v)*dx, tensor=dfn.PETScMatrix()).mat()
 
     def norm(x):
         """
@@ -714,7 +716,8 @@ def setup_norm(hopf_model):
         xs = x/scale
         dxs = xs.copy()
         dxs['emod'] = M_EMOD * xs.sub['emod']
-        dxs['umesh'] = M_SHAPE * xs.sub['umesh']
+        if 'umesh' in xs:
+            dxs['umesh'] = M_SHAPE * xs.sub['umesh']
         return bla.dot(x, dxs) ** 0.5
 
     return norm

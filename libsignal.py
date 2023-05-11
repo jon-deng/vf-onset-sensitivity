@@ -6,7 +6,7 @@ import numpy as np
 from jax import numpy as jnp
 
 # from femvf.models.dynamical.fluid import smooth_min_weight, wavg
-from femvf.models.equations.bernoulli import (
+from femvf.models.equations.fluid import (
     smooth_min_weight, wavg
 )
 
@@ -29,7 +29,7 @@ def _split_mono_hopf_state(state, sizes):
     return tuple([
         state[idxa:idxb]
         for idxa, idxb in zip(idx_bounds[:-1], idx_bounds[1:])
-        ])
+    ])
 
 def make_glottal_width(hopf, num_points=100):
     """
