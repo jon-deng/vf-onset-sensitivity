@@ -1,5 +1,5 @@
 """
-Conduct a sensitivity/optimization study of onset pressure and frequency
+Conduct a sensitivity study of onset pressure and frequency
 """
 
 import argparse
@@ -17,7 +17,7 @@ from scipy import optimize
 from petsc4py import PETSc
 from slepc4py import SLEPc
 # NOTE: Importing `dolfin` after `scipy.optimize` is important!
-# Importing it after seems to cause segfaults
+# Importing it after seems to cause segfaults for some reason
 import dolfin as dfn
 dfn.set_log_level(50)
 
@@ -39,23 +39,6 @@ import libfunctionals as libfuncs
 import exputils
 
 # pylint: disable=redefined-outer-name
-
-ptypes = {
-    'Name': str,
-    'omega': float,
-    'beta': float
-}
-FrequencyPenaltyFuncParam = exputils.make_parameters(ptypes)
-
-ptypes = {
-    'MeshName': str,
-    'Ecov': float,
-    'Ebod': float,
-    'ParamOption': str,
-    'Functional': FrequencyPenaltyFuncParam,
-    'H': float
-}
-ExpParamFreqPenalty = exputils.make_parameters(ptypes)
 
 ptypes = {
     'MeshName': str,
@@ -134,7 +117,7 @@ def set_prop(prop, hopf, celllabel_to_dofs, emod_cov, emod_bod, layer_type='disc
         emod[dofs_bod] = emod_bod
         emod[dofs_share] = 1/2*(emod_cov + emod_bod)
     elif layer_type == 'linear':
-        coord = hopf.res.solid.forms['coeff.prop.emod'].function_space().tabulate_dof_coordinates()
+        coord = hopf.res.solid.residual.form['coeff.prop.emod'].function_space().tabulate_dof_coordinates()
         y = coord[:, 1]
         ymax, ymin = y.max(), y.min()
         emod[:] = (
@@ -163,85 +146,19 @@ def setup_functional(
     """
     Return a functional
     """
-    func_onset_pressure = libfuncs.OnsetPressureFunctional(model)
-    func_onset_frequency = libfuncs.AbsOnsetFrequencyFunctional(model)
-    func_strain_energy = libfuncs.StrainEnergyFunctional(model)
-    def get_named_functional(func_name):
-        if func_name == 'OnsetPressure':
-            func = func_onset_pressure
-        elif func_name == 'OnsetFrequency':
-            func = func_onset_frequency
-        elif func_name == 'OnsetPressureStrainEnergy':
-            func = func_strain_energy * func_onset_pressure
-        else:
-            raise ValueError("Unknown functional '{func_name}'")
-        return func
-
-    if isinstance(params['Functional'], str):
-        func_name = params['Functional']
-        func = get_named_functional(func_name)
-
-    elif isinstance(params['Functional'], FrequencyPenaltyFuncParam):
-        func_params = params['Functional']
-        func_name = func_params['Name']
-        omega = func_params['omega']
-        beta = func_params['beta']
-
-        func = get_named_functional(func_name)
-        func = (
-            func
-            + beta*(func_onset_frequency-omega)**2
-        )
-    else:
-        raise ValueError(f"Unknown functional type {type(params['Functional'])}")
-
-    return func
-
-def setup_opt_options(
-        params: exputils.BaseParameters,
-        parameterization
-    ):
-    """
-    Return optimizer options
-    """
-    _lb = parameterization.x.copy()
-    _ub = parameterization.x.copy()
-    _lb[:] = -np.inf
-    _ub[:] = np.inf
-    # Add lower bound to emod
-    _lb['emod'][:] = 0.5e3*10
-
-    generic_options = {
-        'bounds': np.stack([_lb.to_mono_ndarray(), _ub.to_mono_ndarray()], axis=-1)
+    functionals = {
+        'OnsetPressure': libfuncs.OnsetPressureFunctional(model),
+        'OnsetFrequency': libfuncs.AbsOnsetFrequencyFunctional(model)
     }
-    specific_options = {
-        'disp': 99,
-        'maxiter': 150,
-        'ftol': 0.0,
-        'maxcor': 50
-        # 'maxls': 100
-    }
-    return generic_options, specific_options
+
+    return functionals[params['Functional']]
 
 def setup_exp_params(study_name: str):
     """
     Return an iterable of parameters for a given study name
     """
 
-    DEFAULT_PARAMS_PENALTY = ExpParamFreqPenalty({
-        'MeshName': f'M5_CB_GA3_CL{CLSCALE:.2f}',
-        'Ecov': 2.5*10*1e3,
-        'Ebod': 2.5*10*1e3,
-        'ParamOption': 'all',
-        'Functional': {
-            'Name': 'OnsetPressure',
-            'omega': -1,
-            'beta': 1000
-        },
-        'H': 1e-3
-    })
-
-    DEFAULT_PARAMS_BASIC = ExpParamBasic({
+    DEFAULT_PARAMS = ExpParamBasic({
         'MeshName': f'M5_CB_GA3_CL{CLSCALE:.2f}',
         'LayerType': 'discrete',
         'Ecov': 2.5*10*1e3,
@@ -258,42 +175,20 @@ def setup_exp_params(study_name: str):
         return []
     elif study_name == 'test':
         params = [
-            DEFAULT_PARAMS_BASIC.substitute(
-                {
-                    'MeshName': f'M5_CB_GA3_CL{0.5:.2f}',
-                    'LayerType': 'discrete',
-                    'Ecov': (1/3) * 7e4, 'Ebod': 7e4
-                }
-            )
+            DEFAULT_PARAMS.substitute({
+                'MeshName': f'M5_CB_GA3_CL{0.5:.2f}',
+                'LayerType': 'discrete',
+                'Ecov': (1/3) * 7e4, 'Ebod': 7e4
+            })
         ]
         return params
-    elif study_name == 'main_minimization':
-        functional_names = [
-            'OnsetPressure',
-            'OnsetPressureStrainEnergy'
-        ]
-        param_options = ['const_shape', 'traction_shape']
-
-        paramss = (
-            DEFAULT_PARAMS_PENALTY.substitute({
-                'Functional/Name': func_name,
-                'Ecov': emod,
-                'Ebod': emod,
-                'ParamOption': param_opt
-            })
-            for param_opt, func_name, emod
-            in itertools.product(param_options, functional_names, emods)
-        )
-        return paramss
     elif study_name == 'main_sensitivity':
         functional_names = [
             'OnsetPressure',
-            'OnsetFrequency',
-            # 'OnsetPressureStrainEnergy'
+            'OnsetFrequency'
         ]
         param_options = [
-            'const_shape',
-            # 'all'
+            'const_shape'
         ]
         emod_covs = np.concatenate([
             (  1)*np.arange(2, 18, 4),
@@ -312,7 +207,7 @@ def setup_exp_params(study_name: str):
 
         emods = [(ecov, ebod) for ecov, ebod in zip(emod_covs, emod_bods)]
         paramss = (
-            DEFAULT_PARAMS_BASIC.substitute({
+            DEFAULT_PARAMS.substitute({
                 'Functional': func_name,
                 'Ecov': emod_cov,
                 'Ebod': emod_bod,
@@ -325,12 +220,10 @@ def setup_exp_params(study_name: str):
     elif study_name == 'main_coarse_sensitivity':
         functional_names = [
             'OnsetPressure',
-            'OnsetFrequency',
-            # 'OnsetPressureStrainEnergy'
+            'OnsetFrequency'
         ]
         param_options = [
-            'const_shape',
-            # 'all'
+            'const_shape'
         ]
         emod_covs = np.concatenate([
             (  1)*np.arange(2, 18, 4),
@@ -349,7 +242,7 @@ def setup_exp_params(study_name: str):
 
         emods = [(ecov, ebod) for ecov, ebod in zip(emod_covs, emod_bods)]
         paramss = (
-            DEFAULT_PARAMS_BASIC.substitute({
+            DEFAULT_PARAMS.substitute({
                 'Functional': func_name,
                 'Ecov': emod_cov,
                 'Ebod': emod_bod,
@@ -374,7 +267,7 @@ def setup_exp_params(study_name: str):
 
         emods = [(ecov, ebod) for ecov, ebod in zip(emod_covs, emod_bods)]
         paramss = (
-            DEFAULT_PARAMS_BASIC.substitute({
+            DEFAULT_PARAMS.substitute({
                 'Functional': func_name,
                 'Ecov': emod_cov,
                 'Ebod': emod_bod,
@@ -426,7 +319,7 @@ def setup_exp_params(study_name: str):
             'sep1', 'sep2', 'sep3', 'sep4'
         ]
         paramss = (
-            DEFAULT_PARAMS_BASIC.substitute({
+            DEFAULT_PARAMS.substitute({
                 'MeshName': mesh_name,
                 'LayerType': layer_type,
                 'Functional': func_name,
@@ -474,7 +367,7 @@ def setup_exp_params(study_name: str):
             f'M5_CB_GA3_CL{clscale:.2f}' for clscale in (0.5, 0.25, 0.125)
         ]
         paramss = (
-            DEFAULT_PARAMS_BASIC.substitute({
+            DEFAULT_PARAMS.substitute({
                 'MeshName': mesh_name,
                 'Functional': func_name,
                 'Ecov': emod_cov,
@@ -504,7 +397,6 @@ def setup_exp_params(study_name: str):
         ]
 
         eig_targets = [
-            # 'LARGEST_MAGNITUDE',
             'LARGEST_REAL'
         ]
 
@@ -518,7 +410,7 @@ def setup_exp_params(study_name: str):
             f'M5_CB_GA3_CL{clscale:.2f}' for clscale in (0.5, 0.25, 0.125)
         ]
         paramss = (
-            DEFAULT_PARAMS_BASIC.substitute({
+            DEFAULT_PARAMS.substitute({
                 'MeshName': mesh_name,
                 'Functional': func_name,
                 'Ecov': emod_cov,
@@ -547,8 +439,7 @@ def setup_parameterization(params, hopf, prop):
     """
     const_vals = {key: np.array(subvec) for key, subvec in prop.sub_items()}
     scale = {
-        'emod': 1e4,
-        'umesh': 1e-1
+        'emod': 1e4
     }
 
     parameterization = None
@@ -560,20 +451,6 @@ def setup_parameterization(params, hopf, prop):
             hopf.res,
             const_vals=const_vals,
             scale=scale
-        )
-    elif params['ParamOption'] == 'all':
-        const_vals.pop('emod')
-        const_vals.pop('umesh')
-
-        # scale = {'emod'}
-        parameterization = pzn.ConstantSubset(
-            hopf.res,
-            const_vals=const_vals,
-            scale=scale
-        )
-    elif params['ParamOption'] == 'traction_shape':
-        parameterization = pzn.TractionShape(
-            hopf.res, lame_lambda=1.0e4, lame_mu=1.0e4
         )
     else:
         raise ValueError(f"Unknown 'ParamOption': {params['ParamOption']}")
@@ -621,17 +498,7 @@ def setup_reduced_functional(params):
         hopf.set_state(xhopf_n)
 
     ## Load the functional/objective function and gradient
-    _params = params.substitute({})
-    if isinstance(params['Functional'], FrequencyPenaltyFuncParam):
-        if params['Functional/omega'] == -1:
-            _params = params.substitute({
-                'Functional': {
-                    'Name': params['Functional']['Name'],
-                    'omega': abs(xhopf_n['omega'][0]),
-                    'beta': 1000.0
-                }
-            })
-    func = setup_functional(_params, hopf)
+    func = setup_functional(params, hopf)
 
     redu_functional = libhopf.ReducedFunctional(
         func,
@@ -639,72 +506,24 @@ def setup_reduced_functional(params):
     )
     return redu_functional, hopf, xhopf_n, p, parameterization
 
-def run_minimize_functional(params, output_dir='out/minimization'):
-    """
-    Run an experiment where a functional is minimized
-    """
-    redu_grad, hopf, xhopf_n, p0, parameterization = setup_reduced_functional(params)
-
-    ## Run the minimizer
-    # Set optimizer options/callback
-    gen_opts, spe_opts = setup_opt_options(params, parameterization)
-    def opt_callback(xk):
-        print("In callback")
-
-    fpath = path.join(output_dir, params.to_str()+'.h5')
-    if not path.isfile(fpath):
-        with h5py.File(fpath, mode='w') as f:
-            grad_manager = libhopf.OptGradManager(
-                redu_grad, f, parameterization
-            )
-            opt_res = optimize.minimize(
-                grad_manager.grad, p0.to_mono_ndarray(),
-                method='L-BFGS-B',
-                jac=True,
-                **gen_opts,
-                options=spe_opts,
-                callback=opt_callback
-            )
-        pprint(opt_res)
-    else:
-        print(f"Skipping existing file '{fpath}'")
-
 def setup_norm(hopf_model: libhopf.HopfModel):
     """
-    Return a norm for property vectors
+    Return a norm for scalar fields over a mesh
 
-    This norm should scale property vectors so that characteristic changes
-    in the stiffness and shape properties (and others in general) are all
-    scaled the same.
+    The norm is used to ensure that a step size for finite differences (FD) is reasonable
+    for different meshes. The norm should give a magnitude that is independent of mesh density.
     """
-    # NOTE: This is the old strategy
-    # _scale = hopf_model.prop.copy()
-    # _scale[:] = 1
-    # _scale['umesh'][:] = 1e-1
-    # _scale['emod'][:] = 1e4
-    # def norm(x):
-    #     return bvec.norm(x/_scale)
 
     scale = hopf_model.prop.copy()
     scale[:] = 1
     scale['emod'][:] = 1e4
-    if 'umesh' in scale:
-        scale['umesh'][:] = 1e-3
 
-    # Mass matrices for the different vector spaces
+    # Mass matrix for the space for elastic modulus
     form = hopf_model.res.solid.residual.form
-    import dolfin as dfn
     dx = hopf_model.res.solid.residual.measure('dx')
     u = dfn.TrialFunction(form['coeff.prop.emod'].function_space())
     v = dfn.TestFunction(form['coeff.prop.emod'].function_space())
     M_EMOD = dfn.assemble(dfn.inner(u, v)*dx, tensor=dfn.PETScMatrix()).mat()
-
-    # The `...[0]` is hard-coded because I did something weird with storing the
-    # mesh displacement/shape property
-    if 'coeff.prop.umesh' in form:
-        u = dfn.TrialFunction(form['coeff.prop.umesh'][0].function_space())
-        v = dfn.TestFunction(form['coeff.prop.umesh'][0].function_space())
-        M_SHAPE = dfn.assemble(dfn.inner(u, v)*dx, tensor=dfn.PETScMatrix()).mat()
 
     def norm(x):
         """
@@ -716,8 +535,6 @@ def setup_norm(hopf_model: libhopf.HopfModel):
         xs = x/scale
         dxs = xs.copy()
         dxs['emod'] = M_EMOD * xs.sub['emod']
-        if 'umesh' in xs:
-            dxs['umesh'] = M_SHAPE * xs.sub['umesh']
         return bla.dot(x, dxs) ** 0.5
 
     return norm
@@ -820,48 +637,26 @@ if __name__ == '__main__':
 
     argparser = argparse.ArgumentParser()
     argparser.add_argument('--study-name', type=str, default='none')
-    argparser.add_argument('--study-type', type=str, default='none')
     argparser.add_argument('--num-proc', type=int, default=1)
     argparser.add_argument('--clscale', type=float, default=1)
-    argparser.add_argument('--output-dir', type=str, default='')
+    argparser.add_argument('--output-dir', type=str, default='out')
     clargs = argparser.parse_args()
     CLSCALE = clargs.clscale
 
     params = setup_exp_params(clargs.study_name)
 
-    run = None
-    if clargs.study_type == 'sensitivity':
-        if clargs.output_dir != '':
-            output_dir = clargs.output_dir
-        else:
-            output_dir = 'out/sensitivity'
+    def run(param_dict):
+        # TODO: Note the conversion of parameter dictionary to
+        # `Parameter` object here is hard-coded; you'll have to change this
+        # in the future if you change the study types.
+        param = ExpParamBasic(param_dict)
+        return run_functional_sensitivity(
+            param, output_dir=clargs.output_dir
+        )
 
-        def run(param_dict):
-            # TODO: Note the conversion of parameter dictionary to
-            # `Parameter` object here is hard-coded; you'll have to change this
-            # in the future if you change the study types.
-            param = ExpParamBasic(param_dict)
-            return run_functional_sensitivity(
-                param, output_dir=output_dir
-            )
-    elif clargs.study_type == 'minimization':
-        if clargs.output_dir != '':
-                output_dir = clargs.output_dir
-        else:
-            output_dir = 'out/minimization'
-
-        def run(param_dict):
-            param = ExpParamFreqPenalty(param_dict)
-            return run_minimize_functional(
-                param, output_dir=output_dir
-            )
+    if clargs.num_proc == 1:
+        for param in tqdm(params):
+            run(param)
     else:
-        raise ValueError(f"Unknown '--study-type' {clargs.study_type}")
-
-    if run is not None:
-        if clargs.num_proc == 1:
-            for param in tqdm(params):
-                run(param)
-        else:
-            with mp.Pool(clargs.num_proc) as pool:
-                pool.map(run, [p.data for p in params])
+        with mp.Pool(clargs.num_proc) as pool:
+            pool.map(run, [p.data for p in params])
