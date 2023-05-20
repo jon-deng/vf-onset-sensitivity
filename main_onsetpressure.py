@@ -36,7 +36,7 @@ import libsetup
 import libhopf
 import libfunctionals as libfuncs
 
-import exputils
+from exputils import exputils
 
 # pylint: disable=redefined-outer-name
 
