@@ -1,5 +1,5 @@
 """
-Run a linear stability analysis (LSA) on a coupled model
+Linear stability analysis (LSA) of a coupled model
 
 This script computes the least stable modes over a sequence of subglottal
 pressures for a given parameter set and dynamical model.
@@ -52,12 +52,12 @@ if __name__ == '__main__':
 
     fig, axs = plt.subplots(2, 1, sharex=True)
 
-    axs[0].plot(psubs, least_stable_omegas.real)
-    axs[1].plot(psubs, least_stable_omegas.imag)
+    axs[0].plot(psubs/10, least_stable_omegas.real)
+    axs[1].plot(psubs/10, least_stable_omegas.imag)
 
 
     axs[0].set_ylabel("$\omega_{real}$")
-    axs[1].set_ylabel("$\omega_{imag}$")
+    axs[1].set_ylabel("$\omega_{imag}$ $[\mathrm{rad}/\mathrm{s}]$")
     axs[1].set_xlabel("$p_{sub}$ [Pa]")
 
     fig.tight_layout()
