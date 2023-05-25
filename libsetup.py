@@ -60,7 +60,10 @@ def load_hopf_model(
         **kwargs
     )
 
-    res_hopf = libhopf.HopfModel(res, dres)
+    if flow_driven:
+        res_hopf = libhopf.HopfModel(res, dres, bifparam_key='qsub')
+    else:
+        res_hopf = libhopf.HopfModel(res, dres, bifparam_key='psub')
     return res_hopf, res, dres
 
 def load_transient_model(
