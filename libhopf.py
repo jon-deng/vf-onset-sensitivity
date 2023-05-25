@@ -101,7 +101,7 @@ class HopfModel:
         self.res = res
         self.dres = dres
 
-        self.state, _component_labels = _gen_hopf_state(res)
+        self.state, _component_labels = _gen_hopf_state(res, bifparam_key=bifparam_key)
         self.prop = res.prop.copy()
 
         # These labels represent the 5 blocks in Griewank and Reddien's equations
