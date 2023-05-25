@@ -525,7 +525,10 @@ def setup_reduced_functional(params):
     xhopf_0 = hopf.state.copy()
     with warnings.catch_warnings() as _:
         warnings.filterwarnings('always')
-        xhopf_0[:] = libhopf.gen_xhopf_0(hopf.res, prop, hopf.E_MODE, PSUBS, tol=100.0)
+        xhopf_0[:] = libhopf.gen_xhopf_0(
+            hopf.res, prop, hopf.E_MODE, PSUBS,
+            tol=100.0, bifparam_key=params['BifParam']
+        )
     xhopf_n, info = libhopf.solve_hopf_by_newton(hopf, xhopf_0, prop)
     if info['status'] != 0:
         raise RuntimeError(
