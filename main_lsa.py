@@ -24,7 +24,8 @@ if __name__ == '__main__':
     hopf, *_ = libsetup.load_hopf_model(
         mesh_path,
         sep_method='fixed',
-        sep_vert_label='separation-inf'
+        sep_vert_label='separation-inf',
+        flow_driven=False
     )
 
     props0 = hopf.prop.copy()

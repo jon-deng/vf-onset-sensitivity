@@ -16,24 +16,28 @@ def transient_fluidtype_from_sep_method(sep_method):
     elif sep_method == 'arearatio':
         return tfmd.BernoulliAreaRatioSep
     else:
-        raise ValueError("Something dun goofed")
+        raise ValueError("")
 
-def dynamical_fluidtype_from_sep_method(sep_method):
+def dynamical_fluidtype_from_sep_method(sep_method, flow_driven=False):
     if sep_method == 'fixed':
-        return dfmd.BernoulliFixedSep, dfmd.LinearizedBernoulliFixedSep
+        if flow_driven:
+            return dfmd.BernoulliFlowFixedSep, dfmd.LinearizedBernoulliFlowFixedSep
+        else:
+            return dfmd.BernoulliFixedSep, dfmd.LinearizedBernoulliFixedSep
     elif sep_method == 'smoothmin':
         return dfmd.BernoulliSmoothMinSep, dfmd.LinearizedBernoulliSmoothMinSep
     elif sep_method == 'arearatio':
         return dfmd.BernoulliAreaRatioSep, dfmd.LinearizedBernoulliAreaRatioSep
     else:
-        raise ValueError("Something dun goofed")
+        raise ValueError("")
 
 def load_hopf_model(
         mesh_path,
         sep_method='fixed',
-        sep_vert_label='separation'
+        sep_vert_label='separation',
+        flow_driven=False
     ):
-    FluidType, LinFluidType = dynamical_fluidtype_from_sep_method(sep_method)
+    FluidType, LinFluidType = dynamical_fluidtype_from_sep_method(sep_method, flow_driven=flow_driven)
 
     kwargs = {
         'fsi_facet_labels': ('pressure',),
