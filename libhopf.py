@@ -453,7 +453,7 @@ def gen_xhopf_0(
     """
     if solve_fp_r is None:
         solve_fp_r = lambda model, control, prop: solve_fp(
-            model, control, prop, psub_incr=250*10
+            model, control, prop, psub_incr=250*10, bifparam_key=bifparam_key
         )
 
     dyn_model.set_prop(prop)
@@ -502,7 +502,7 @@ def gen_xhopf_0(
     omega_pairs = (omega_lbs, omega_ubs)
     xhopf_0 = gen_xhopf_0_from_bounds(
         dyn_model, prop, evec_ref, bounds, omega_pairs,
-        tol=tol, solve_fp_r=solve_fp_r
+        tol=tol, solve_fp_r=solve_fp_r, bifparam_key=bifparam_key
     )
     return xhopf_0
 
@@ -622,7 +622,7 @@ def bound_ponset(
             ]
         return bound_ponset(
             model, control, prop, (ret_lbs, ret_ubs), (ret_lomegas, ret_uomegas),
-            nsplit=nsplit, tol=tol, solve_fp_r=solve_fp_r
+            nsplit=nsplit, tol=tol, solve_fp_r=solve_fp_r, bifparam_key=bifparam_key
         )
 
 def gen_xhopf_0_from_bounds(
@@ -663,7 +663,7 @@ def gen_xhopf_0_from_bounds(
     # Find lower/upper bounds for the Hopf bifurcation point
     (lbs, ubs), _ = bound_ponset(
         dyn_model, control, prop, bound_pairs, omega_pairs=omega_pairs,
-        nsplit=nsplit, tol=tol, solve_fp_r=solve_fp_r
+        nsplit=nsplit, tol=tol, solve_fp_r=solve_fp_r, bifparam_key=bifparam_key
     )
 
     if len(ubs) > 1:
