@@ -220,6 +220,30 @@ class BaseFunctional(GenericFunctional):
     def set_prop(self, prop):
         self.model.set_prop(prop)
 
+class OnsetFlowRateFunctional(BaseFunctional):
+    """
+    Represents a functional returning the flow rate
+
+    The functional is represented by
+        f(x, p)
+    where x is the Hopf state vector, and p are the model properties
+    """
+
+    # TODO: You can replace 'q' with 'qsub'
+    def assem_g(self):
+        return self.state['q'][0]
+
+    def assem_dg_dstate(self):
+        dg_dstate = self.state.copy()
+        dg_dstate[:] = 0.0
+        dg_dstate['q'][0] = 1.0
+        return dg_dstate
+
+    def assem_dg_dprop(self):
+        dg_dprops = self.prop.copy()
+        dg_dprops[:] = 0
+        return dg_dprops
+
 class OnsetPressureFunctional(BaseFunctional):
     """
     Represents a functional returning the onset pressure
@@ -236,6 +260,52 @@ class OnsetPressureFunctional(BaseFunctional):
         dg_dstate = self.state.copy()
         dg_dstate[:] = 0.0
         dg_dstate['psub'][0] = 1.0
+        return dg_dstate
+
+    def assem_dg_dprop(self):
+        dg_dprops = self.prop.copy()
+        dg_dprops[:] = 0
+        return dg_dprops
+
+class SubglottalPressureFunctional(BaseFunctional):
+    """
+    Represents a functional returning the onset pressure
+
+    The functional is represented by
+        f(x, p)
+    where x is the Hopf state vector, and p are the model properties
+    """
+
+    def assem_g(self):
+        return self.state['p'][0]
+
+    def assem_dg_dstate(self):
+        dg_dstate = self.state.copy()
+        dg_dstate[:] = 0.0
+        dg_dstate['p'][0] = 1.0
+        return dg_dstate
+
+    def assem_dg_dprop(self):
+        dg_dprops = self.prop.copy()
+        dg_dprops[:] = 0
+        return dg_dprops
+
+class SubglottalFlowRateFunctional(BaseFunctional):
+    """
+    Represents a functional returning the flow rate
+
+    The functional is represented by
+        f(x, p)
+    where x is the Hopf state vector, and p are the model properties
+    """
+
+    def assem_g(self):
+        return self.state['q'][0]
+
+    def assem_dg_dstate(self):
+        dg_dstate = self.state.copy()
+        dg_dstate[:] = 0.0
+        dg_dstate['q'][0] = 1.0
         return dg_dstate
 
     def assem_dg_dprop(self):
