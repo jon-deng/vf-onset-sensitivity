@@ -49,7 +49,8 @@ ptypes = {
     'Functional': str,
     'H': float,
     'EigTarget': str,
-    'SepPoint': str
+    'SepPoint': str,
+    'BifParam': str
 }
 ExpParamBasic = exputils.make_parameters(ptypes)
 
@@ -62,8 +63,14 @@ def setup_dyna_model(params: exputils.BaseParameters):
     mesh_name = params['MeshName']
     mesh_path = path.join('./mesh', mesh_name+'.msh')
 
+    if params['BifParam'] == 'psub':
+        flow_driven = False
+    elif params['BifParam'] == 'qsub':
+        flow_driven = True
+    else:
+        raise ValueError("")
     hopf, res, dres = libsetup.load_hopf_model(
-        mesh_path, sep_method='fixed', sep_vert_label=params['SepPoint']
+        mesh_path, sep_method='fixed', sep_vert_label=params['SepPoint'], flow_driven=flow_driven
     )
     return hopf, res, dres
 
@@ -147,8 +154,10 @@ def setup_functional(
     Return a functional
     """
     functionals = {
+        'SubglottalPressure': libfuncs.SubglottalPressureFunctional(model),
         'OnsetPressure': libfuncs.OnsetPressureFunctional(model),
-        'OnsetFrequency': libfuncs.AbsOnsetFrequencyFunctional(model)
+        'OnsetFrequency': libfuncs.AbsOnsetFrequencyFunctional(model),
+        'OnsetFlowRate': libfuncs.OnsetFlowRateFunctional(model)
     }
 
     return functionals[params['Functional']]
@@ -167,7 +176,8 @@ def setup_exp_params(study_name: str):
         'Functional': 'OnsetPressure',
         'H': 1e-3,
         'EigTarget': 'LARGEST_MAGNITUDE',
-        'SepPoint': 'separation-inf'
+        'SepPoint': 'separation-inf',
+        'BifParam': 'psub'
     })
 
     emods = np.arange(2.5, 20, 2.5) * 10 * 1e3
@@ -176,9 +186,10 @@ def setup_exp_params(study_name: str):
     elif study_name == 'test':
         params = [
             DEFAULT_PARAMS.substitute({
-                'MeshName': f'M5_CB_GA3_CL{0.5:.2f}',
+                'Functional': 'OnsetPressure',
+                'MeshName': f'M5_CB_GA3_CL{1.0:.2f}',
                 'LayerType': 'discrete',
-                'Ecov': (1/3) * 7e4, 'Ebod': 7e4
+                'Ecov': 6e4, 'Ebod': 6e4
             })
         ]
         return params
@@ -212,6 +223,33 @@ def setup_exp_params(study_name: str):
                 'Ecov': emod_cov,
                 'Ebod': emod_bod,
                 'ParamOption': param_option
+            })
+            for func_name, (emod_cov, emod_bod), param_option
+            in itertools.product(functional_names, emods, param_options)
+        )
+        return paramss
+    elif study_name == 'main_sensitivity_const_flow':
+        functional_names = [
+            'SubglottalPressure',
+            'OnsetFrequency',
+            'OnsetFlowRate'
+        ]
+        param_options = [
+            'const_shape'
+        ]
+        emod_covs = np.array([6.0e4])
+        emod_bods = np.array([6.0e4])
+
+        assert len(emod_covs) == len(emod_bods)
+
+        emods = [(ecov, ebod) for ecov, ebod in zip(emod_covs, emod_bods)]
+        paramss = (
+            DEFAULT_PARAMS.substitute({
+                'Functional': func_name,
+                'Ecov': emod_cov,
+                'Ebod': emod_bod,
+                'ParamOption': param_option,
+                'BifParam': 'qsub'
             })
             for func_name, (emod_cov, emod_bod), param_option
             in itertools.product(functional_names, emods, param_options)

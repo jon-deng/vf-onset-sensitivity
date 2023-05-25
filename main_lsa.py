@@ -45,7 +45,7 @@ if __name__ == '__main__':
     res = hopf.res
 
     if FLOW_DRIVEN:
-        lmbdas = np.arange(0, 5000, 50)
+        lmbdas = np.arange(0, 100, 10)
     else:
         lmbdas = np.arange(0, 1000, 100)*10
 
@@ -77,7 +77,7 @@ if __name__ == '__main__':
     if FLOW_DRIVEN:
         axs[1].set_xlabel("$q_{sub}$ $[\mathrm{cm}^3/\mathrm{s}]$")
     else:
-        axs[1].set_xlabel("$p_{sub}$ $[10 \mathrm{Pa}]$")
+        axs[1].set_xlabel("$p_{sub}$ $[0.1 \mathrm{Pa}]$")
 
     fig.tight_layout()
     if FLOW_DRIVEN:
