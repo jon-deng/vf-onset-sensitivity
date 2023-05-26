@@ -164,6 +164,7 @@ def setup_functional(
         The dynamical system model
     """
     functionals = {
+        'SubglottalFlowRate': libfuncs.SubglottalFlowRateFunctional(model),
         'SubglottalPressure': libfuncs.SubglottalPressureFunctional(model),
         'OnsetPressure': libfuncs.OnsetPressureFunctional(model),
         'OnsetFrequency': libfuncs.AbsOnsetFrequencyFunctional(model),
@@ -201,17 +202,20 @@ def setup_exp_params(study_name: str):
     elif study_name == 'test':
         params = [
             DEFAULT_PARAMS.substitute({
-                'Functional': 'OnsetPressure',
-                'MeshName': f'M5_CB_GA3_CL{1.0:.2f}',
+                'Functional': 'OnsetFlowRate',
+                'MeshName': f'M5_CB_GA3_CL{0.5:.2f}',
                 'LayerType': 'discrete',
-                'Ecov': 6e4, 'Ebod': 6e4
+                'Ecov': 6e4, 'Ebod': 6e4,
+                'BifParam': 'psub'
             })
         ]
         return params
     elif study_name == 'main_sensitivity':
         functional_names = [
             'OnsetPressure',
-            'OnsetFrequency'
+            'OnsetFrequency',
+            'SubglottalPressure',
+            'SubglottalFlowRate'
         ]
         param_options = [
             'const_shape'
@@ -243,11 +247,12 @@ def setup_exp_params(study_name: str):
             in itertools.product(functional_names, emods, param_options)
         )
         return paramss
-    elif study_name == 'main_sensitivity_const_flow':
+    elif study_name == 'main_sensitivity_flowdriven':
         functional_names = [
-            'SubglottalPressure',
-            'OnsetFrequency',
             'OnsetFlowRate'
+            'OnsetFrequency',
+            'SubglottalPressure',
+            'SubglottalFlowRate'
         ]
         param_options = [
             'const_shape'
