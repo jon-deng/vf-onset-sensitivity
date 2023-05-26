@@ -12,20 +12,16 @@ import itertools
 import warnings
 from tqdm import tqdm
 
+# NOTE: The import order for `dolfin` and other packages (numpy, scipy, etc.)
+# seems to cause issues sometimes (at least on my installation)
+import dolfin as dfn
+dfn.set_log_level(50)
 import h5py
 import numpy as np
 from petsc4py import PETSc
 from slepc4py import SLEPc
-# NOTE: Importing `dolfin` after `scipy.optimize` is important!
-# Importing it after seems to cause segfaults for some reason
-import dolfin as dfn
-dfn.set_log_level(50)
 
 from blockarray import blockvec as bv, linalg as bla, h5utils
-from femvf import load
-from femvf.models.transient import (
-    solid as tsld, fluid as tfld, base as tbase
-)
 from femvf.models.dynamical import (
     base as dbase
 )
@@ -81,7 +77,7 @@ def setup_dyna_model(params: exputils.BaseParameters):
 
 def setup_props(
         params: exputils.BaseParameters,
-        model: Union[tbase.BaseTransientModel, dbase.BaseDynamicalModel]
+        model: dbase.BaseDynamicalModel
     ):
     """
     Return model properties
