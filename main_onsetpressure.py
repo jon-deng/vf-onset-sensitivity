@@ -2,18 +2,18 @@
 Conduct a sensitivity study of onset pressure and frequency
 """
 
+from typing import Union, Mapping
+from numpy.typing import NDArray
+
 import argparse
 import os.path as path
 import multiprocessing as mp
-from pprint import pprint
 import itertools
 import warnings
 from tqdm import tqdm
-from typing import Union
 
 import h5py
 import numpy as np
-from scipy import optimize
 from petsc4py import PETSc
 from slepc4py import SLEPc
 # NOTE: Importing `dolfin` after `scipy.optimize` is important!
@@ -21,7 +21,7 @@ from slepc4py import SLEPc
 import dolfin as dfn
 dfn.set_log_level(50)
 
-from blockarray import blockvec as bvec, linalg as bla, h5utils
+from blockarray import blockvec as bv, linalg as bla, h5utils
 from femvf import load
 from femvf.models.transient import (
     solid as tsld, fluid as tfld, base as tbase
@@ -58,7 +58,12 @@ PSUBS = np.arange(0, 800, 50) * 10
 
 def setup_dyna_model(params: exputils.BaseParameters):
     """
-    Return a dynamical model
+    Return a Hopf model and the non-linear/linearized dynamical system models
+
+    Parameters
+    ----------
+    params: exputils.BaseParameters
+        The experiment/case parameters
     """
     mesh_name = params['MeshName']
     mesh_path = path.join('./mesh', mesh_name+'.msh')
@@ -74,27 +79,19 @@ def setup_dyna_model(params: exputils.BaseParameters):
     )
     return hopf, res, dres
 
-def setup_tran_model(params: exputils.BaseParameters):
-    """
-    Return a transient model
-    """
-    mesh_name = params['MeshName']
-    mesh_path = path.join('./mesh', mesh_name+'.msh')
-
-    model = load.load_transient_fsi_model(
-        mesh_path, None,
-        SolidType=tsld.KelvinVoigt,
-        FluidType=tfld.BernoulliFixedSep,
-        separation_vertex_label='sep-inf'
-    )
-    return model
-
 def setup_props(
         params: exputils.BaseParameters,
         model: Union[tbase.BaseTransientModel, dbase.BaseDynamicalModel]
     ):
     """
-    Return a properties vector
+    Return model properties
+
+    Parameters
+    ----------
+    params: exputils.BaseParameters
+        The experiment/case parameters
+    model:
+        The dynamical system model
     """
     prop = model.prop.copy()
     region_to_dofs = process_celllabel_to_dofs_from_residual(
@@ -108,7 +105,17 @@ def setup_props(
     )
     return prop
 
-def set_prop(prop, hopf, celllabel_to_dofs, emod_cov, emod_bod, layer_type='discrete'):
+def set_prop(
+        prop: bv.BlockVector,
+        hopf: libhopf.HopfModel,
+        celllabel_to_dofs: Mapping[str, NDArray],
+        emod_cov:float,
+        emod_bod: float,
+        layer_type='discrete'
+    ):
+    """
+    Return the model properties vector with desired values
+    """
     # Set any constant properties
     prop = libsetup.set_default_props(prop, hopf.res.solid.residual.mesh())
 
@@ -152,6 +159,13 @@ def setup_functional(
     ):
     """
     Return a functional
+
+    Parameters
+    ----------
+    params: exputils.BaseParameters
+        The experiment/case parameters
+    model:
+        The dynamical system model
     """
     functionals = {
         'SubglottalPressure': libfuncs.SubglottalPressureFunctional(model),
@@ -164,7 +178,12 @@ def setup_functional(
 
 def setup_exp_params(study_name: str):
     """
-    Return an iterable of parameters for a given study name
+    Return an iterable of experiment parameters (a parametric study)
+
+    Parameters
+    ----------
+    study_name: str
+        The name of the parametric study
     """
 
     DEFAULT_PARAMS = ExpParamBasic({
@@ -471,9 +490,22 @@ def setup_exp_params(study_name: str):
     else:
         raise ValueError("Unknown `study_name` '{study_name}'")
 
-def setup_parameterization(params, hopf, prop):
+def setup_parameterization(
+        params: exputils.BaseParameters,
+        hopf: libhopf.HopfModel,
+        prop: bv.BlockVector
+    ):
     """
     Return a parameterization
+
+    Parameters
+    ----------
+    params: exputils.BaseParameters
+        The experiment/case parameters
+    hopf:
+        The Hopf system model
+    prop:
+        The Hopf model properties vector
     """
     const_vals = {key: np.array(subvec) for key, subvec in prop.sub_items()}
     scale = {
@@ -495,9 +527,14 @@ def setup_parameterization(params, hopf, prop):
 
     return parameterization, scale
 
-def setup_reduced_functional(params):
+def setup_reduced_functional(params: exputils.BaseParameters):
     """
     Return a reduced functional + additional stuff
+
+    Parameters
+    ----------
+    params: exputils.BaseParameters
+        The experiment/case parameters
     """
     ## Load the model and set model properties
     hopf, *_ = setup_dyna_model(params)
@@ -519,7 +556,7 @@ def setup_reduced_functional(params):
                 p[key][:] = p.sub[key]/val
 
     prop = parameterization.apply(p)
-    assert np.isclose(bvec.norm(prop-_props), 0)
+    assert np.isclose(bv.norm(prop-_props), 0)
 
     ## Solve for the Hopf bifurcation
     xhopf_0 = hopf.state.copy()
@@ -551,8 +588,14 @@ def setup_norm(hopf_model: libhopf.HopfModel):
     """
     Return a norm for scalar fields over a mesh
 
-    The norm is used to ensure that a step size for finite differences (FD) is reasonable
-    for different meshes. The norm should give a magnitude that is independent of mesh density.
+    The norm is used to ensure that a step size for finite differences (FD) is
+    reasonable for different meshes. The norm should give a magnitude that is
+    independent of mesh density.
+
+    Parameters
+    ----------
+    hopf:
+        The Hopf system model
     """
 
     scale = hopf_model.prop.copy()
@@ -580,7 +623,10 @@ def setup_norm(hopf_model: libhopf.HopfModel):
 
     return norm
 
-def run_functional_sensitivity(params, output_dir='out/sensitivity'):
+def run_functional_sensitivity(
+        params: exputils.BaseParameters,
+        output_dir='out/sensitivity'
+    ):
     """
     Run an experiment where the sensitivity of a functional is saved
     """
