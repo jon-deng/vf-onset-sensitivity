@@ -202,11 +202,11 @@ def setup_exp_params(study_name: str):
     elif study_name == 'test':
         params = [
             DEFAULT_PARAMS.substitute({
-                'Functional': 'OnsetFlowRate',
+                'Functional': 'SubglottalFlowRate',
                 'MeshName': f'M5_CB_GA3_CL{0.5:.2f}',
                 'LayerType': 'discrete',
                 'Ecov': 6e4, 'Ebod': 6e4,
-                'BifParam': 'psub'
+                'BifParam': 'qsub'
             })
         ]
         return params
@@ -563,9 +563,18 @@ def setup_reduced_functional(params: exputils.BaseParameters):
     xhopf_0 = hopf.state.copy()
     with warnings.catch_warnings() as _:
         warnings.filterwarnings('always')
+        if params['BifParam'] == 'psub':
+            bifparam_tol = 100
+            bifparams = PSUBS
+        elif params['BifParam'] == 'qsub':
+            bifparam_tol = 10
+            bifparams = np.linspace(0, 300, 11)
+        else:
+            raise ValueError("")
+
         xhopf_0[:] = libhopf.gen_xhopf_0(
-            hopf.res, prop, hopf.E_MODE, PSUBS,
-            tol=100.0, bifparam_key=params['BifParam']
+            hopf.res, prop, hopf.E_MODE, bifparams,
+            tol=bifparam_tol, bifparam_key=params['BifParam']
         )
     xhopf_n, info = libhopf.solve_hopf_by_newton(hopf, xhopf_0, prop)
     if info['status'] != 0:
