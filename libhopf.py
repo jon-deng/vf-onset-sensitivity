@@ -1142,7 +1142,8 @@ def solve_hopf_by_newton(
         hopf: HopfModel,
         xhopf_0: bvec.BlockVector,
         prop: bvec.BlockVector,
-        out=None, newton_params=None
+        out=None, newton_params=None,
+        linear_solver='petsc'
     ) -> Tuple[bvec.BlockVector, Dict]:
     """Solve the nonlinear Hopf problem using a newton method"""
     hopf.set_prop(prop)
@@ -1170,9 +1171,14 @@ def solve_hopf_by_newton(
             hopf.apply_dirichlet_bmat(jac_n)
             _rhs_n = rhs_n.to_mono_petsc()
             _jac_n = jac_n.to_mono_petsc()
-            _dx_n = _jac_n.getVecRight()
 
-            _dx_n, _ = subops.solve_petsc_lu(_jac_n, _rhs_n, out=_dx_n)
+            if linear_solver == 'petsc':
+                _dx_n = _jac_n.getVecRight()
+                _dx_n, _ = subops.solve_petsc_lu(_jac_n, _rhs_n, out=_dx_n)
+            elif linear_solver == 'numpy':
+                _dx_n = np.linalg.solve(_jac_n[:, :], _rhs_n[:])
+            else:
+                raise ValueError("")
 
             dx_n = xhopf_n.copy()
             dx_n.set_mono(_dx_n)
@@ -1430,7 +1436,8 @@ def solve_reduced_gradient(
         functional: libfunc.GenericFunctional,
         hopf: HopfModel,
         state: bvec.BlockVector,
-        prop: bvec.BlockVector
+        prop: bvec.BlockVector,
+        linear_solver='petsc'
     ) -> bvec.BlockVector:
     """Solve for the reduced gradient of a functional"""
     for obj in (functional, hopf):
@@ -1450,7 +1457,13 @@ def solve_reduced_gradient(
     _dg_dres = _dres_dx_adj.getVecRight()
 
     # Solve the adjoint problem for the 'adjoint state'
-    _dg_dres, _ = subops.solve_petsc_lu(_dres_dx_adj, _dg_dx, out=_dg_dres)
+    if linear_solver == 'petsc':
+        _dg_dres, _ = subops.solve_petsc_lu(_dres_dx_adj, _dg_dx, out=_dg_dres)
+    elif linear_solver == 'numpy':
+        _dg_dres = np.linalg.solve(_dres_dx_adj[:, :], _dg_dx[:])
+    else:
+        raise ValueError("")
+
     dg_dres.set_mono(_dg_dres)
 
     # Compute the reduced gradient
