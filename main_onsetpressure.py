@@ -200,6 +200,8 @@ def setup_exp_params(study_name: str):
     if study_name == 'none':
         return []
     elif study_name == 'test':
+        # TODO: The flow rate driven model seems to have a lot of numerical error
+        # and fails when using PETSc's LU solver
         params = [
             DEFAULT_PARAMS.substitute({
                 'Functional': 'SubglottalFlowRate',
@@ -249,7 +251,7 @@ def setup_exp_params(study_name: str):
         return paramss
     elif study_name == 'main_sensitivity_flowdriven':
         functional_names = [
-            'OnsetFlowRate'
+            'OnsetFlowRate',
             'OnsetFrequency',
             'SubglottalPressure',
             'SubglottalFlowRate'
@@ -645,6 +647,10 @@ def run_functional_sensitivity(
     if not path.isfile(fpath):
         ## Compute 1st order sensitivity of the functional
         rfunc.set_prop(parameterization.apply(p0))
+
+        # DEBUG:
+        # breakpoint()
+
         grad_props = rfunc.assem_dg_dprop()
         grad_params = parameterization.apply_vjp(p0, grad_props)
 
