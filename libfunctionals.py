@@ -231,12 +231,12 @@ class OnsetFlowRateFunctional(BaseFunctional):
 
     # TODO: You can replace 'q' with 'qsub'
     def assem_g(self):
-        return self.state['q'][0]
+        return self.state['qsub'][0]
 
     def assem_dg_dstate(self):
         dg_dstate = self.state.copy()
         dg_dstate[:] = 0.0
-        dg_dstate['q'][0] = 1.0
+        dg_dstate['qsub'][0] = 1.0
         return dg_dstate
 
     def assem_dg_dprop(self):
