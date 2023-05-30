@@ -20,7 +20,7 @@ dfn.set_log_level(50)
 # Set `FLOW_DRIVEN` to toggle between using a constant flow-rate Bernoulli flow
 # and a pressure driven Bernoulli flow
 FLOW_DRIVEN = False
-FLOW_DRIVEN = True
+# FLOW_DRIVEN = True
 
 if __name__ == '__main__':
     CLSCALE = 0.5
@@ -54,14 +54,19 @@ if __name__ == '__main__':
         control[bifparam_key] = lmbda
         return control
 
+    xfps_info = [
+        libhopf.solve_fp(res, make_control(lmbda), props0, bifparam_key=bifparam_key)[0]
+        for lmbda in lmbdas
+    ]
+
     least_stable_modes = [
         libhopf.solve_least_stable_mode(
             res,
-            libhopf.solve_fp(res, make_control(lmbda), props0, bifparam_key=bifparam_key)[0],
+            xfp_info[0],
             make_control(lmbda),
             props0
         )
-        for lmbda in lmbdas
+        for lmbda, xfp_info in zip(lmbdas, xfps_info)
     ]
     least_stable_omegas = np.array([mode_info[0] for mode_info in least_stable_modes])
 
