@@ -204,12 +204,13 @@ def setup_exp_params(study_name: str):
         # and fails when using PETSc's LU solver
         params = [
             DEFAULT_PARAMS.substitute({
-                'Functional': 'SubglottalFlowRate',
+                'Functional': functional_name,
                 'MeshName': f'M5_CB_GA3_CL{0.5:.2f}',
                 'LayerType': 'discrete',
                 'Ecov': 6e4, 'Ebod': 6e4,
-                'BifParam': 'qsub'
+                'BifParam': 'psub'
             })
+            for functional_name in ['OnsetPressure', 'OnsetFrequency']
         ]
         return params
     elif study_name == 'main_sensitivity':
@@ -234,6 +235,9 @@ def setup_exp_params(study_name: str):
             1*np.arange(2, 18, 4),
             1*np.arange(2, 18, 4)
         ]) * 10 * 1e3
+
+        # emod_covs = np.array([6, 3]) * 10 * 1e3
+        # emod_bods = np.array([6, 6]) * 10 * 1e3
 
         assert len(emod_covs) == len(emod_bods)
 
@@ -578,21 +582,28 @@ def setup_reduced_functional(params: exputils.BaseParameters):
             hopf.res, prop, hopf.E_MODE, bifparams,
             tol=bifparam_tol, bifparam_key=params['BifParam']
         )
-    xhopf_n, info = libhopf.solve_hopf_by_newton(hopf, xhopf_0, prop)
+
+    newton_params = {
+        'absolute_tolerance': 1e-10,
+        'relative_tolerance': 1e-5,
+        'maximum_iterations': 5
+    }
+    xhopf_n, info = libhopf.solve_hopf_by_newton(
+        hopf, xhopf_0, prop, newton_params=newton_params
+    )
     if info['status'] != 0:
         raise RuntimeError(
             f"Hopf solution at linearization point didn't converge with info: {info}"
             f"; this happened for the parameter set {params}"
         )
-    else:
-        hopf.set_state(xhopf_n)
+    hopf.set_state(xhopf_n)
 
     ## Load the functional/objective function and gradient
     func = setup_functional(params, hopf)
 
     redu_functional = libhopf.ReducedFunctional(
         func,
-        libhopf.ReducedHopfModel(hopf)
+        libhopf.ReducedHopfModel(hopf, newton_params=newton_params)
     )
     return redu_functional, hopf, xhopf_n, p, parameterization
 
