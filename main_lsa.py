@@ -42,7 +42,7 @@ if __name__ == '__main__':
     if BIFPARAM_KEY == 'qsub':
         lmbdas = np.arange(0, 100, 10)
     elif BIFPARAM_KEY == 'psub':
-        lmbdas = np.arange(0, 1000, 100)*10
+        lmbdas = np.arange(0, 500, 25)*10
     else:
         raise ValueError("")
 
@@ -55,6 +55,7 @@ if __name__ == '__main__':
         libhopf.solve_fp(res, make_control(lmbda), props0, bifparam_key=BIFPARAM_KEY)
         for lmbda in lmbdas
     ]
+    bad_fps = [xfp_info[1]['status'] != 0 for xfp_info in xfps_info]
 
     least_stable_modes = [
         libhopf.solve_least_stable_mode(
@@ -71,9 +72,12 @@ if __name__ == '__main__':
 
     axs[0].plot(lmbdas, least_stable_omegas.real)
     axs[1].plot(lmbdas, least_stable_omegas.imag)
+    # Mark points with bad fixed point solutions with a 'o'
+    axs[0].plot(lmbdas[bad_fps], least_stable_omegas.real[bad_fps], marker='o', mfc='none', ls='none')
 
     axs[0].set_ylabel("$\omega_{real}$")
     axs[1].set_ylabel("$\omega_{imag}$ $[\mathrm{rad}/\mathrm{s}]$")
+    # axs[0].set_ylim(-10, 10)
 
     if BIFPARAM_KEY == 'qsub':
         axs[1].set_xlabel("$q_{sub}$ $[\mathrm{cm}^3/\mathrm{s}]$")
