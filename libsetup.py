@@ -18,12 +18,14 @@ def transient_fluidtype_from_sep_method(sep_method):
     else:
         raise ValueError("")
 
-def dynamical_fluidtype_from_sep_method(sep_method, flow_driven=False):
+def dynamical_fluidtype_from_sep_method(sep_method, bifparam_key='psub'):
     if sep_method == 'fixed':
-        if flow_driven:
+        if bifparam_key == 'qsub':
             return dfmd.BernoulliFlowFixedSep, dfmd.LinearizedBernoulliFlowFixedSep
-        else:
+        elif bifparam_key == 'psub':
             return dfmd.BernoulliFixedSep, dfmd.LinearizedBernoulliFixedSep
+        else:
+            raise ValueError("")
     elif sep_method == 'smoothmin':
         return dfmd.BernoulliSmoothMinSep, dfmd.LinearizedBernoulliSmoothMinSep
     elif sep_method == 'arearatio':
@@ -35,9 +37,9 @@ def load_hopf_model(
         mesh_path,
         sep_method='fixed',
         sep_vert_label='separation',
-        flow_driven=False
+        bifparam_key='psub'
     ):
-    FluidType, LinFluidType = dynamical_fluidtype_from_sep_method(sep_method, flow_driven=flow_driven)
+    FluidType, LinFluidType = dynamical_fluidtype_from_sep_method(sep_method, bifparam_key=bifparam_key)
 
     kwargs = {
         'fsi_facet_labels': ('pressure',),
@@ -60,10 +62,7 @@ def load_hopf_model(
         **kwargs
     )
 
-    if flow_driven:
-        res_hopf = libhopf.HopfModel(res, dres, bifparam_key='qsub')
-    else:
-        res_hopf = libhopf.HopfModel(res, dres, bifparam_key='psub')
+    res_hopf = libhopf.HopfModel(res, dres, bifparam_key=bifparam_key)
     return res_hopf, res, dres
 
 def load_transient_model(

@@ -64,14 +64,10 @@ def setup_dyna_model(params: exputils.BaseParameters):
     mesh_name = params['MeshName']
     mesh_path = path.join('./mesh', mesh_name+'.msh')
 
-    if params['BifParam'] == 'psub':
-        flow_driven = False
-    elif params['BifParam'] == 'qsub':
-        flow_driven = True
-    else:
-        raise ValueError("")
     hopf, res, dres = libsetup.load_hopf_model(
-        mesh_path, sep_method='fixed', sep_vert_label=params['SepPoint'], flow_driven=flow_driven
+        mesh_path, sep_method='fixed',
+        sep_vert_label=params['SepPoint'],
+        bifparam_key=params['BifParam']
     )
     return hopf, res, dres
 
