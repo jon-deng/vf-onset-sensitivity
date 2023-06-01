@@ -206,7 +206,7 @@ def setup_exp_params(study_name: str):
                 'Ecov': 6e4, 'Ebod': 6e4,
                 'BifParam': 'psub'
             })
-            for functional_name in ['OnsetPressure', 'OnsetFrequency']
+            for functional_name in ['OnsetPressure']
         ]
         return params
     elif study_name == 'main_sensitivity':
@@ -561,6 +561,26 @@ def setup_reduced_functional(params: exputils.BaseParameters):
     prop = parameterization.apply(p)
     assert np.isclose(bv.norm(prop-_props), 0)
 
+    # DEBUG: Check that old and new codes give the same residuals
+    res = hopf.res
+    control = res.control
+    control['psub'] = 100*10
+    control['psup'] = 10
+    res.set_control(control)
+    state = res.state
+    state[:] = 0
+    res.set_state(state)
+    res.set_prop(prop)
+    res.assem_res().print_summary()
+
+    state = hopf.state
+    state[:] = 0
+    state['psub'] = 100*10
+    hopf.set_state(state)
+    hopf.set_prop(prop)
+    hopf.assem_res().print_summary()
+    breakpoint()
+
     ## Solve for the Hopf bifurcation
     xhopf_0 = hopf.state.copy()
     with warnings.catch_warnings() as _:
@@ -587,6 +607,7 @@ def setup_reduced_functional(params: exputils.BaseParameters):
     xhopf_n, info = libhopf.solve_hopf_by_newton(
         hopf, xhopf_0, prop, newton_params=newton_params
     )
+    print(f"Hopf bifurcation solver exited with info: {info}")
     if info['status'] != 0:
         raise RuntimeError(
             f"Hopf solution at linearization point didn't converge with info: {info}"
@@ -656,9 +677,10 @@ def run_functional_sensitivity(
         rfunc.set_prop(parameterization.apply(p0))
 
         # DEBUG:
-        # breakpoint()
-
         grad_props = rfunc.assem_dg_dprop()
+
+        breakpoint()
+
         grad_params = parameterization.apply_vjp(p0, grad_props)
 
         ## Compute 2nd order sensitivity of the functional
