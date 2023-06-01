@@ -734,6 +734,8 @@ def normalize_eigvec_by_hopf(
     inner(evec_ref, real(A * exp(1j * theta) * evec)) == 0
     inner(evec_ref, im(A * exp(1j * theta) * evec)) == 1
     """
+    # TODO: Replace this with formula that doesn't use `arctan` since it can
+    # have divide-by-zero errors
     a = bla.dot(evec_ref, evec_real)
     b = bla.dot(evec_ref, evec_imag)
 
