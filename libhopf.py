@@ -734,17 +734,15 @@ def normalize_eigvec_by_hopf(
     inner(evec_ref, real(A * exp(1j * theta) * evec)) == 0
     inner(evec_ref, im(A * exp(1j * theta) * evec)) == 1
     """
-    # TODO: Replace this with formula that doesn't use `arctan` since it can
-    # have divide-by-zero errors
-    a = bla.dot(evec_ref, evec_real)
-    b = bla.dot(evec_ref, evec_imag)
+    _a = bla.dot(evec_ref, evec_imag)
+    _b = bla.dot(evec_ref, evec_real)
 
-    theta = np.arctan(a/b)
-    amp = float((a*np.sin(theta) + b*np.cos(theta))**-1)
+    a = _a/(_a**2+ _b**2)
+    b = _b/(_a**2+ _b**2)
 
-    ret_evec_real = amp*(evec_real*float(np.cos(theta)) - evec_imag*float(np.sin(theta)))
-    ret_evec_imag = amp*(evec_real*float(np.sin(theta)) + evec_imag*float(np.cos(theta)))
-    return ret_evec_real, ret_evec_imag
+    nevec_real = a*evec_real - b*evec_imag
+    nevec_imag = b*evec_real + a*evec_imag
+    return nevec_real, nevec_imag
 
 def normalize_eigvec_by_norm(
         evec_real: bvec.BlockVector,
