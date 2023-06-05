@@ -1174,7 +1174,12 @@ def solve_hopf_by_newton(
 
             if linear_solver == 'petsc':
                 _dx_n = _jac_n.getVecRight()
-                _dx_n, _ = subops.solve_petsc_lu(_jac_n, _rhs_n, out=_dx_n)
+                _dx_n, ksp = subops.solve_petsc_lu(_jac_n, _rhs_n, out=_dx_n)
+                ksp.destroy()
+            elif linear_solver == 'superlu':
+                _dx_n = _jac_n.getVecRight()
+                _dx_n, ksp = subops.solve_superlu(_jac_n, _rhs_n, out=_dx_n)
+                ksp.destroy()
             elif linear_solver == 'numpy':
                 _dx_n = np.linalg.solve(_jac_n[:, :], _rhs_n[:])
             else:
@@ -1458,7 +1463,11 @@ def solve_reduced_gradient(
 
     # Solve the adjoint problem for the 'adjoint state'
     if linear_solver == 'petsc':
-        _dg_dres, _ = subops.solve_petsc_lu(_dres_dx_adj, _dg_dx, out=_dg_dres)
+        _dg_dres, ksp = subops.solve_petsc_lu(_dres_dx_adj, _dg_dx, out=_dg_dres)
+        ksp.destroy()
+    elif linear_solver == 'superlu':
+        _dg_dres, ksp = subops.solve_superlu(_dres_dx_adj, _dg_dx, out=_dg_dres)
+        ksp.destroy()
     elif linear_solver == 'numpy':
         _dg_dres = np.linalg.solve(_dres_dx_adj[:, :], _dg_dx[:])
     else:
