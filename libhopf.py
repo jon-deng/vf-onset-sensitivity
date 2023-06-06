@@ -1143,7 +1143,7 @@ def solve_hopf_by_newton(
         xhopf_0: bvec.BlockVector,
         prop: bvec.BlockVector,
         out=None, newton_params=None,
-        linear_solver='petsc'
+        linear_solver='numpy'
     ) -> Tuple[bvec.BlockVector, Dict]:
     """Solve the nonlinear Hopf problem using a newton method"""
     hopf.set_prop(prop)
@@ -1442,7 +1442,7 @@ def solve_reduced_gradient(
         hopf: HopfModel,
         state: bvec.BlockVector,
         prop: bvec.BlockVector,
-        linear_solver='petsc'
+        linear_solver='numpy'
     ) -> bvec.BlockVector:
     """Solve for the reduced gradient of a functional"""
     for obj in (functional, hopf):
