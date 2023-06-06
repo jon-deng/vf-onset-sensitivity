@@ -212,9 +212,7 @@ def setup_exp_params(study_name: str):
     elif study_name == 'main_sensitivity':
         functional_names = [
             'OnsetPressure',
-            'OnsetFrequency',
-            'SubglottalPressure',
-            'SubglottalFlowRate'
+            'OnsetFrequency'
         ]
         param_options = [
             'const_shape'
