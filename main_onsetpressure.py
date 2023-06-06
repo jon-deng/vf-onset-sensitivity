@@ -420,7 +420,7 @@ def setup_exp_params(study_name: str):
         assert len(emod_covs) == len(emod_bods)
         emods = [(ecov, ebod) for ecov, ebod in zip(emod_covs, emod_bods)]
 
-        hs = np.array([1e-3, 1e-4])
+        hs = np.array([1e-2, 1e-3, 1e-4])
         mesh_names = [
             f'M5_CB_GA3_CL{clscale:.2f}' for clscale in (0.5, 0.25, 0.125)
         ]
