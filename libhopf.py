@@ -186,15 +186,15 @@ class HopfModel:
         omega = x['omega'][0]
 
         ## Set appropriate linearization directions
-        res_state = res.assem_res()
+        res_state = res.assem_res().copy()
 
         dres.set_dstate(mode_real)
         dres.set_dstatet(-float(omega)*mode_imag)
-        res_mode_real = dres.assem_res()
+        res_mode_real = dres.assem_res().copy()
 
         dres.set_dstate(mode_imag)
         dres.set_dstatet(float(omega)*mode_real)
-        res_mode_imag = dres.assem_res()
+        res_mode_imag = dres.assem_res().copy()
 
         res_psub = x[[self.bifparam_key]].copy()
         res_psub[self.bifparam_key][0] = bla.dot(ee, mode_real)
