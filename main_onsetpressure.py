@@ -195,8 +195,16 @@ def setup_parameterization(
     }
 
     parameterization = None
-    if params['ParamOption'] == 'const_shape':
+    if params['ParamOption'] == 'Stiffness':
         const_vals.pop('emod')
+
+        parameterization = pzn.ConstantSubset(
+            hopf.res,
+            const_vals=const_vals,
+            scale=scale
+        )
+    elif params['ParamOption'] == 'Shape':
+        const_vals.pop('umesh')
 
         parameterization = pzn.ConstantSubset(
             hopf.res,
@@ -297,7 +305,7 @@ def make_exp_params(study_name: str):
         'LayerType': 'discrete',
         'Ecov': 2.5*10*1e3,
         'Ebod': 2.5*10*1e3,
-        'ParamOption': 'const_shape',
+        'ParamOption': 'Stiffness',
         'Functional': 'OnsetPressure',
         'H': 1e-3,
         'EigTarget': 'LARGEST_MAGNITUDE',
