@@ -12,7 +12,8 @@ from blockarray import linalg as bla
 
 from libhopf import functional as libfuncs
 from libhopf.setup import load_hopf_model, set_default_props
-from test_hopf import taylor_convergence
+
+from libtest import taylor_convergence
 
 
 # pylint: disable=redefined-outer-name
@@ -23,7 +24,7 @@ ECOV = 5e3 * 10
 PSUB = 450 * 10
 
 def _test_taylor(*args, **kwargs):
-    errs, magnitudes, conv_rates = taylor_convergence(*args, **kwargs)
+    alphas, errs, magnitudes, conv_rates = taylor_convergence(*args, **kwargs)
     assert pass_taylor_convergence_test(errs, magnitudes, conv_rates)
 
 def pass_taylor_convergence_test(errs, magnitudes, conv_rates, relerr_tol=1e-5):
@@ -41,15 +42,23 @@ def pass_taylor_convergence_test(errs, magnitudes, conv_rates, relerr_tol=1e-5):
     else:
         return False
 
+@pytest.fixture(
+    params=[
+        'M5_CB_GA3_CL0.50'
+    ]
+)
+def mesh_path(request):
+    mesh_name = request.param
+    mesh_dir = './mesh'
+    mesh_path = path.join(mesh_dir, f'{mesh_name}.msh')
+
+    return mesh_path
 
 @pytest.fixture()
-def setup_hopf_model():
+def setup_hopf_model(mesh_path):
     """
     Return a hopf model
     """
-    mesh_name = 'BC-dcov5.00e-02-cl1.00'
-    mesh_path = path.join('./mesh', mesh_name+'.msh')
-
     hopf, *_ = load_hopf_model(mesh_path, sep_method='smoothmin', sep_vert_label='separation')
     return hopf
 
@@ -85,7 +94,7 @@ def setup_linearization(setup_func, setup_hopf_model):
     hopf.apply_dirichlet_bvec(dstate)
 
     props0 = hopf.prop.copy()
-    set_default_props(props0, hopf.res.solid.forms['mesh.mesh'])
+    set_default_props(props0, hopf.res.solid.residual.mesh())
     dprop = props0.copy()
     dprop[:] = 0
     dprop['emod'] = 1.0

@@ -55,31 +55,31 @@ def taylor_convergence(x0, dx, res, jac, norm=None):
     print("Convergence rates: ", np.array(conv_rates))
     return alphas, errs, magnitudes, conv_rates
 
-def test_assem_dres_dstate(hopf, state0, dstate):
+def test_assem_dres_dstate(hopf_model, state0, dstate):
 
     def hopf_res(x):
-        hopf.set_state(x)
-        res = hopf.assem_res()
-        hopf.apply_dirichlet_bvec(res)
-        return hopf.assem_res()
+        hopf_model.set_state(x)
+        res = hopf_model.assem_res()
+        hopf_model.apply_dirichlet_bvec(res)
+        return hopf_model.assem_res()
 
     def hopf_jac(x):
-        hopf.set_state(x)
-        dres_dstate = hopf.assem_dres_dstate()
-        hopf.apply_dirichlet_bmat(dres_dstate)
+        hopf_model.set_state(x)
+        dres_dstate = hopf_model.assem_dres_dstate()
+        hopf_model.apply_dirichlet_bmat(dres_dstate)
         return dres_dstate
 
     taylor_convergence(state0, dstate, hopf_res, hopf_jac)
 
-def test_assem_dres_dprops(hopf, props0, dprop):
+def test_assem_dres_dprops(hopf_model, props0, dprop):
     def hopf_res(x):
-        hopf.set_prop(x)
-        return hopf.assem_res()
+        hopf_model.set_prop(x)
+        return hopf_model.assem_res()
 
     def hopf_jac(x):
-        hopf.set_prop(x)
-        dres_dprops = hopf.assem_dres_dprops()
-        hopf.zero_rows_dirichlet_bmat(dres_dprops)
+        hopf_model.set_prop(x)
+        dres_dprops = hopf_model.assem_dres_dprops()
+        hopf_model.zero_rows_dirichlet_bmat(dres_dprops)
         return dres_dprops
 
     taylor_convergence(props0, dprop, hopf_res, hopf_jac)
@@ -96,12 +96,12 @@ if __name__ == '__main__':
     ## Set the Hopf model properties
     # get the scalar DOFs associated with the cover/body layers
     # region_to_dofs = process_celllabel_to_dofs_from_forms(
-    #     res.solid.forms,
-    #     res.solid.forms['fspace.scalar']
+    #     res.solid.residual.form,
+    #     res.solid.residual.form['fspace.scalar']
     # )
 
     prop = model.prop.copy()
-    prop = set_default_props(prop, res.solid.forms['mesh.mesh'])
+    prop = set_default_props(prop, res.solid.residual.mesh())
 
     ## Test sensitivities of the Hopf model residual w.r.t each block of
     ## `Hopf.state`

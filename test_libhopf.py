@@ -7,14 +7,14 @@ import warnings
 import pytest
 import h5py
 import numpy as np
+from petsc4py import PETSc
 
 from femvf.parameters import parameterization as pazn
 from blockarray import linalg as bla, blockvec as bv, subops
 
 from libhopf import hopf, functional as libfunctional, setup
-from test_hopf import taylor_convergence
+from libtest import taylor_convergence
 
-from petsc4py import PETSc
 # pylint: disable=redefined-outer-name
 # pylint: disable=no-member, invalid-name
 
@@ -37,7 +37,7 @@ def prop(hopf_model):
     """Return Hopf model properties"""
 
     prop = hopf_model.prop.copy()
-    setup.set_default_props(prop, hopf_model.res.solid.forms['mesh.mesh'])
+    setup.set_default_props(prop, hopf_model.res.solid.residual.mesh())
     prop['kcontact'][:] = 1e0
     return prop
 
@@ -61,7 +61,7 @@ class TestHopfModel:
         omega_labels) = hopf_model.labels_hopf_components
 
         # Create a pure x-shearing motion to use for displacement/velocities
-        y = hopf_model.res.solid.forms['coeff.state.u1'].function_space().tabulate_dof_coordinates()[1::2, 1]
+        y = hopf_model.res.solid.residual.form['coeff.state.u1'].function_space().tabulate_dof_coordinates()[1::2, 1]
         ux = 1e-2*(y-y.min())/(y.max()-y.min())
         uy = 0
 
@@ -358,7 +358,7 @@ def params(hopf_model, parameterization):
     p0['nu'] = 0.45
     p0['eta'] = 5
 
-    setup.set_default_props(p0, hopf_model.res.solid.forms['mesh.mesh'])
+    setup.set_default_props(p0, hopf_model.res.solid.residual.mesh())
     return p0
 
 @pytest.fixture(
@@ -590,7 +590,7 @@ class TestReducedFunctional:
         scale['umesh'][:] = 1e-3
 
         # Mass matrices for the different vector spaces
-        forms = hopf_model.res.solid.forms
+        forms = hopf_model.res.solid.residual.form
         import dolfin as dfn
         dx = forms['measure.dx']
         u = dfn.TrialFunction(forms['coeff.prop.emod'].function_space())
