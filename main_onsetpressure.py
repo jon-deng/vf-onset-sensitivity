@@ -206,10 +206,17 @@ def setup_parameterization(
     elif params['ParamOption'] == 'Shape':
         const_vals.pop('umesh')
 
+        K, NU = 1e3, 0.4
         parameterization = pzn.ConstantSubset(
             hopf.res,
             const_vals=const_vals,
-            scale=scale
+            scale=scale,
+            lame_lambda=(3*K*NU)/(1+NU),
+            lame_mu=(3*K*(1-2*NU))/(2*(1+NU))
+        )
+    elif params['ParamOption'] == 'TractionShape':
+        parameterization = pzn.TractionShape(
+            hopf.res
         )
     else:
         raise ValueError(f"Unknown 'ParamOption': {params['ParamOption']}")
@@ -321,13 +328,26 @@ def make_exp_params(study_name: str):
         # and fails when using PETSc's LU solver
         params = [
             DEFAULT_PARAMS.substitute({
-                'Functional': functional_name,
+                'Functional': 'OnsetPressure',
                 'MeshName': f'M5_CB_GA3_CL{0.5:.2f}',
                 'LayerType': 'discrete',
                 'Ecov': 6e4, 'Ebod': 6e4,
                 'BifParam': 'psub'
             })
-            for functional_name in ['OnsetPressure', 'OnsetFrequency']
+        ]
+        return params
+    elif study_name == 'test_traction_shape':
+        # TODO: The flow rate driven model seems to have a lot of numerical error
+        # and fails when using PETSc's LU solver
+        params = [
+            DEFAULT_PARAMS.substitute({
+                'Functional': 'OnsetPressure',
+                'MeshName': f'M5_CB_GA3_CL{0.5:.2f}',
+                'LayerType': 'discrete',
+                'Ecov': 6e4, 'Ebod': 6e4,
+                'BifParam': 'psub',
+                'ParamOption': 'TractionShape'
+            })
         ]
         return params
     elif study_name == 'main_sensitivity':

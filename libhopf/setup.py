@@ -49,7 +49,7 @@ def load_hopf_model(
     res = load.load_dynamical_fsi_model(
         mesh_path,
         None,
-        SolidType=dsmd.KelvinVoigt,
+        SolidType=dsmd.KelvinVoigtWShape,
         FluidType=FluidType,
         **kwargs
     )
@@ -57,7 +57,7 @@ def load_hopf_model(
     dres = load.load_dynamical_fsi_model(
         mesh_path,
         None,
-        SolidType=dsmd.LinearizedKelvinVoigt,
+        SolidType=dsmd.LinearizedKelvinVoigtWShape,
         FluidType=LinFluidType,
         **kwargs
     )
