@@ -69,7 +69,7 @@ def setup_hopf_model(mesh_path):
         libfuncs.StrainEnergyFunctional
     ]
 )
-def setup_func(setup_hopf_model, request):
+def func(setup_hopf_model, request):
     """
     Return a hopf model functional to test
     """
@@ -77,11 +77,10 @@ def setup_func(setup_hopf_model, request):
     return FunctionalClass(setup_hopf_model)
 
 @pytest.fixture()
-def setup_linearization(setup_func, setup_hopf_model):
+def setup_linearization(func, setup_hopf_model):
     """
     Return a linearzation point and direction
     """
-    func = setup_func
     hopf = setup_hopf_model
 
     state0 = hopf.state.copy()
@@ -102,17 +101,15 @@ def setup_linearization(setup_func, setup_hopf_model):
 
     return (state0, props0), (dstate, dprop)
 
-def set_linearization(setup_func, state, prop):
+def set_linearization(func, state, prop):
     """
     Set the linearization point for a functional
     """
-    func = setup_func
     func.set_state(state)
     func.set_prop(prop)
 
-def test_assem_dg_dstate(setup_func, setup_linearization):
+def test_assem_dg_dstate(func, setup_linearization):
     """Test the functional `state` derivative"""
-    func = setup_func
     (state, prop), (dstate, dprop) = setup_linearization
     set_linearization(func, state, prop)
 
@@ -126,9 +123,8 @@ def test_assem_dg_dstate(setup_func, setup_linearization):
 
     _test_taylor(state, dstate, res, jac, norm=lambda x: (x**2)**0.5)
 
-def test_assem_dg_dprops(setup_func, setup_linearization):
+def test_assem_dg_dprop(func, setup_linearization):
     """Test the functional `prop` derivative"""
-    func = setup_func
     (state, prop), (dstate, dprop) = setup_linearization
     set_linearization(func, state, prop)
 
@@ -138,7 +134,7 @@ def test_assem_dg_dprops(setup_func, setup_linearization):
 
     def jac(x, dx):
         func.set_prop(x)
-        return bla.dot(func.assem_dg_dprops(), dx)
+        return bla.dot(func.assem_dg_dprop(), dx)
 
     _test_taylor(prop, dprop, res, jac, norm=lambda x: (x**2)**0.5)
 

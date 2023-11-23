@@ -12,7 +12,7 @@ import dolfin as dfn
 import ufl
 
 from femvf.models.assemblyutils import CachedFormAssembler
-from femvf.models.equations import solid
+from femvf.models.equations import uflcontinuum
 from blockarray import blockvec as bvec
 
 from . import signal
@@ -403,8 +403,8 @@ class StrainEnergyFunctional(BaseFunctional):
         emod = form['coeff.prop.emod']
         nu = form['coeff.prop.nu']
         dis = form['coeff.state.u1']
-        inf_strain = solid.form_strain_inf(dis)
-        cauchy_stress = solid.form_lin_iso_cauchy_stress(inf_strain, emod, nu)
+        inf_strain = uflcontinuum.strain_inf(dis)
+        cauchy_stress = uflcontinuum.stress_isotropic(inf_strain, emod, nu)
         dx = dfn.Measure('dx', mesh)
 
         strain_energy = ufl.inner(cauchy_stress, inf_strain)*dx

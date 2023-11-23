@@ -3,8 +3,18 @@ Module with common functionality used for testing
 """
 
 import numpy as np
+from blockarray.blockarray import BlockArray
 import blockarray.linalg as bla
 
+
+def copy_vector(vector):
+    """
+    Copy a vector or float
+    """
+    if isinstance(vector, BlockArray):
+        return vector.copy()
+    else:
+        return vector
 
 def taylor_convergence(x0, dx, res, jac, norm=None):
     """
@@ -15,8 +25,8 @@ def taylor_convergence(x0, dx, res, jac, norm=None):
 
     # Step sizes go from largest to smallest
     alphas = 2**np.arange(4)[::-1]
-    res_ns = [res(x0+alpha*dx).copy() for alpha in alphas]
-    res_0 = res(x0).copy()
+    res_ns = [copy_vector(res(x0+alpha*dx)) for alpha in alphas]
+    res_0 = copy_vector(res(x0))
 
     dres_exacts = [res_n-res_0 for res_n in res_ns]
     dres_linear = jac(x0, dx)

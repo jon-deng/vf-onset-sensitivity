@@ -46,7 +46,7 @@ def make_glottal_width(hopf, num_points=100):
     else:
         ZETA = 1e-4
 
-    S = np.array(hopf.dres.fluid.s) # can also be res
+    S = np.array(hopf.dres.fluid.residual.mesh()) # can also be res
 
     HOPF_COMPONENT_SIZES = tuple([
         hopf.state[labels].mshape[0]
