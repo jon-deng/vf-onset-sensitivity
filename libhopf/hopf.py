@@ -420,13 +420,16 @@ def _gen_hopf_state(res: 'HopfModel', bifparam_key='psub') -> Tuple[bvec.BlockVe
     return ret, labels
 
 ## Functions for finding/bracketing Hopf bifurcations
+def _solve_fp(model, control, prop):
+    return solve_fp(model, control, prop)
+
 def gen_xhopf_0(
         dyn_model: dynbase.BaseDynamicalModel,
         prop: bvec.BlockVector,
         evec_ref: bvec.BlockVector,
         psubs: np.ndarray,
         tol: float=100.0,
-        solve_fp_r: Optional[FixedPointSolver]=None,
+        solve_fp_r: FixedPointSolver=_solve_fp,
         bifparam_key: Optional[str]='psub'
     ) -> bvec.BlockVector:
     """
@@ -451,11 +454,6 @@ def gen_xhopf_0(
         property vector. This differs from `solve_fp` which requires more
         information.
     """
-    if solve_fp_r is None:
-        solve_fp_r = lambda model, control, prop: solve_fp(
-            model, control, prop, psub_incr=250*10, bifparam_key=bifparam_key
-        )
-
     dyn_model.set_prop(prop)
     dyn_control = dyn_model.control.copy()
 
@@ -512,7 +510,7 @@ def bound_ponset(
         prop: bvec.BlockVector,
         bound_pairs: ListPair,
         omega_pairs: ListPair=None,
-        solve_fp_r: Optional[FixedPointSolver]=None,
+        solve_fp_r: FixedPointSolver=_solve_fp,
         nsplit: int=2,
         tol: float=100.0,
         bifparam_key: Optional[str]='psub'
@@ -631,7 +629,7 @@ def gen_xhopf_0_from_bounds(
         evec_ref: bvec.BlockVector,
         bound_pairs: ListPair,
         omega_pairs: Optional[ListPair]=None,
-        solve_fp_r: Optional[FixedPointSolver]=None,
+        solve_fp_r: FixedPointSolver=_solve_fp,
         nsplit: int=2,
         tol: float=100.0,
         bifparam_key: Optional[str]='psub'
@@ -1522,7 +1520,7 @@ class OptGradManager:
         )
         h5utils.create_resizable_block_vector_group(
             f.create_group('hopf_state'),
-            redu_grad.rhopf_model.state.labels, redu_grad.rhopf_model.state.bshape
+            redu_grad.rhopf_model.hopf.state.labels, redu_grad.rhopf_model.hopf.state.bshape
         )
         f.create_dataset('objective', (0,), maxshape=(None,))
 
@@ -1551,7 +1549,7 @@ class OptGradManager:
             self.f['parameters'], p
         )
 
-        hopf_state = self.redu_grad.hist_state[-1]
+        hopf_state = self.redu_grad.rhopf_model.hist_state[-1]
         h5utils.append_block_vector_to_group(
             self.f['hopf_state'], hopf_state
         )
@@ -1633,8 +1631,12 @@ class ReducedFunctionalHessianContext:
             reduced_functional: ReducedFunctional,
             parameterization: paramzn.BaseParameterization,
             norm: Optional[Callable[[bvec.BlockVector], float]]=None,
-            step_size: Optional[float]=None
+            step_size: Optional[float]=1.0
         ):
+        if norm is None:
+            def norm(vec: bvec.BlockVector):
+                return vec.norm()
+
         self.rfunctional = reduced_functional
         self.parameterization = parameterization
         self.params = parameterization.x.copy()
