@@ -28,15 +28,13 @@ from femvf.models.dynamical import (
 from femvf.parameters import parameterization as pzn
 from femvf.meshutils import process_celllabel_to_dofs_from_residual
 
-import libsetup
-import libhopf
-import libfunctionals as libfuncs
+from libhopf import hopf as libhopf, setup as libsetup, functional as libfuncs
 
 from exputils import exputils
 
 # pylint: disable=redefined-outer-name
 
-ptypes = {
+parameter_types = {
     'MeshName': str,
     'LayerType': str,
     'Ecov': float,
@@ -48,13 +46,14 @@ ptypes = {
     'SepPoint': str,
     'BifParam': str
 }
-ExpParamBasic = exputils.make_parameters(ptypes)
+ExpParamBasic = exputils.make_parameters(parameter_types)
 
 PSUBS = np.arange(0, 800, 50) * 10
 
+
 def setup_dyna_model(params: exputils.BaseParameters):
     """
-    Return a Hopf model and the non-linear/linearized dynamical system models
+    Return a Hopf model, and non-linear/linearized dynamical models
 
     Parameters
     ----------
@@ -101,7 +100,7 @@ def set_prop(
         prop: bv.BlockVector,
         hopf: libhopf.HopfModel,
         celllabel_to_dofs: Mapping[str, NDArray],
-        emod_cov:float,
+        emod_cov: float,
         emod_bod: float,
         layer_type='discrete'
     ):
@@ -123,7 +122,10 @@ def set_prop(
         emod[dofs_bod] = emod_bod
         emod[dofs_share] = 1/2*(emod_cov + emod_bod)
     elif layer_type == 'linear':
-        coord = hopf.res.solid.residual.form['coeff.prop.emod'].function_space().tabulate_dof_coordinates()
+        coord = (
+            hopf.res.solid.residual.form['coeff.prop.emod']
+            .function_space().tabulate_dof_coordinates()
+        )
         y = coord[:, 1]
         ymax, ymin = y.max(), y.min()
         emod[:] = (
@@ -142,7 +144,8 @@ def set_prop(
     prop['ymid'] = y_max + y_gap
     prop['ycontact'] = y_max + y_gap - y_con_offset
 
-    prop['ncontact'][:] = [0, 1]
+    prop['ncontact'][:] = 0.0
+    prop['ncontact'][1] = 1.0
     return prop
 
 def setup_functional(
@@ -169,7 +172,117 @@ def setup_functional(
 
     return functionals[params['Functional']]
 
-def setup_exp_params(study_name: str):
+def setup_parameterization(
+        params: exputils.BaseParameters,
+        hopf: libhopf.HopfModel,
+        prop: bv.BlockVector
+    ):
+    """
+    Return a parameterization
+
+    Parameters
+    ----------
+    params: exputils.BaseParameters
+        The experiment/case parameters
+    hopf:
+        The Hopf system model
+    prop:
+        The Hopf model properties vector
+    """
+    const_vals = {key: np.array(subvec) for key, subvec in prop.sub_items()}
+    scale = {
+        'emod': 1e4
+    }
+
+    parameterization = None
+    if params['ParamOption'] == 'const_shape':
+        const_vals.pop('emod')
+
+        parameterization = pzn.ConstantSubset(
+            hopf.res,
+            const_vals=const_vals,
+            scale=scale
+        )
+    else:
+        raise ValueError(f"Unknown 'ParamOption': {params['ParamOption']}")
+
+    return parameterization, scale
+
+def setup_reduced_functional(params: exputils.BaseParameters):
+    """
+    Return a reduced functional + additional stuff
+
+    Parameters
+    ----------
+    params: exputils.BaseParameters
+        The experiment/case parameters
+    """
+    ## Load the model and set model properties
+    hopf, *_ = setup_dyna_model(params)
+
+    _props = setup_props(params, hopf)
+
+    ## Setup the linearization/initial guess parameters
+    parameterization, scale = setup_parameterization(params, hopf, _props)
+
+    p = parameterization.x.copy()
+    for key, subvec in _props.items():
+        if key in p:
+            p[key][:] = subvec
+
+    # Apply the scaling that's used for `ConstantSubset`
+    if isinstance(parameterization, pzn.ConstantSubset):
+        for key, val in scale.items():
+            if key in p:
+                p[key][:] = p.sub[key]/val
+
+    prop = parameterization.apply(p)
+    assert np.isclose(bv.norm(prop-_props), 0)
+
+    ## Solve for the Hopf bifurcation
+    xhopf_0 = hopf.state.copy()
+    with warnings.catch_warnings() as _:
+        warnings.filterwarnings('always')
+        if params['BifParam'] == 'psub':
+            bifparam_tol = 100
+            bifparams = PSUBS
+        elif params['BifParam'] == 'qsub':
+            bifparam_tol = 10
+            bifparams = np.linspace(0, 300, 11)
+        else:
+            raise ValueError("")
+
+        xhopf_0[:] = libhopf.gen_xhopf_0(
+            hopf.res, prop, hopf.E_MODE, bifparams,
+            tol=bifparam_tol, bifparam_key=params['BifParam']
+        )
+
+    newton_params = {
+        'absolute_tolerance': 1e-10,
+        'relative_tolerance': 1e-5,
+        'maximum_iterations': 5
+    }
+    xhopf_n, info = libhopf.solve_hopf_by_newton(
+        hopf, xhopf_0, prop, newton_params=newton_params
+    )
+    if info['status'] != 0:
+        raise RuntimeError(
+            f"Hopf solution at linearization point didn't converge with info: {info}"
+            f"; this happened for the parameter set {params}"
+        )
+    hopf.set_state(xhopf_n)
+
+    ## Load the functional/objective function and gradient
+    func = setup_functional(params, hopf)
+
+    redu_functional = libhopf.ReducedFunctional(
+        func,
+        libhopf.ReducedHopfModel(hopf, newton_params=newton_params)
+    )
+    return redu_functional, hopf, xhopf_n, p, parameterization
+
+
+def make_exp_params(study_name: str):
     """
     Return an iterable of experiment parameters (a parametric study)
 
@@ -490,117 +603,7 @@ def setup_exp_params(study_name: str):
     else:
         raise ValueError("Unknown `study_name` '{study_name}'")
 
-def setup_parameterization(
-        params: exputils.BaseParameters,
-        hopf: libhopf.HopfModel,
-        prop: bv.BlockVector
-    ):
-    """
-    Return a parameterization
-
-    Parameters
-    ----------
-    params: exputils.BaseParameters
-        The experiment/case parameters
-    hopf:
-        The Hopf system model
-    prop:
-        The Hopf model properties vector
-    """
-    const_vals = {key: np.array(subvec) for key, subvec in prop.sub_items()}
-    scale = {
-        'emod': 1e4
-    }
-
-    parameterization = None
-    if params['ParamOption'] == 'const_shape':
-        const_vals.pop('emod')
-
-        # scale = {'emod'}
-        parameterization = pzn.ConstantSubset(
-            hopf.res,
-            const_vals=const_vals,
-            scale=scale
-        )
-    else:
-        raise ValueError(f"Unknown 'ParamOption': {params['ParamOption']}")
-
-    return parameterization, scale
-
-def setup_reduced_functional(params: exputils.BaseParameters):
-    """
-    Return a reduced functional + additional stuff
-
-    Parameters
-    ----------
-    params: exputils.BaseParameters
-        The experiment/case parameters
-    """
-    ## Load the model and set model properties
-    hopf, *_ = setup_dyna_model(params)
-
-    _props = setup_props(params, hopf)
-
-    ## Setup the linearization/initial guess parameters
-    parameterization, scale = setup_parameterization(params, hopf, _props)
-
-    p = parameterization.x.copy()
-    for key, subvec in _props.items():
-        if key in p:
-            p[key][:] = subvec
-
-    # Apply the scaling that's used for `ConstantSubset`
-    if isinstance(parameterization, pzn.ConstantSubset):
-        for key, val in scale.items():
-            if key in p:
-                p[key][:] = p.sub[key]/val
-
-    prop = parameterization.apply(p)
-    assert np.isclose(bv.norm(prop-_props), 0)
-
-    ## Solve for the Hopf bifurcation
-    xhopf_0 = hopf.state.copy()
-    with warnings.catch_warnings() as _:
-        warnings.filterwarnings('always')
-        if params['BifParam'] == 'psub':
-            bifparam_tol = 100
-            bifparams = PSUBS
-        elif params['BifParam'] == 'qsub':
-            bifparam_tol = 10
-            bifparams = np.linspace(0, 300, 11)
-        else:
-            raise ValueError("")
-
-        xhopf_0[:] = libhopf.gen_xhopf_0(
-            hopf.res, prop, hopf.E_MODE, bifparams,
-            tol=bifparam_tol, bifparam_key=params['BifParam']
-        )
-
-    newton_params = {
-        'absolute_tolerance': 1e-10,
-        'relative_tolerance': 1e-5,
-        'maximum_iterations': 5
-    }
-    xhopf_n, info = libhopf.solve_hopf_by_newton(
-        hopf, xhopf_0, prop, newton_params=newton_params
-    )
-    if info['status'] != 0:
-        raise RuntimeError(
-            f"Hopf solution at linearization point didn't converge with info: {info}"
-            f"; this happened for the parameter set {params}"
-        )
-    hopf.set_state(xhopf_n)
-
-    ## Load the functional/objective function and gradient
-    func = setup_functional(params, hopf)
-
-    redu_functional = libhopf.ReducedFunctional(
-        func,
-        libhopf.ReducedHopfModel(hopf, newton_params=newton_params)
-    )
-    return redu_functional, hopf, xhopf_n, p, parameterization
-
-def setup_norm(hopf_model: libhopf.HopfModel):
+def make_norm(hopf_model: libhopf.HopfModel):
     """
     Return a norm for scalar fields over a mesh
 
@@ -639,6 +642,7 @@ def setup_norm(hopf_model: libhopf.HopfModel):
 
     return norm
 
+
 def run_functional_sensitivity(
         params: exputils.BaseParameters,
         output_dir='out/sensitivity'
@@ -659,7 +663,7 @@ def run_functional_sensitivity(
         grad_params = parameterization.apply_vjp(p0, grad_props)
 
         ## Compute 2nd order sensitivity of the functional
-        norm = setup_norm(hopf)
+        norm = make_norm(hopf)
         redu_hess_context = libhopf.ReducedFunctionalHessianContext(
             rfunc, parameterization, norm=norm, step_size=params['H']
         )
@@ -750,7 +754,7 @@ if __name__ == '__main__':
     clargs = argparser.parse_args()
     CLSCALE = clargs.clscale
 
-    params = setup_exp_params(clargs.study_name)
+    params = make_exp_params(clargs.study_name)
 
     def run(param_dict):
         # TODO: Note the conversion of parameter dictionary to
