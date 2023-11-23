@@ -6,7 +6,7 @@ from femvf.models.transient import solid as tsmd, fluid as tfmd
 from femvf.models.dynamical import solid as dsmd, fluid as dfmd
 from femvf import load
 
-import libhopf
+from . import hopf
 
 def transient_fluidtype_from_sep_method(sep_method):
     if sep_method == 'fixed':
@@ -62,7 +62,7 @@ def load_hopf_model(
         **kwargs
     )
 
-    res_hopf = libhopf.HopfModel(res, dres, bifparam_key=bifparam_key)
+    res_hopf = hopf.HopfModel(res, dres, bifparam_key=bifparam_key)
     return res_hopf, res, dres
 
 def load_transient_model(

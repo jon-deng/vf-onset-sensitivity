@@ -13,7 +13,7 @@ import numpy as np
 # from femvf.meshutils import process_celllabel_to_dofs_from_forms
 import blockarray.linalg as bla
 
-from libsetup import set_default_props, load_hopf_model
+from libhopf.setup import set_default_props, load_hopf_model
 
 # slepc4py.init(sys.argv)
 
@@ -69,7 +69,7 @@ def test_assem_dres_dstate(hopf, state0, dstate):
         hopf.apply_dirichlet_bmat(dres_dstate)
         return dres_dstate
 
-    _test_taylor(state0, dstate, hopf_res, hopf_jac)
+    taylor_convergence(state0, dstate, hopf_res, hopf_jac)
 
 def test_assem_dres_dprops(hopf, props0, dprop):
     def hopf_res(x):
@@ -82,7 +82,7 @@ def test_assem_dres_dprops(hopf, props0, dprop):
         hopf.zero_rows_dirichlet_bmat(dres_dprops)
         return dres_dprops
 
-    _test_taylor(props0, dprop, hopf_res, hopf_jac)
+    taylor_convergence(props0, dprop, hopf_res, hopf_jac)
 
 
 if __name__ == '__main__':

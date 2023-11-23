@@ -60,7 +60,7 @@ import blockarray.linalg as bla
 from blockarray import blockvec as bvec, blockmat as bmat
 from blockarray.typing import (Labels)
 
-import libfunctionals as libfunc
+from . import functional
 
 # pylint: disable=invalid-name
 ListPair = Tuple[List[float], List[float]]
@@ -1340,7 +1340,7 @@ class ReducedFunctional:
 
     def __init__(
             self,
-            func: libfunc.GenericFunctional,
+            func: functional.GenericFunctional,
             reduced_hopf_model: ReducedHopfModel
         ):
         self.func = func
@@ -1438,7 +1438,7 @@ class ReducedFunctional:
         return norm_dprops * functools.reduce(operator.add, dgs)
 
 def solve_reduced_gradient(
-        functional: libfunc.GenericFunctional,
+        functional: functional.GenericFunctional,
         hopf: HopfModel,
         state: bvec.BlockVector,
         prop: bvec.BlockVector,

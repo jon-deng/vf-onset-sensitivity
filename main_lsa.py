@@ -12,8 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import dolfin as dfn
 
-import libsetup
-import libhopf
+from libhopf import setup, hopf
 
 dfn.set_log_level(50)
 
@@ -27,17 +26,17 @@ if __name__ == '__main__':
     # mesh_name = 'BC-dcov5.00e-02-cl1.00'
     mesh_name = f'M5_CB_GA3_CL{CLSCALE:.2f}'
     mesh_path = f'mesh/{mesh_name}.msh'
-    hopf, *_ = libsetup.load_hopf_model(
+    hopf_model, *_ = setup.load_hopf_model(
         mesh_path,
         sep_method='fixed',
         sep_vert_label='separation-inf',
         bifparam_key=BIFPARAM_KEY
     )
 
-    props0 = hopf.prop.copy()
-    libsetup.set_default_props(props0, hopf.res.solid.residual.mesh())
-    hopf.set_prop(props0)
-    res = hopf.res
+    props0 = hopf_model.prop.copy()
+    setup.set_default_props(props0, hopf_model.res.solid.residual.mesh())
+    hopf_model.set_prop(props0)
+    res = hopf_model.res
 
     if BIFPARAM_KEY == 'qsub':
         lmbdas = np.arange(0, 100, 10)
@@ -52,13 +51,13 @@ if __name__ == '__main__':
         return control
 
     xfps_info = [
-        libhopf.solve_fp(res, make_control(lmbda), props0, bifparam_key=BIFPARAM_KEY)
+        hopf.solve_fp(res, make_control(lmbda), props0, bifparam_key=BIFPARAM_KEY)
         for lmbda in lmbdas
     ]
     bad_fps = [xfp_info[1]['status'] != 0 for xfp_info in xfps_info]
 
     least_stable_modes = [
-        libhopf.solve_least_stable_mode(
+        hopf.solve_least_stable_mode(
             res,
             xfp_info[0],
             make_control(lmbda),

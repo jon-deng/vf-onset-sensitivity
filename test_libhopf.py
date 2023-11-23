@@ -1,5 +1,5 @@
 """
-Test the `libhopf` module
+Test the `libhopf.hopf` module
 """
 # import sys
 from os import path
@@ -11,9 +11,7 @@ import numpy as np
 from femvf.parameters import parameterization as pazn
 from blockarray import linalg as bla, blockvec as bv, subops
 
-import libhopf
-import libfunctionals as libfuncs
-import libsetup
+from libhopf import hopf, functional as libfunctional, setup
 from test_hopf import taylor_convergence
 
 from petsc4py import PETSc
@@ -28,19 +26,18 @@ def hopf_model():
     mesh_path = path.join('./mesh', mesh_name+'.msh')
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore')
-        hopf, *_ = libsetup.load_hopf_model(
+        hopf_model, *_ = setup.load_hopf_model(
             mesh_path,
             sep_method='smoothmin', sep_vert_label='separation'
         )
-    return hopf
+    return hopf_model
 
 @pytest.fixture()
 def prop(hopf_model):
     """Return Hopf model properties"""
-    hopf = hopf_model
 
-    prop = hopf.prop.copy()
-    libsetup.set_default_props(prop, hopf.res.solid.forms['mesh.mesh'])
+    prop = hopf_model.prop.copy()
+    setup.set_default_props(prop, hopf_model.res.solid.forms['mesh.mesh'])
     prop['kcontact'][:] = 1e0
     return prop
 
@@ -56,21 +53,19 @@ class TestHopfModel:
 
         The point is not necessarily a Hopf bifurcation.
         """
-        hopf = hopf_model
-
         # NOTE: Some `state` components can't be zero or Hopf jacobians may have zero rank
         (state_labels,
         mode_real_labels,
         mode_imag_labels,
         psub_labels,
-        omega_labels) = hopf.labels_hopf_components
+        omega_labels) = hopf_model.labels_hopf_components
 
         # Create a pure x-shearing motion to use for displacement/velocities
-        y = hopf.res.solid.forms['coeff.state.u1'].function_space().tabulate_dof_coordinates()[1::2, 1]
+        y = hopf_model.res.solid.forms['coeff.state.u1'].function_space().tabulate_dof_coordinates()[1::2, 1]
         ux = 1e-2*(y-y.min())/(y.max()-y.min())
         uy = 0
 
-        state = hopf.state.copy()
+        state = hopf_model.state.copy()
         state[:] = 0
 
         # TODO: Note that some subtle bugs may only appear for certain
@@ -89,7 +84,7 @@ class TestHopfModel:
         PSUB = 100*10
         state[psub_labels] = PSUB
         state[omega_labels] = 1.0
-        hopf.apply_dirichlet_bvec(state)
+        hopf_model.apply_dirichlet_bvec(state)
 
         return (state, prop)
 
@@ -103,16 +98,14 @@ class TestHopfModel:
     )
     def setup_dstate(self, hopf_model, request):
         """Return a state perturbation"""
-        hopf = hopf_model
-
-        dstate = hopf.state.copy()
+        dstate = hopf_model.state.copy()
         dstate[:] = 0
 
         label = request.param
         print(f"Testing along direction {label}")
         dstate[label] = 1e-4
 
-        hopf.apply_dirichlet_bvec(dstate)
+        hopf_model.apply_dirichlet_bvec(dstate)
         return dstate
 
     def test_assem_dres_dstate(
@@ -122,22 +115,20 @@ class TestHopfModel:
             setup_dstate
         ):
         """Test `HopfModel.assem_dres_dstate`"""
-
-        hopf = hopf_model
         state, prop = xhopf_prop
         dstate = setup_dstate
-        hopf.set_prop(prop)
+        hopf_model.set_prop(prop)
 
         def hopf_res(x):
-            hopf.set_state(x)
-            res = hopf.assem_res()
-            hopf.apply_dirichlet_bvec(res)
-            return hopf.assem_res()
+            hopf_model.set_state(x)
+            res = hopf_model.assem_res()
+            hopf_model.apply_dirichlet_bvec(res)
+            return hopf_model.assem_res()
 
         def hopf_jac(x, dx):
-            hopf.set_state(x)
-            dres_dstate = hopf.assem_dres_dstate()
-            hopf.apply_dirichlet_bmat(dres_dstate)
+            hopf_model.set_state(x)
+            dres_dstate = hopf_model.assem_dres_dstate()
+            hopf_model.apply_dirichlet_bmat(dres_dstate)
             return bla.mult_mat_vec(dres_dstate, dx)
 
         taylor_convergence(state, dstate, hopf_res, hopf_jac)
@@ -153,24 +144,22 @@ class TestHopfModel:
 
         This should be true as long as the tranpose is computed correctly.
         """
-
-        hopf = hopf_model
         state, prop = xhopf_prop
         dstate = setup_dstate
-        hopf.set_state(state)
-        hopf.set_prop(prop)
+        hopf_model.set_state(state)
+        hopf_model.set_prop(prop)
 
-        dres_dstate = hopf.assem_dres_dstate()
-        hopf.apply_dirichlet_bmat(dres_dstate)
+        dres_dstate = hopf_model.assem_dres_dstate()
+        hopf_model.apply_dirichlet_bmat(dres_dstate)
 
         dres_adj = state.copy()
         dres_adj[:] = 0
         dres_adj['psub'] = 1
         # adj_res[:] = 1
-        hopf.apply_dirichlet_bvec(dres_adj)
+        hopf_model.apply_dirichlet_bvec(dres_adj)
 
-        dres_dstate_adj = hopf.assem_dres_dstate().transpose()
-        hopf.apply_dirichlet_bmat(dres_dstate_adj)
+        dres_dstate_adj = hopf_model.assem_dres_dstate().transpose()
+        hopf_model.apply_dirichlet_bmat(dres_dstate_adj)
 
         self._test_operator_adjoint(
             dres_dstate, dres_dstate_adj,
@@ -184,16 +173,14 @@ class TestHopfModel:
             setup_dstate
         ):
         """Test `HopfModel.assem_dres_dstate`"""
-
-        hopf = hopf_model
         state, prop = xhopf_prop
         dstate = setup_dstate
-        hopf.set_state(state)
-        hopf.set_prop(prop)
+        hopf_model.set_state(state)
+        hopf_model.set_prop(prop)
 
-        dres_dstate = hopf.assem_dres_dstate()
-        hopf.apply_dirichlet_bmat(dres_dstate)
-        hopf.apply_dirichlet_bvec(dstate)
+        dres_dstate = hopf_model.assem_dres_dstate()
+        hopf_model.apply_dirichlet_bmat(dres_dstate)
+        hopf_model.apply_dirichlet_bvec(dstate)
         dres = bla.mult_mat_vec(dres_dstate, dstate)
 
         dstate_test = dres.copy()
@@ -216,9 +203,7 @@ class TestHopfModel:
     )
     def dprop(self, hopf_model, request):
         """Return a properties perturbation"""
-        hopf = hopf_model
-
-        dprop = hopf.prop.copy()
+        dprop = hopf_model.prop.copy()
         dprop[:] = 0.0
         label, value = request.param
         dprop[label] = value
@@ -232,21 +217,19 @@ class TestHopfModel:
             dprop
         ):
         """Test `HopfModel.assem_dres_dprop`"""
-
-        hopf = hopf_model
         state, prop = xhopf_prop
-        hopf.set_state(state)
+        hopf_model.set_state(state)
 
         def hopf_res(x):
-            hopf.set_prop(x)
-            res = hopf.assem_res()
-            hopf.apply_dirichlet_bvec(res)
+            hopf_model.set_prop(x)
+            res = hopf_model.assem_res()
+            hopf_model.apply_dirichlet_bvec(res)
             return res
 
         def hopf_jac(x, dx):
-            hopf.set_prop(x)
-            dres_dprop = hopf.assem_dres_dprop()
-            hopf.zero_rows_dirichlet_bmat(dres_dprop)
+            hopf_model.set_prop(x)
+            dres_dprop = hopf_model.assem_dres_dprop()
+            hopf_model.zero_rows_dirichlet_bmat(dres_dprop)
             return bla.mult_mat_vec(dres_dprop, dx)
         taylor_convergence(prop, dprop, hopf_res, hopf_jac)
 
@@ -261,17 +244,16 @@ class TestHopfModel:
 
         This should be true as long as the tranpose is computed correctly.
         """
-        hopf = hopf_model
         state, prop = xhopf_prop
-        hopf.set_state(state)
-        hopf.set_prop(prop)
+        hopf_model.set_state(state)
+        hopf_model.set_prop(prop)
 
-        dres_dprop = hopf.assem_dres_dprop()
+        dres_dprop = hopf_model.assem_dres_dprop()
 
         dres_adj = state.copy()
         dres_adj[:] = 1
         # dres_adj['psub'] = 1
-        hopf.apply_dirichlet_bvec(dres_adj)
+        hopf_model.apply_dirichlet_bvec(dres_adj)
 
         dres_dprop_adj = dres_dprop.transpose()
 
@@ -311,14 +293,13 @@ class TestHopfUtilities:
 
     def test_bound_hopf_bifurcations(self, hopf_model, prop, bound_pairs):
         """Test `bound_hopf_bifurcations`"""
-        hopf = hopf_model
-        hopf.set_prop(prop)
+        hopf_model.set_prop(prop)
 
-        dyn_model = hopf.res
-        dyn_prop = hopf.res.prop
-        dyn_control = hopf.res.control
+        dyn_model = hopf_model.res
+        dyn_prop = hopf_model.res.prop
+        dyn_control = hopf_model.res.control
 
-        bounds, omegas = libhopf.bound_ponset(
+        bounds, omegas = hopf.bound_ponset(
             dyn_model, dyn_control, dyn_prop, bound_pairs
         )
         print(f"Hopf bifurcations between {bounds[0]} and {bounds[1]}")
@@ -326,37 +307,33 @@ class TestHopfUtilities:
 
     def test_gen_hopf_initial_guess_from_bounds(self, hopf_model, prop, bound_pairs):
         """Test `gen_hopf_initial_guess_from_bounds`"""
-        hopf = hopf_model
-        hopf.set_prop(prop)
+        hopf_model.set_prop(prop)
 
-        dyn_model = hopf.res
+        dyn_model = hopf_model.res
         dyn_prop = dyn_model.prop
 
-        xhopf_0 = libhopf.gen_xhopf_0_from_bounds(dyn_model, dyn_prop, hopf.E_MODE, bound_pairs)
+        xhopf_0 = hopf.gen_xhopf_0_from_bounds(dyn_model, dyn_prop, hopf_model.E_MODE, bound_pairs)
 
-        xhopf_n, info = libhopf.solve_hopf_by_newton(hopf, xhopf_0, prop)
+        xhopf_n, info = hopf.solve_hopf_by_newton(hopf_model, xhopf_0, prop)
         print(f"Solved Hopf system from automatic initial guess with info {info}")
 
     @pytest.fixture()
     def setup_xhopf_0(self, hopf_model, prop, bound_pairs):
         """Return an initial guess for the hopf state"""
-        hopf = hopf_model
-        hopf.set_prop(prop)
+        hopf_model.set_prop(prop)
 
-        dyn_model = hopf.res
+        dyn_model = hopf_model.res
         dyn_prop = dyn_model.prop
 
-        xhopf_0 = libhopf.gen_xhopf_0_from_bounds(
-            dyn_model, dyn_prop, hopf.E_MODE, bound_pairs
+        xhopf_0 = hopf.gen_xhopf_0_from_bounds(
+            dyn_model, dyn_prop, hopf_model.E_MODE, bound_pairs
         )
         return xhopf_0
 
     def test_solve_hopf_newton(self, hopf_model, prop, setup_xhopf_0):
         """Test `solve_hopf_newton`"""
         xhopf_0 = setup_xhopf_0
-        hopf = hopf_model
-
-        xhopf, info = libhopf.solve_hopf_by_newton(hopf, xhopf_0, prop)
+        xhopf, info = hopf.solve_hopf_by_newton(hopf_model, xhopf_0, prop)
 
 @pytest.fixture(
     params=[
@@ -381,7 +358,7 @@ def params(hopf_model, parameterization):
     p0['nu'] = 0.45
     p0['eta'] = 5
 
-    libsetup.set_default_props(p0, hopf_model.res.solid.forms['mesh.mesh'])
+    setup.set_default_props(p0, hopf_model.res.solid.forms['mesh.mesh'])
     return p0
 
 @pytest.fixture(
@@ -400,7 +377,7 @@ def dparams(params, request):
         dparams[key] = val
     return dparams
 
-def solve_linearization(hopf, prop):
+def solve_linearization(hopf_model, prop):
     """
     Return a linearization point corresponding to a Hopf bifurcation
 
@@ -411,11 +388,11 @@ def solve_linearization(hopf, prop):
         to `prop`
     `prop` - the Hopf model properties
     """
-    hopf.set_prop(prop)
+    hopf_model.set_prop(prop)
     psubs = np.arange(1, 1000, 100)*10
-    xhopf_0 = hopf.state.copy()
-    xhopf_0[:] = libhopf.gen_xhopf_0(hopf.res, prop, hopf.E_MODE, psubs)
-    xhopf, info = libhopf.solve_hopf_by_newton(hopf, xhopf_0, prop)
+    xhopf_0 = hopf_model.state.copy()
+    xhopf_0[:] = hopf.gen_xhopf_0(hopf_model.res, prop, hopf_model.E_MODE, psubs)
+    xhopf, info = hopf.solve_hopf_by_newton(hopf_model, xhopf_0, prop)
     return xhopf, info
 
 @pytest.fixture()
@@ -423,8 +400,7 @@ def xhopf_prop(hopf_model, prop):
     """
     Return a linearization point corresponding to a Hopf bifurcation
     """
-    hopf = hopf_model
-    xhopf, info = solve_linearization(hopf, prop)
+    xhopf, info = solve_linearization(hopf_model, prop)
     return xhopf, prop
 
 @pytest.fixture()
@@ -433,8 +409,7 @@ def xhopf_params(hopf_model, params):
     Return a linearization point corresponding to a Hopf bifurcation
     """
     p0, parameterization = params
-    hopf = hopf_model
-    xhopf, info = solve_linearization(hopf, parameterization.apply(p0))
+    xhopf, info = solve_linearization(hopf_model, parameterization.apply(p0))
     return xhopf, p0, parameterization
 
 @pytest.fixture(
@@ -459,16 +434,15 @@ def dprop(prop, dprop_dir):
 
 @pytest.fixture(
     params=[
-        libfuncs.StrainEnergyFunctional,
-        libfuncs.OnsetPressureFunctional,
-        libfuncs.AbsOnsetFrequencyFunctional
+        libfunctional.StrainEnergyFunctional,
+        libfunctional.OnsetPressureFunctional,
+        libfunctional.AbsOnsetFrequencyFunctional
     ]
 )
 def functional(hopf_model, request):
     """Return a Hopf model functional"""
-    hopf = hopf_model
     Functional = request.param
-    return Functional(hopf)
+    return Functional(hopf_model)
 
 class TestFunctionalGradient:
     """
@@ -484,33 +458,31 @@ class TestFunctionalGradient:
             dprop
         ):
         """Test a combined operator of `HopfModel`"""
-
-        hopf = hopf_model
         xhopf, prop = xhopf_prop
 
         def res(prop):
-            x, info = libhopf.solve_hopf_by_newton(hopf, xhopf, prop)
+            x, info = hopf.solve_hopf_by_newton(hopf_model, xhopf, prop)
             # print(info)
             assert info['status'] == 0
             return x
 
         def jac(prop, dprop):
             # Set the linearization point
-            x, info = libhopf.solve_hopf_by_newton(hopf, xhopf, prop)
+            x, info = hopf.solve_hopf_by_newton(hopf_model, xhopf, prop)
             assert info['status'] == 0
             # print(info)
-            hopf.set_state(x)
+            hopf_model.set_state(x)
 
             # Compute the jacobian action
-            dres_dprop = hopf.assem_dres_dprop()
-            hopf.zero_rows_dirichlet_bmat(dres_dprop)
+            dres_dprop = hopf_model.assem_dres_dprop()
+            hopf_model.zero_rows_dirichlet_bmat(dres_dprop)
             dres = bla.mult_mat_vec(dres_dprop, dprop)
             _dres = dres.to_mono_petsc()
 
-            dstate = hopf.state.copy()
+            dstate = hopf_model.state.copy()
             _dstate = dstate.to_mono_petsc()
-            dres_dstate = hopf.assem_dres_dstate()
-            hopf.apply_dirichlet_bmat(dres_dstate)
+            dres_dstate = hopf_model.assem_dres_dstate()
+            hopf_model.apply_dirichlet_bmat(dres_dstate)
             _dres_dstate = dres_dstate.to_mono_petsc()
             subops.solve_petsc_lu(_dres_dstate, -1*_dres, out=_dstate)
             dstate.set_mono(_dstate)
@@ -538,14 +510,13 @@ class TestFunctionalGradient:
             The Hopf model
         xhopf_prop: (xhopf, prop, dprop)
         """
-        hopf = hopf_model
         func = functional
         xhopf, prop = xhopf_prop
         # dprop = dprop
 
         def res(prop):
-            hopf.set_prop(prop)
-            x, info = libhopf.solve_hopf_by_newton(hopf, xhopf, prop)
+            hopf_model.set_prop(prop)
+            x, info = hopf.solve_hopf_by_newton(hopf_model, xhopf, prop)
             assert info['status'] == 0
 
             func.set_state(x)
@@ -553,15 +524,15 @@ class TestFunctionalGradient:
             return np.array(func.assem_g())
 
         def jac(prop, dprop):
-            hopf.set_prop(prop)
-            x, info = libhopf.solve_hopf_by_newton(hopf, xhopf, prop)
+            hopf_model.set_prop(prop)
+            x, info = hopf.solve_hopf_by_newton(hopf_model, xhopf, prop)
 
-            hopf.set_state(x)
+            hopf_model.set_state(x)
             func.set_state(x)
             func.set_prop(prop)
 
             return bla.dot(
-                libhopf.solve_reduced_gradient(func, hopf, xhopf, prop),
+                hopf.solve_reduced_gradient(func, hopf_model, xhopf, prop),
                 dprop
             )
 
@@ -572,7 +543,7 @@ class TestFunctionalGradient:
 
 class TestReducedFunctional:
     """
-    Test `libhopf.ReducedFunctional`
+    Test `hopf.ReducedFunctional`
     """
 
     @pytest.fixture()
@@ -580,18 +551,15 @@ class TestReducedFunctional:
         """
         Return a reduced Hopf model
         """
-        hopf = hopf_model
-        rhopf = libhopf.ReducedHopfModel(
-            hopf
+        rhopf = hopf.ReducedHopfModel(
+            hopf_model
         )
         return rhopf
 
     @pytest.fixture()
     def rfunctional(self, functional, rhopf):
         """Return a `ReducedFunctional` instance"""
-        func = functional
-
-        return libhopf.ReducedFunctional(func, rhopf)
+        return hopf.ReducedFunctional(functional, rhopf)
 
     @pytest.fixture()
     def props(
@@ -648,7 +616,7 @@ class TestReducedFunctional:
         """
         Test `ReducedFunctional.set_prop` solves for a Hopf bifurcation
         """
-        hopf = rfunctional.rhopf_model.hopf
+        hopf_model = rfunctional.rhopf_model.hopf
         for prop in props:
             # For each property in a list of properties to test, set the properties
             # of the ReducedFunctional; the ReducedFunctional should handle solving the
@@ -658,9 +626,9 @@ class TestReducedFunctional:
 
             # Next, check that the Hopf system was correctly solved in
             # ReducedGradient by checking the Hopf residual
-            hopf.set_state(rfunctional.rhopf_model.assem_state())
-            hopf.set_prop(rfunctional.rhopf_model.prop)
-            print(bla.norm(hopf.assem_res()))
+            hopf_model.set_state(rfunctional.rhopf_model.assem_state())
+            hopf_model.set_prop(rfunctional.rhopf_model.prop)
+            print(bla.norm(hopf_model.assem_res()))
 
     def test_assem_d2g_dprop2(
             self, rfunctional, xhopf_prop, dprop, norm
@@ -726,7 +694,7 @@ class TestOptGradManager:
         redu_grad = rfunctional
 
         with h5py.File("out/_test_make_opt_grad.h5", mode='w') as f:
-            grad_manager = libhopf.OptGradManager(redu_grad, f, parameterization)
+            grad_manager = hopf.OptGradManager(redu_grad, f, parameterization)
 
             for param in params:
                 print(grad_manager.grad(param.to_mono_ndarray()))
@@ -744,9 +712,8 @@ class TestReducedFunctionalHessianContext:
         """
         Return a reduced Hopf model
         """
-        hopf = hopf_model
-        rhopf = libhopf.ReducedHopfModel(
-            hopf
+        rhopf = hopf.ReducedHopfModel(
+            hopf_model
         )
         return rhopf
 
@@ -755,14 +722,14 @@ class TestReducedFunctionalHessianContext:
         """Return a `ReducedFunctional` instance"""
         func = functional
 
-        return libhopf.ReducedFunctional(func, rhopf)
+        return hopf.ReducedFunctional(func, rhopf)
 
     @pytest.fixture()
     def context(self, rfunctional, parameterization):
         """
         Return a PETSc Python mat context
         """
-        return libhopf.ReducedFunctionalHessianContext(
+        return hopf.ReducedFunctionalHessianContext(
             rfunctional, parameterization
         )
 

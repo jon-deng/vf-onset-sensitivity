@@ -10,8 +10,8 @@ import pytest
 import numpy as np
 from blockarray import linalg as bla
 
-import libfunctionals as libfuncs
-from libsetup import load_hopf_model, set_default_props
+from libhopf import functional as libfuncs
+from libhopf.setup import load_hopf_model, set_default_props
 from test_hopf import taylor_convergence
 
 

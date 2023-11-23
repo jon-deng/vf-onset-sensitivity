@@ -13,9 +13,9 @@ import ufl
 
 from femvf.models.assemblyutils import CachedFormAssembler
 from femvf.models.equations import solid
-from blockarray import blockvec  as bvec
+from blockarray import blockvec as bvec
 
-import libsignal
+from . import signal
 
 # pylint: disable=abstract-method
 
@@ -367,7 +367,7 @@ class GlottalWidthErrorFunctional(BaseFunctional):
 
         assert weights.size == gw_ref.size
 
-        eval_gw = libsignal.make_glottal_width(model, gw_ref.size)
+        eval_gw = signal.make_glottal_width(model, gw_ref.size)
 
         def _err(state, prop):
             gw_hopf = eval_gw(state, prop)
