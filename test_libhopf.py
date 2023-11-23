@@ -280,6 +280,8 @@ class TestHopfModel:
             rtol=1e-9, atol=1e-9
         )
 
+# NOTE: The parameters don't result in a hopf bifurcation being found for this
+# one
 class TestHopfUtilities:
     """
     Test utility functions for the Hopf bifurcation system
@@ -541,25 +543,28 @@ class TestFunctionalGradient:
             norm=lambda x: x
         )
 
+
+@pytest.fixture()
+def rhopf(hopf_model):
+    """
+    Return a reduced Hopf model
+    """
+    rhopf = hopf.ReducedHopfModel(
+        hopf_model
+    )
+    return rhopf
+
+@pytest.fixture()
+def rfunctional(functional, rhopf):
+    """Return a `ReducedFunctional` instance"""
+    func = functional
+
+    return hopf.ReducedFunctional(func, rhopf)
+
 class TestReducedFunctional:
     """
     Test `hopf.ReducedFunctional`
     """
-
-    @pytest.fixture()
-    def rhopf(self, hopf_model):
-        """
-        Return a reduced Hopf model
-        """
-        rhopf = hopf.ReducedHopfModel(
-            hopf_model
-        )
-        return rhopf
-
-    @pytest.fixture()
-    def rfunctional(self, functional, rhopf):
-        """Return a `ReducedFunctional` instance"""
-        return hopf.ReducedFunctional(functional, rhopf)
 
     @pytest.fixture()
     def props(
@@ -706,23 +711,6 @@ class TestOptGradManager:
                     print(f"{key}: {f[key][:]}")
 
 class TestReducedFunctionalHessianContext:
-
-    @pytest.fixture()
-    def rhopf(self, hopf_model):
-        """
-        Return a reduced Hopf model
-        """
-        rhopf = hopf.ReducedHopfModel(
-            hopf_model
-        )
-        return rhopf
-
-    @pytest.fixture()
-    def rfunctional(self, functional, rhopf):
-        """Return a `ReducedFunctional` instance"""
-        func = functional
-
-        return hopf.ReducedFunctional(func, rhopf)
 
     @pytest.fixture()
     def context(self, rfunctional, parameterization):
