@@ -216,7 +216,7 @@ def setup_parameterization(
         )
     elif params['ParamOption'] == 'TractionShape':
         parameterization = pzn.TractionShape(
-            hopf.res
+            hopf.res, const_vals=const_vals
         )
     else:
         raise ValueError(f"Unknown 'ParamOption': {params['ParamOption']}")
@@ -244,6 +244,9 @@ def setup_reduced_functional(params: exputils.BaseParameters):
     for key, subvec in _props.items():
         if key in p:
             p[key][:] = subvec
+
+    if 'tmesh' in p:
+        p['tmesh'][:] = 0
 
     # Apply the scaling that's used for `ConstantSubset`
     if isinstance(parameterization, pzn.ConstantSubset):
@@ -633,28 +636,37 @@ def make_exp_params(study_name: str):
 
 def make_norm(hopf_model: libhopf.HopfModel):
     """
-    Return a norm for scalar fields over a mesh
+    Return a norm for the model properties vector
 
-    The norm is used to ensure that a step size for finite differences (FD) is
-    reasonable for different meshes. The norm should give a magnitude that is
-    independent of mesh density.
+    The norm is used to ensure that a step size in the properties for
+    finite differences (FD) is independent of discretization. This is so that
+    a FD step size roughly behaves the same between coarse/fine discretizations.
 
     Parameters
     ----------
-    hopf:
+    hopf_model:
         The Hopf system model
     """
 
     scale = hopf_model.prop.copy()
     scale[:] = 1
     scale['emod'][:] = 1e4
+    scale['umesh'][:] = 1e-3
 
-    # Mass matrix for the space for elastic modulus
+    # To compute discretization independent norms, use mass matrices to define
+    # norms for properties that vary with the mesh
+
+    # Mass matrix for the space of elastic moduli:
     form = hopf_model.res.solid.residual.form
     dx = hopf_model.res.solid.residual.measure('dx')
     u = dfn.TrialFunction(form['coeff.prop.emod'].function_space())
     v = dfn.TestFunction(form['coeff.prop.emod'].function_space())
     M_EMOD = dfn.assemble(dfn.inner(u, v)*dx, tensor=dfn.PETScMatrix()).mat()
+
+    # Mass matrix for the space of mesh deformations:
+    u = dfn.TrialFunction(form['coeff.prop.umesh'].function_space())
+    v = dfn.TestFunction(form['coeff.prop.umesh'].function_space())
+    M_UMESH = dfn.assemble(dfn.inner(u, v)*dx, tensor=dfn.PETScMatrix()).mat()
 
     def norm(x):
         """
@@ -666,6 +678,7 @@ def make_norm(hopf_model: libhopf.HopfModel):
         xs = x/scale
         dxs = xs.copy()
         dxs['emod'] = M_EMOD * xs.sub['emod']
+        dxs['umesh'] = M_UMESH * xs.sub['umesh']
         return bla.dot(x, dxs) ** 0.5
 
     return norm
@@ -673,14 +686,15 @@ def make_norm(hopf_model: libhopf.HopfModel):
 
 def run_functional_sensitivity(
         params: exputils.BaseParameters,
-        output_dir='out/sensitivity'
+        output_dir='out/sensitivity',
+        overwrite=False
     ):
     """
     Run an experiment where the sensitivity of a functional is saved
     """
     rfunc, hopf, xhopf_n, p0, parameterization = setup_reduced_functional(params)
     fpath = path.join(output_dir, params.to_str()+'.h5')
-    if not path.isfile(fpath):
+    if not path.isfile(fpath) or overwrite:
         ## Compute 1st order sensitivity of the functional
         rfunc.set_prop(parameterization.apply(p0))
 
@@ -777,7 +791,8 @@ if __name__ == '__main__':
     argparser = argparse.ArgumentParser()
     argparser.add_argument('--study-name', type=str, default='none')
     argparser.add_argument('--num-proc', type=int, default=1)
-    argparser.add_argument('--clscale', type=float, default=1)
+    argparser.add_argument('--clscale', type=float, default=1.0)
+    argparser.add_argument('--overwrite', action='store_true')
     argparser.add_argument('--output-dir', type=str, default='out')
     clargs = argparser.parse_args()
     CLSCALE = clargs.clscale
@@ -790,7 +805,7 @@ if __name__ == '__main__':
         # in the future if you change the study types.
         param = ExpParamBasic(param_dict)
         return run_functional_sensitivity(
-            param, output_dir=clargs.output_dir
+            param, output_dir=clargs.output_dir, overwrite=clargs.overwrite
         )
 
     if clargs.num_proc == 1:
