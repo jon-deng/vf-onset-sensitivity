@@ -96,7 +96,7 @@ class TestHopfModel:
             'psub', 'omega'
         ]
     )
-    def setup_dstate(self, hopf_model, request):
+    def dstate(self, hopf_model, request):
         """Return a state perturbation"""
         dstate = hopf_model.state.copy()
         dstate[:] = 0
@@ -112,11 +112,10 @@ class TestHopfModel:
             self,
             hopf_model,
             xhopf_prop,
-            setup_dstate
+            dstate
         ):
         """Test `HopfModel.assem_dres_dstate`"""
         state, prop = xhopf_prop
-        dstate = setup_dstate
         hopf_model.set_prop(prop)
 
         def hopf_res(x):
@@ -137,7 +136,7 @@ class TestHopfModel:
             self,
             hopf_model,
             xhopf_prop,
-            setup_dstate
+            dstate
         ):
         """
         Test the adjoint of `HopfModel.assem_dres_dstate`
@@ -145,7 +144,6 @@ class TestHopfModel:
         This should be true as long as the tranpose is computed correctly.
         """
         state, prop = xhopf_prop
-        dstate = setup_dstate
         hopf_model.set_state(state)
         hopf_model.set_prop(prop)
 
@@ -170,11 +168,10 @@ class TestHopfModel:
             self,
             hopf_model,
             xhopf_prop,
-            setup_dstate
+            dstate
         ):
         """Test `HopfModel.assem_dres_dstate`"""
         state, prop = xhopf_prop
-        dstate = setup_dstate
         hopf_model.set_state(state)
         hopf_model.set_prop(prop)
 
@@ -198,7 +195,7 @@ class TestHopfModel:
             ('emod', 1e2),
             ('rho', 1e-2),
             ('rho_air', 1e-4),
-            ('umesh', 1.0e-4)
+            ('umesh', 1.0e-3)
         ]
     )
     def dprop(self, hopf_model, request):
@@ -231,6 +228,7 @@ class TestHopfModel:
             dres_dprop = hopf_model.assem_dres_dprop()
             hopf_model.zero_rows_dirichlet_bmat(dres_dprop)
             return bla.mult_mat_vec(dres_dprop, dx)
+
         taylor_convergence(prop, dprop, hopf_res, hopf_jac)
 
     def test_assem_dres_dprop_adjoint(
