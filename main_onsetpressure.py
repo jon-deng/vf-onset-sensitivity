@@ -191,7 +191,7 @@ def setup_parameterization(
     """
     const_vals = {key: np.array(subvec) for key, subvec in prop.sub_items()}
     scale = {
-        'emod': 1e4
+        # 'emod': 1e4
     }
 
     parameterization = None
@@ -206,17 +206,19 @@ def setup_parameterization(
     elif params['ParamOption'] == 'Shape':
         const_vals.pop('umesh')
 
-        K, NU = 1e3, 0.4
         parameterization = pzn.ConstantSubset(
             hopf.res,
             const_vals=const_vals,
-            scale=scale,
-            lame_lambda=(3*K*NU)/(1+NU),
-            lame_mu=(3*K*(1-2*NU))/(2*(1+NU))
+            scale=scale
         )
     elif params['ParamOption'] == 'TractionShape':
+        # const_vals.pop('umesh')
+
+        K, NU = 1e1, 0.3
         parameterization = pzn.TractionShape(
-            hopf.res, const_vals=const_vals
+            hopf.res, const_vals=const_vals,
+            lame_lambda=(3*K*NU)/(1+NU),
+            lame_mu=(3*K*(1-2*NU))/(2*(1+NU))
         )
     else:
         raise ValueError(f"Unknown 'ParamOption': {params['ParamOption']}")
@@ -340,8 +342,6 @@ def make_exp_params(study_name: str):
         ]
         return params
     elif study_name == 'test_traction_shape':
-        # TODO: The flow rate driven model seems to have a lot of numerical error
-        # and fails when using PETSc's LU solver
         params = [
             DEFAULT_PARAMS.substitute({
                 'Functional': 'OnsetPressure',
@@ -351,6 +351,20 @@ def make_exp_params(study_name: str):
                 'BifParam': 'psub',
                 'ParamOption': 'TractionShape'
             })
+        ]
+        return params
+    elif study_name == 'test_shape':
+        params = [
+            DEFAULT_PARAMS.substitute({
+                'Functional': 'OnsetPressure',
+                'MeshName': f'M5_CB_GA3_CL{0.5:.2f}',
+                'LayerType': 'discrete',
+                'Ecov': 6e4, 'Ebod': 6e4,
+                'BifParam': 'psub',
+                'ParamOption': 'Shape',
+                'H': h
+            })
+            for h in (1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9, 1e-10)
         ]
         return params
     elif study_name == 'main_sensitivity':
@@ -651,7 +665,7 @@ def make_norm(hopf_model: libhopf.HopfModel):
     scale = hopf_model.prop.copy()
     scale[:] = 1
     scale['emod'][:] = 1e4
-    scale['umesh'][:] = 1e-3
+    scale['umesh'][:] = 1e-4
 
     # To compute discretization independent norms, use mass matrices to define
     # norms for properties that vary with the mesh
@@ -716,7 +730,7 @@ def run_functional_sensitivity(
 
         eps = SLEPc.EPS().create()
         eps.setOperators(mat)
-        eps.setDimensions(5, 20)
+        eps.setDimensions(5, 25)
         eps.setProblemType(SLEPc.EPS.ProblemType.HEP)
 
         if params['EigTarget'] == 'LARGEST_MAGNITUDE':
