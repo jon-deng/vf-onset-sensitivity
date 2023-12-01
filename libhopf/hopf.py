@@ -53,7 +53,7 @@ import h5py
 
 import nonlineq as nleq
 from femvf.models.dynamical import base as dynbase, coupled as dyncoup
-from femvf.parameters import parameterization as paramzn
+from femvf.parameters import transform as paramzn
 import blockarray.h5utils as h5utils
 import blockarray.subops as subops
 import blockarray.linalg as bla
@@ -1498,7 +1498,7 @@ class OptGradManager:
             self,
             redu_grad: ReducedFunctional,
             f: h5py.Group,
-            param: paramzn.BaseParameterization
+            param: paramzn.Transform
         ):
         self.redu_grad = redu_grad
         self.f = f
@@ -1629,7 +1629,7 @@ class ReducedFunctionalHessianContext:
     def __init__(
             self,
             reduced_functional: ReducedFunctional,
-            parameterization: paramzn.BaseParameterization,
+            parameterization: paramzn.Transform,
             norm: Optional[Callable[[bvec.BlockVector], float]]=None,
             step_size: Optional[float]=1.0
         ):

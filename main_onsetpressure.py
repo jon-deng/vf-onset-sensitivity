@@ -25,7 +25,7 @@ from blockarray import blockvec as bv, linalg as bla, h5utils
 from femvf.models.dynamical import (
     base as dbase
 )
-from femvf.parameters import parameterization as pzn
+from femvf.parameters import transform as pzn
 from femvf.meshutils import process_celllabel_to_dofs_from_residual
 
 from libhopf import hopf as libhopf, setup as libsetup, functional as libfuncs
@@ -190,40 +190,53 @@ def setup_parameterization(
         The Hopf model properties vector
     """
     const_vals = {key: np.array(subvec) for key, subvec in prop.sub_items()}
-    scale = {
-        # 'emod': 1e4
+    parameter_scales = {
+        'emod': 1e4
     }
 
-    parameterization = None
+    transform = None
     if params['ParamOption'] == 'Stiffness':
         const_vals.pop('emod')
 
-        parameterization = pzn.ConstantSubset(
-            hopf.res,
-            const_vals=const_vals,
-            scale=scale
+        scale = pzn.Scale(
+            hopf.res.prop, scale=parameter_scales
         )
+        const_subset = pzn.ConstantSubset(
+             hopf.res.prop, const_vals=const_vals
+        )
+        transform = scale * const_subset
     elif params['ParamOption'] == 'Shape':
         const_vals.pop('umesh')
 
-        parameterization = pzn.ConstantSubset(
-            hopf.res,
-            const_vals=const_vals,
-            scale=scale
+        scale = pzn.Scale(
+            hopf.res.prop, scale=parameter_scales
         )
+        const_subset = pzn.ConstantSubset(
+             hopf.res.prop, const_vals=const_vals
+        )
+        transform = scale * const_subset
     elif params['ParamOption'] == 'TractionShape':
-        # const_vals.pop('umesh')
+        const_vals.pop('umesh')
 
         K, NU = 1e1, 0.3
-        parameterization = pzn.TractionShape(
-            hopf.res, const_vals=const_vals,
+        traction_shape = pzn.TractionShape(
+            hopf.res,
             lame_lambda=(3*K*NU)/(1+NU),
             lame_mu=(3*K*(1-2*NU))/(2*(1+NU))
         )
+        const_subset = pzn.ConstantSubset(
+            traction_shape.y,
+            const_vals=const_vals
+        )
+        scale = pzn.Scale(
+            const_subset.y, scale=parameter_scales
+        )
+        transform = traction_shape * scale * const_subset
+        # transform = traction_shape * scale
     else:
         raise ValueError(f"Unknown 'ParamOption': {params['ParamOption']}")
 
-    return parameterization, scale
+    return transform, parameter_scales
 
 def setup_reduced_functional(params: exputils.BaseParameters):
     """
@@ -242,21 +255,30 @@ def setup_reduced_functional(params: exputils.BaseParameters):
     ## Setup the linearization/initial guess parameters
     parameterization, scale = setup_parameterization(params, hopf, _props)
 
-    p = parameterization.x.copy()
+    param = parameterization.x.copy()
     for key, subvec in _props.items():
-        if key in p:
-            p[key][:] = subvec
+        if key in param:
+            param[key][:] = subvec
 
-    if 'tmesh' in p:
-        p['tmesh'][:] = 0
+    if 'tmesh' in param:
+        param['tmesh'][:] = 0
 
-    # Apply the scaling that's used for `ConstantSubset`
-    if isinstance(parameterization, pzn.ConstantSubset):
+    # Apply the scaling that's used for `Scale`
+    if isinstance(parameterization, pzn.TransformComposition):
+        has_scale_transform = (
+            any(isinstance(transform, pzn.Scale) for transform in parameterization._transforms)
+        )
+    else:
+        has_scale_transform = isinstance(parameterization, pzn.Scale)
+
+    param.print_summary()
+    if has_scale_transform:
         for key, val in scale.items():
-            if key in p:
-                p[key][:] = p.sub[key]/val
+            if key in param:
+                param[key][:] = param.sub[key]/val
+    param.print_summary()
 
-    prop = parameterization.apply(p)
+    prop = parameterization.apply(param)
     assert np.isclose(bv.norm(prop-_props), 0)
 
     ## Solve for the Hopf bifurcation
@@ -299,7 +321,7 @@ def setup_reduced_functional(params: exputils.BaseParameters):
         func,
         libhopf.ReducedHopfModel(hopf, newton_params=newton_params)
     )
-    return redu_functional, hopf, xhopf_n, p, parameterization
+    return redu_functional, hopf, xhopf_n, param, parameterization
 
 
 def make_exp_params(study_name: str):
