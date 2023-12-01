@@ -224,6 +224,8 @@ def setup_parameterization(
             lame_lambda=(3*K*NU)/(1+NU),
             lame_mu=(3*K*(1-2*NU))/(2*(1+NU))
         )
+        extract = pzn.ExtractSubset(traction_shape.x, keys_to_extract=('tmesh',))
+
         const_subset = pzn.ConstantSubset(
             traction_shape.y,
             const_vals=const_vals
@@ -231,7 +233,7 @@ def setup_parameterization(
         scale = pzn.Scale(
             const_subset.y, scale=parameter_scales
         )
-        transform = traction_shape * scale * const_subset
+        transform = extract * traction_shape * scale * const_subset
         # transform = traction_shape * scale
     else:
         raise ValueError(f"Unknown 'ParamOption': {params['ParamOption']}")
@@ -271,12 +273,10 @@ def setup_reduced_functional(params: exputils.BaseParameters):
     else:
         has_scale_transform = isinstance(parameterization, pzn.Scale)
 
-    param.print_summary()
     if has_scale_transform:
         for key, val in scale.items():
             if key in param:
                 param[key][:] = param.sub[key]/val
-    param.print_summary()
 
     prop = parameterization.apply(param)
     assert np.isclose(bv.norm(prop-_props), 0)
