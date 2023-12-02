@@ -1662,7 +1662,4 @@ class ReducedFunctionalHessianContext:
         # Convert dual properties -> dual parameter
         by = self.parameterization.apply_vjp(self.params, hy)
 
-        # DEBUG:
-        by.print_summary()
-
         y.array[:] = by.to_mono_petsc()
