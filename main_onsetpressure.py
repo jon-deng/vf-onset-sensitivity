@@ -224,7 +224,9 @@ def setup_parameterization(
             lame_lambda=(3*K*NU)/(1+NU),
             lame_mu=(3*K*(1-2*NU))/(2*(1+NU))
         )
-        extract = pzn.ExtractSubset(traction_shape.x, keys_to_extract=('tmesh',))
+        extract = pzn.ExtractSubset(
+            traction_shape.x, keys_to_extract=('tmesh',)
+        )
 
         const_subset = pzn.ConstantSubset(
             traction_shape.y,
@@ -369,10 +371,11 @@ def make_exp_params(study_name: str):
                 'Functional': 'OnsetPressure',
                 'MeshName': f'M5_CB_GA3_CL{0.5:.2f}',
                 'LayerType': 'discrete',
-                'Ecov': 6e4, 'Ebod': 6e4,
+                'Ecov': emod, 'Ebod': emod,
                 'BifParam': 'psub',
                 'ParamOption': 'TractionShape'
             })
+            for emod in [2e4, 4e4, 6e4, 8e4]
         ]
         return params
     elif study_name == 'test_shape':
@@ -389,6 +392,41 @@ def make_exp_params(study_name: str):
             for h in (1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9, 1e-10)
         ]
         return params
+    elif study_name == 'main_traction_shape':
+        functional_names = [
+            'OnsetPressure',
+            'OnsetFrequency'
+        ]
+        emod_covs = np.concatenate([
+            (  1)*np.arange(2, 18, 4),
+            (1/2)*np.arange(2, 18, 4),
+            (1/3)*np.arange(2, 18, 4),
+            (1/4)*np.arange(2, 18, 4),
+        ]) * 10 * 1e3
+        emod_bods = np.concatenate([
+            1*np.arange(2, 18, 4),
+            1*np.arange(2, 18, 4),
+            1*np.arange(2, 18, 4),
+            1*np.arange(2, 18, 4)
+        ]) * 10 * 1e3
+
+        # emod_covs = np.array([6, 3]) * 10 * 1e3
+        # emod_bods = np.array([6, 6]) * 10 * 1e3
+
+        assert len(emod_covs) == len(emod_bods)
+
+        emods = [(ecov, ebod) for ecov, ebod in zip(emod_covs, emod_bods)]
+        paramss = (
+            DEFAULT_PARAMS.substitute({
+                'Functional': func_name,
+                'Ecov': emod_cov,
+                'Ebod': emod_bod,
+                'ParamOption': 'TractionShape'
+            })
+            for func_name, (emod_cov, emod_bod)
+            in itertools.product(functional_names, emods)
+        )
+        return paramss
     elif study_name == 'main_sensitivity':
         functional_names = [
             'OnsetPressure',
