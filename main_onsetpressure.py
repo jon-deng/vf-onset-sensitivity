@@ -25,7 +25,7 @@ from blockarray import blockvec as bv, linalg as bla, h5utils
 from femvf.models.dynamical import (
     base as dbase
 )
-from femvf.parameters import transform as pzn
+from femvf.parameters import transform as tfrm
 from femvf.meshutils import process_celllabel_to_dofs_from_residual
 
 from libhopf import hopf as libhopf, setup as libsetup, functional as libfuncs
@@ -172,7 +172,7 @@ def setup_functional(
 
     return functionals[params['Functional']]
 
-def setup_parameterization(
+def setup_transform(
         params: exputils.BaseParameters,
         hopf: libhopf.HopfModel,
         prop: bv.BlockVector
@@ -198,20 +198,20 @@ def setup_parameterization(
     if params['ParamOption'] == 'Stiffness':
         const_vals.pop('emod')
 
-        scale = pzn.Scale(
+        scale = tfrm.Scale(
             hopf.res.prop, scale=parameter_scales
         )
-        const_subset = pzn.ConstantSubset(
+        const_subset = tfrm.ConstantSubset(
              hopf.res.prop, const_vals=const_vals
         )
         transform = scale * const_subset
     elif params['ParamOption'] == 'Shape':
         const_vals.pop('umesh')
 
-        scale = pzn.Scale(
+        scale = tfrm.Scale(
             hopf.res.prop, scale=parameter_scales
         )
-        const_subset = pzn.ConstantSubset(
+        const_subset = tfrm.ConstantSubset(
              hopf.res.prop, const_vals=const_vals
         )
         transform = scale * const_subset
@@ -219,20 +219,20 @@ def setup_parameterization(
         const_vals.pop('umesh')
 
         K, NU = 1e1, 0.3
-        traction_shape = pzn.TractionShape(
+        traction_shape = tfrm.TractionShape(
             hopf.res,
             lame_lambda=(3*K*NU)/(1+NU),
             lame_mu=(3*K*(1-2*NU))/(2*(1+NU))
         )
-        extract = pzn.ExtractSubset(
+        extract = tfrm.ExtractSubset(
             traction_shape.x, keys_to_extract=('tmesh',)
         )
 
-        const_subset = pzn.ConstantSubset(
+        const_subset = tfrm.ConstantSubset(
             traction_shape.y,
             const_vals=const_vals
         )
-        scale = pzn.Scale(
+        scale = tfrm.Scale(
             const_subset.y, scale=parameter_scales
         )
         transform = extract * traction_shape * scale * const_subset
@@ -257,9 +257,9 @@ def setup_reduced_functional(params: exputils.BaseParameters):
     _props = setup_props(params, hopf)
 
     ## Setup the linearization/initial guess parameters
-    parameterization, scale = setup_parameterization(params, hopf, _props)
+    transform, scale = setup_transform(params, hopf, _props)
 
-    param = parameterization.x.copy()
+    param = transform.x.copy()
     for key, subvec in _props.items():
         if key in param:
             param[key][:] = subvec
@@ -268,19 +268,19 @@ def setup_reduced_functional(params: exputils.BaseParameters):
         param['tmesh'][:] = 0
 
     # Apply the scaling that's used for `Scale`
-    if isinstance(parameterization, pzn.TransformComposition):
+    if isinstance(transform, tfrm.TransformComposition):
         has_scale_transform = (
-            any(isinstance(transform, pzn.Scale) for transform in parameterization._transforms)
+            any(isinstance(transform, tfrm.Scale) for transform in transform._transforms)
         )
     else:
-        has_scale_transform = isinstance(parameterization, pzn.Scale)
+        has_scale_transform = isinstance(transform, tfrm.Scale)
 
     if has_scale_transform:
         for key, val in scale.items():
             if key in param:
                 param[key][:] = param.sub[key]/val
 
-    prop = parameterization.apply(param)
+    prop = transform.apply(param)
     assert np.isclose(bv.norm(prop-_props), 0)
 
     ## Solve for the Hopf bifurcation
@@ -323,7 +323,7 @@ def setup_reduced_functional(params: exputils.BaseParameters):
         func,
         libhopf.ReducedHopfModel(hopf, newton_params=newton_params)
     )
-    return redu_functional, hopf, xhopf_n, param, parameterization
+    return redu_functional, hopf, xhopf_n, param, transform
 
 
 def make_exp_params(study_name: str):
@@ -766,22 +766,22 @@ def run_functional_sensitivity(
     """
     Run an experiment where the sensitivity of a functional is saved
     """
-    rfunc, hopf, xhopf_n, p0, parameterization = setup_reduced_functional(params)
+    rfunc, hopf, xhopf_n, p0, transform = setup_reduced_functional(params)
     fpath = path.join(output_dir, params.to_str()+'.h5')
     if not path.isfile(fpath) or overwrite:
         ## Compute 1st order sensitivity of the functional
-        rfunc.set_prop(parameterization.apply(p0))
+        rfunc.set_prop(transform.apply(p0))
 
         # DEBUG:
         # breakpoint()
 
         grad_props = rfunc.assem_dg_dprop()
-        grad_params = parameterization.apply_vjp(p0, grad_props)
+        grad_params = transform.apply_vjp(p0, grad_props)
 
         ## Compute 2nd order sensitivity of the functional
         norm = make_norm(hopf)
         redu_hess_context = libhopf.ReducedFunctionalHessianContext(
-            rfunc, parameterization, norm=norm, step_size=params['H']
+            rfunc, transform, norm=norm, step_size=params['H']
         )
         redu_hess_context.set_params(p0)
         mat = PETSc.Mat().createPython(p0.mshape*2)
@@ -810,7 +810,7 @@ def run_functional_sensitivity(
         _real_evec = mat.getVecRight()
         for n in range(neig):
             eigval = eps.getEigenpair(n, _real_evec)
-            eigvec = parameterization.x.copy()
+            eigvec = transform.x.copy()
             eigvec.set_mono(_real_evec)
             eigvals.append(eigval)
             eigvecs.append(eigvec)

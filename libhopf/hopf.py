@@ -1629,7 +1629,7 @@ class ReducedFunctionalHessianContext:
     def __init__(
             self,
             reduced_functional: ReducedFunctional,
-            parameterization: paramzn.Transform,
+            transform: paramzn.Transform,
             norm: Optional[Callable[[bvec.BlockVector], float]]=None,
             step_size: Optional[float]=1.0
         ):
@@ -1638,8 +1638,8 @@ class ReducedFunctionalHessianContext:
                 return vec.norm()
 
         self.rfunctional = reduced_functional
-        self.parameterization = parameterization
-        self.params = parameterization.x.copy()
+        self.transform = transform
+        self.params = transform.x.copy()
 
         self._norm = norm
         self._step_size = step_size
@@ -1647,19 +1647,19 @@ class ReducedFunctionalHessianContext:
     def set_params(self, params: bvec.BlockVector):
         self.params[:] = params
         return self.rfunctional.set_prop(
-            self.parameterization.apply(params)
+            self.transform.apply(params)
         )
 
     def mult(self, mat: PETSc.Mat, x: PETSc.Vec, y: PETSc.Vec):
-        bx = self.parameterization.x.copy()
+        bx = self.transform.x.copy()
         bx.set_mono(x)
 
-        # Use the parameterization to convert parameter -> model properties
-        dprop = self.parameterization.apply_jvp(self.params, bx)
+        # Use the transform to convert parameter -> model properties
+        dprop = self.transform.apply_jvp(self.params, bx)
         hy = self.rfunctional.assem_d2g_dprop2(
             dprop, norm=self._norm, h=self._step_size
         )
         # Convert dual properties -> dual parameter
-        by = self.parameterization.apply_vjp(self.params, hy)
+        by = self.transform.apply_vjp(self.params, hy)
 
         y.array[:] = by.to_mono_petsc()
