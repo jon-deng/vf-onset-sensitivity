@@ -2,7 +2,7 @@
 Conduct a sensitivity study of onset pressure and frequency
 """
 
-from typing import Union, Mapping
+from typing import Mapping
 from numpy.typing import NDArray
 
 import argparse
@@ -108,7 +108,9 @@ def set_prop(
     Return the model properties vector with desired values
     """
     # Set any constant properties
-    prop = libsetup.set_default_props(prop, hopf.res.solid.residual.mesh())
+    prop = libsetup.set_default_props(
+        prop, hopf.res.solid.residual.mesh(), nfluid=len(hopf.res.fluids)
+    )
 
     # Set cover and body layer properties
     dofs_cov = np.array(celllabel_to_dofs['cover'], dtype=np.int32)
@@ -298,7 +300,7 @@ def setup_reduced_functional(params: exputils.BaseParameters):
 
         xhopf_0[:] = libhopf.gen_xhopf_0(
             hopf.res, prop, hopf.E_MODE, bifparams,
-            tol=bifparam_tol, bifparam_key=params['BifParam']
+            tol=bifparam_tol
         )
 
     newton_params = {

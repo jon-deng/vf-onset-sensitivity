@@ -62,7 +62,7 @@ def load_hopf_model(
         **kwargs
     )
 
-    res_hopf = hopf.HopfModel(res, dres, bifparam_key=bifparam_key)
+    res_hopf = hopf.HopfModel(res, dres)
     return res_hopf, res, dres
 
 def load_transient_model(
@@ -85,7 +85,7 @@ ECOV = 5e3*10
 EBODY = 5e3*10
 PSUB = 450 * 10
 
-def set_default_props(prop, mesh):
+def set_default_props(prop, mesh, nfluid=1):
     """
     Set the model properties
     """
@@ -97,7 +97,7 @@ def set_default_props(prop, mesh):
 
     return prop
 
-def set_constant_props(prop, mesh):
+def set_constant_props(prop, mesh, nfluid=1):
     prop['eta'][:] =  5.0
     prop['rho'][:] =  1.0
     prop['nu'][:] =  0.45
@@ -122,6 +122,7 @@ def set_constant_props(prop, mesh):
     prop['kcontact'][:] =  1e16
     prop['ymid'][:] =  y_mid
 
-    prop['rho_air'][:] =  1.293e-3
+    for n in range(nfluid):
+        prop[f'fluid{n}.rho_air'][:] =  1.293e-3
 
     return prop
