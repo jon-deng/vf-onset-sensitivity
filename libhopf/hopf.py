@@ -437,7 +437,9 @@ def _gen_hopf_state(res: 'HopfModel', bifparam_key='psub') -> Tuple[bv.BlockVect
     X_mode_imag = bv.BlockVector(_mode_imag_vecs, labels=[_mode_imag_labels])
 
     # X_bifparam = res.control[[bifparam_key]].copy()
-    X_bifparam = bv.BlockVector((np.array([0.0]),), labels=((bifparam_key,),))
+    X_bifparam = bv.convert_subtype_to_petsc(
+        bv.BlockVector((np.array([0.0]),), labels=((bifparam_key,),))
+    )
 
     _omega = X_bifparam[bifparam_key].copy()
     _omega_vecs = [_omega]
