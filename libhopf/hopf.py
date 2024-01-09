@@ -167,11 +167,9 @@ class HopfModel:
             model.set_state(xhopf[self.labels_fp])
 
             control = self.set_bifparam(
-                model, model.control, xhopf[self.bifparam_key]
+                model, model.control, xhopf[self.bifparam_key][0]
             )
-            prop = model.prop
             model.set_control(control)
-            model.set_prop(prop)
 
     def apply_dirichlet_bvec(self, vec):
         """Zeros dirichlet associated indices on the Hopf state"""
