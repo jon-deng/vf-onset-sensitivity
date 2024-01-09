@@ -77,6 +77,7 @@ def set_bifparam_fluid(model, control, bifparam, name='psub'):
 
 def assem_dcontrol_dlambda_fluid(model, bifparam, name='psub'):
     dcontrol_dlambda = model.control.copy()
+    dcontrol_dlambda[:] = 0.0
 
     num_fluid = len(model.fluids)
     for n in range(num_fluid):
@@ -318,7 +319,6 @@ class HopfModel:
             dres_dstate.copy(),
             NULL_MAT_STATE_STATE,
             NULL_MAT_STATE_STATE,
-            # TODO: Convert to matrix
             bv.to_block_colmat(
                 bla.mult_mat_vec(dres_dcontrol, dcontrol_dlambda)
             ),
