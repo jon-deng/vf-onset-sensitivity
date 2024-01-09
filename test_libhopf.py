@@ -1,6 +1,10 @@
 """
 Test the `libhopf.hopf` module
 """
+
+# NOTE: Put this here to avoid `jax` import error
+from femvf.parameters import transform
+
 # import sys
 from os import path
 import warnings
@@ -9,7 +13,6 @@ import h5py
 import numpy as np
 from petsc4py import PETSc
 
-from femvf.parameters import parameterization as pazn
 from blockarray import linalg as bla, blockvec as bv, subops
 
 from libhopf import hopf, functional as libfunctional, setup
@@ -337,8 +340,8 @@ class TestHopfUtilities:
 
 @pytest.fixture(
     params=[
-        pazn.TractionShape,
-        pazn.Identity
+        transform.TractionShape,
+        transform.Identity
     ]
 )
 def parameterization(hopf_model, request):
