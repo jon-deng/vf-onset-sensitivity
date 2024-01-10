@@ -23,13 +23,16 @@ def taylor_convergence(x0, dx, res, jac, norm=None):
     if norm is None:
         norm = bla.norm
 
+    # Compute the linearized residual from `jac`
+    # and exact residual from finite-differences
+    dres_linear = jac(x0, dx)
+
     # Step sizes go from largest to smallest
     alphas = 2**np.arange(4)[::-1]
     res_ns = [copy_vector(res(x0+alpha*dx)) for alpha in alphas]
     res_0 = copy_vector(res(x0))
 
     dres_exacts = [res_n-res_0 for res_n in res_ns]
-    dres_linear = jac(x0, dx)
 
     errs = np.array([
         norm(dres_exact-alpha*dres_linear)
