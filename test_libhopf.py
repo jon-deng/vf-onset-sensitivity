@@ -133,7 +133,6 @@ class TestHopfModel:
             hopf_model.apply_dirichlet_bmat(dres_dstate)
             return bla.mult_mat_vec(dres_dstate, dx)
 
-        breakpoint()
         taylor_convergence(state, dstate, hopf_res, hopf_jac)
 
     def test_assem_dres_dstate_adjoint(
