@@ -103,12 +103,16 @@ def set_constant_props(prop, mesh, nfluid=1):
     prop['nu'][:] =  0.45
 
     # Fluid separation smoothing prop
-    if all(key in prop for key in ['zeta_min', 'zeta_sep']):
-        prop['zeta_min'][:] =  1.0e-4
-        prop['zeta_sep'][:] =  1.0e-4
-
-    if 'r_sep' in prop:
-        prop['r_sep'][:] =  1.0
+    fluid_values = {
+        'zeta_min': 1e-4,
+        'zeta_sep': 1e-4,
+        'r_sep': 1.0,
+        'rho_air': 1.293e-3
+    }
+    for n in range(nfluid):
+        for key, value in fluid_values.items():
+            if f'fluid{n}.{key}' in prop:
+                prop[f'fluid{n}.{key}'][:] = value
 
     # Contact and midline symmetry properties
     # y_gap = 0.5 / 10 # Set y gap to 0.5 mm
@@ -121,8 +125,5 @@ def set_constant_props(prop, mesh, nfluid=1):
     prop['ycontact'][:] =  y_contact
     prop['kcontact'][:] =  1e16
     prop['ymid'][:] =  y_mid
-
-    for n in range(nfluid):
-        prop[f'fluid{n}.rho_air'][:] =  1.293e-3
 
     return prop
