@@ -221,10 +221,48 @@ def setup_transform(
         const_vals.pop('umesh')
 
         K, NU = 1e1, 0.3
+
+        ## Apply a fixed `DirichletBC` on the first facet at the origin
+        # and a fixed y coordinate along the bottom surface
+        residual = hopf.res.solid.residual
+        def is_on_origin(facet):
+            facet_points = [point for point in dfn.entities(facet, 0)]
+            is_on_origins = [
+                np.all(point.midpoint()[:] == np.zeros(3))
+                for point in facet_points
+            ]
+            return np.any(is_on_origins)
+
+        facets = [
+            facet for facet in dfn.facets(residual.mesh())
+            if (
+                np.dot(facet.normal()[:], [1, 0, 0]) == 0
+                and facet.midpoint()[1] == 0
+                and is_on_origin(facet)
+            )
+        ]
+        origin_facet = facets[0]
+
+        mf = dfn.MeshFunction('size_t', residual.mesh(), 1, value=0)
+        mf.set_value(origin_facet.index(), 1)
+
+        fspace = residual.form['coeff.prop.umesh'].function_space()
+        fixed_dis = dfn.Constant(residual.mesh().topology().dim()*[0.0])
+        dirichlet_bc_first_facet = dfn.DirichletBC(fspace, fixed_dis, mf, 1)
+
+        mf = residual.mesh_function('facet')
+        mf_label_to_value = residual.mesh_function_label_to_value('facet')
+        fixed_surface_ids = [mf_label_to_value[name] for name in residual.fixed_facet_labels]
+        dirichlet_bcs_fixed_y = [
+            dfn.DirichletBC(fspace.sub(1), dfn.Constant(0.0), mf, facet_val)
+            for facet_val in fixed_surface_ids
+        ]
+
         traction_shape = tfrm.TractionShape(
             hopf.res,
             lame_lambda=(3*K*NU)/(1+NU),
-            lame_mu=(3*K*(1-2*NU))/(2*(1+NU))
+            lame_mu=(3*K*(1-2*NU))/(2*(1+NU)),
+            dirichlet_bcs=[dirichlet_bc_first_facet]+ dirichlet_bcs_fixed_y
         )
         extract = tfrm.ExtractSubset(
             traction_shape.x, keys_to_extract=('tmesh',)
@@ -377,7 +415,7 @@ def make_exp_params(study_name: str):
                 'BifParam': 'psub',
                 'ParamOption': 'TractionShape'
             })
-            for emod in [2e4, 4e4, 6e4, 8e4]
+            for emod in [6e4]
         ]
         return params
     elif study_name == 'test_shape':
