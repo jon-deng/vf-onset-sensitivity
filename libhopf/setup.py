@@ -39,7 +39,9 @@ def load_hopf_model(
         sep_vert_label='separation',
         bifparam_key='psub'
     ):
-    FluidType, LinFluidType = dynamical_fluidtype_from_sep_method(sep_method, bifparam_key=bifparam_key)
+    FluidType, LinFluidType = dynamical_fluidtype_from_sep_method(
+        sep_method, bifparam_key=bifparam_key
+    )
 
     kwargs = {
         'fsi_facet_labels': ('pressure',),
