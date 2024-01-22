@@ -64,7 +64,7 @@ def setup_dyna_model(params: exputils.BaseParameters):
     mesh_path = path.join('./mesh', mesh_name+'.msh')
 
     hopf, res, dres = libsetup.load_hopf_model(
-        mesh_path, sep_method='fixed',
+        mesh_path, sep_method='arearatio',
         sep_vert_label=params['SepPoint'],
         bifparam_key=params['BifParam']
     )
@@ -434,8 +434,7 @@ def make_exp_params(study_name: str):
         return params
     elif study_name == 'main_traction_shape':
         functional_names = [
-            'OnsetPressure',
-            'OnsetFrequency'
+            'OnsetPressure'
         ]
         emod_covs = np.concatenate([
             (  1)*np.arange(2, 18, 4),
@@ -461,6 +460,7 @@ def make_exp_params(study_name: str):
                 'Functional': func_name,
                 'Ecov': emod_cov,
                 'Ebod': emod_bod,
+                'MeshName': f'M5_CB_GA3_CL{0.5:.2f}',
                 'ParamOption': 'TractionShape'
             })
             for func_name, (emod_cov, emod_bod)
