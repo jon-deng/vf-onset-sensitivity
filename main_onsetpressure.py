@@ -48,7 +48,8 @@ parameter_types = {
 }
 ExpParamBasic = exputils.make_parameters(parameter_types)
 
-PSUBS = np.arange(0, 800, 50) * 10
+# This is the range of subglottal pressures to check for onset pressure
+PSUBS = np.linspace(0, 1500, 16) * 10
 
 
 def setup_dyna_model(params: exputils.BaseParameters):
@@ -70,7 +71,7 @@ def setup_dyna_model(params: exputils.BaseParameters):
     )
     return hopf, res, dres
 
-def setup_props(
+def setup_prop(
         params: exputils.BaseParameters,
         model: dbase.BaseDynamicalModel
     ):
@@ -113,13 +114,13 @@ def set_prop(
     )
 
     # Set cover and body layer properties
-    dofs_cov = np.array(celllabel_to_dofs['cover'], dtype=np.int32)
-    dofs_bod = np.array(celllabel_to_dofs['body'], dtype=np.int32)
-    dofs_share = set(dofs_cov) & set(dofs_bod)
-    dofs_share = np.array(list(dofs_share), dtype=np.int32)
-
     emod = np.zeros(prop['emod'].shape)
     if layer_type == 'discrete':
+        dofs_cov = np.array(celllabel_to_dofs['cover'], dtype=np.int32)
+        dofs_bod = np.array(celllabel_to_dofs['body'], dtype=np.int32)
+        dofs_share = set(dofs_cov) & set(dofs_bod)
+        dofs_share = np.array(list(dofs_share), dtype=np.int32)
+
         emod[dofs_cov] = emod_cov
         emod[dofs_bod] = emod_bod
         emod[dofs_share] = 1/2*(emod_cov + emod_bod)
@@ -294,7 +295,7 @@ def setup_reduced_functional(params: exputils.BaseParameters):
     ## Load the model and set model properties
     hopf, *_ = setup_dyna_model(params)
 
-    _props = setup_props(params, hopf)
+    _props = setup_prop(params, hopf)
 
     ## Setup the linearization/initial guess parameters
     transform, scale = setup_transform(params, hopf, _props)
@@ -406,16 +407,23 @@ def make_exp_params(study_name: str):
         ]
         return params
     elif study_name == 'test_traction_shape':
+        # Modify this one as you need for different tests
+        emods = [6e4]
+        mesh_names = (
+            [f'M5_CB_GA3_CL{0.5:.2f}'] + ['Trapezoid_GA1.00']
+            + [f'Trapezoid_GA{angle:>0.2f}' for angle in range(5, 31, 5)]
+        )
+        layer_types = ['discrete'] +['linear'] + len(range(5, 31, 5))*['linear']
         params = [
             DEFAULT_PARAMS.substitute({
                 'Functional': 'OnsetPressure',
-                'MeshName': f'M5_CB_GA3_CL{0.5:.2f}',
-                'LayerType': 'discrete',
+                'MeshName': mesh_name,
+                'LayerType': layer_type,
                 'Ecov': emod, 'Ebod': emod,
                 'BifParam': 'psub',
                 'ParamOption': 'TractionShape'
             })
-            for emod in [6e4]
+            for (mesh_name, layer_type), emod in itertools.product(zip(mesh_names, layer_types), emods)
         ]
         return params
     elif study_name == 'test_shape':
