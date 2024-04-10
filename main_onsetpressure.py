@@ -35,15 +35,31 @@ from exputils import exputils
 # pylint: disable=redefined-outer-name
 
 parameter_types = {
+    # For specifying the mesh
     'MeshName': str,
+    # Controls how layer stiffnesses map to stiffness distributions
+    # (discrete | linear)
     'LayerType': str,
+    # Stiffnesses of the cover and body
     'Ecov': float,
     'Ebod': float,
+    # Control which parameter to find the sensitivity to
+    # (Stiffness | Shape | TractionShape)
     'ParamOption': str,
+    # Control the functional to find the sensitivity of
+    # (OnsetPressure | OnsetFlowrate | ...)
     'Functional': str,
+    # The step size used when computing the Hessian
     'H': float,
+    # The eigenvalue detection range string used by SLEPc
+    # This is used when decomposing the Jacobian
+    # (LARGEST_MAGNITUDE | LARGEST_REAL | ...)
     'EigTarget': str,
+    # Controls where the fluid model separates
+    # (depends on what you labelled vertices in the mesh)
     'SepPoint': str,
+    # Controls the bifurcation parameter of the Hopf model
+    # (psub | qsub)
     'BifParam': str
 }
 ExpParamBasic = exputils.make_parameters(parameter_types)
@@ -52,7 +68,7 @@ ExpParamBasic = exputils.make_parameters(parameter_types)
 PSUBS = np.linspace(0, 1500, 16) * 10
 
 
-def setup_dyna_model(params: exputils.BaseParameters):
+def setup_dyna_model(param: exputils.BaseParameters):
     """
     Return a Hopf model, and non-linear/linearized dynamical models
 
@@ -61,18 +77,18 @@ def setup_dyna_model(params: exputils.BaseParameters):
     params: exputils.BaseParameters
         The experiment/case parameters
     """
-    mesh_name = params['MeshName']
+    mesh_name = param['MeshName']
     mesh_path = path.join('./mesh', mesh_name+'.msh')
 
     hopf, res, dres = libsetup.load_hopf_model(
         mesh_path, sep_method='arearatio',
-        sep_vert_label=params['SepPoint'],
-        bifparam_key=params['BifParam']
+        sep_vert_label=param['SepPoint'],
+        bifparam_key=param['BifParam']
     )
     return hopf, res, dres
 
 def setup_prop(
-        params: exputils.BaseParameters,
+        param: exputils.BaseParameters,
         model: dbase.BaseDynamicalModel
     ):
     """
@@ -92,8 +108,8 @@ def setup_prop(
     )
     prop = set_prop(
         prop, model, region_to_dofs,
-        params['Ecov'], params['Ebod'],
-        layer_type=params['LayerType']
+        param['Ecov'], param['Ebod'],
+        layer_type=param['LayerType']
     )
     return prop
 
@@ -152,7 +168,7 @@ def set_prop(
     return prop
 
 def setup_functional(
-        params: exputils.BaseParameters,
+        param: exputils.BaseParameters,
         model: dbase.BaseDynamicalModel
     ):
     """
@@ -173,10 +189,10 @@ def setup_functional(
         'OnsetFlowRate': libfuncs.OnsetFlowRateFunctional(model)
     }
 
-    return functionals[params['Functional']]
+    return functionals[param['Functional']]
 
 def setup_transform(
-        params: exputils.BaseParameters,
+        param: exputils.BaseParameters,
         hopf: libhopf.HopfModel,
         prop: bv.BlockVector
     ):
@@ -198,7 +214,7 @@ def setup_transform(
     }
 
     transform = None
-    if params['ParamOption'] == 'Stiffness':
+    if param['ParamOption'] == 'Stiffness':
         const_vals.pop('emod')
 
         scale = tfrm.Scale(
@@ -208,7 +224,7 @@ def setup_transform(
              hopf.res.prop, const_vals=const_vals
         )
         transform = scale * const_subset
-    elif params['ParamOption'] == 'Shape':
+    elif param['ParamOption'] == 'Shape':
         const_vals.pop('umesh')
 
         scale = tfrm.Scale(
@@ -218,7 +234,7 @@ def setup_transform(
              hopf.res.prop, const_vals=const_vals
         )
         transform = scale * const_subset
-    elif params['ParamOption'] == 'TractionShape':
+    elif param['ParamOption'] == 'TractionShape':
         const_vals.pop('umesh')
 
         K, NU = 1e1, 0.3
@@ -279,11 +295,11 @@ def setup_transform(
         transform = extract * traction_shape * scale * const_subset
         # transform = traction_shape * scale
     else:
-        raise ValueError(f"Unknown 'ParamOption': {params['ParamOption']}")
+        raise ValueError(f"Unknown 'ParamOption': {param['ParamOption']}")
 
     return transform, parameter_scales
 
-def setup_reduced_functional(params: exputils.BaseParameters):
+def setup_reduced_functional(param: exputils.BaseParameters):
     """
     Return a reduced functional + additional stuff
 
@@ -293,12 +309,12 @@ def setup_reduced_functional(params: exputils.BaseParameters):
         The experiment/case parameters
     """
     ## Load the model and set model properties
-    hopf, *_ = setup_dyna_model(params)
+    hopf, *_ = setup_dyna_model(param)
 
-    _props = setup_prop(params, hopf)
+    _props = setup_prop(param, hopf)
 
     ## Setup the linearization/initial guess parameters
-    transform, scale = setup_transform(params, hopf, _props)
+    transform, scale = setup_transform(param, hopf, _props)
 
     param = transform.x.copy()
     for key, subvec in _props.items():
@@ -328,10 +344,10 @@ def setup_reduced_functional(params: exputils.BaseParameters):
     xhopf_0 = hopf.state.copy()
     with warnings.catch_warnings() as _:
         warnings.filterwarnings('always')
-        if params['BifParam'] == 'psub':
+        if param['BifParam'] == 'psub':
             bifparam_tol = 100
             bifparams = PSUBS
-        elif params['BifParam'] == 'qsub':
+        elif param['BifParam'] == 'qsub':
             bifparam_tol = 10
             bifparams = np.linspace(0, 300, 11)
         else:
@@ -353,12 +369,12 @@ def setup_reduced_functional(params: exputils.BaseParameters):
     if info['status'] != 0:
         raise RuntimeError(
             f"Hopf solution at linearization point didn't converge with info: {info}"
-            f"; this happened for the parameter set {params}"
+            f"; this happened for the parameter set {param}"
         )
     hopf.set_state(xhopf_n)
 
     ## Load the functional/objective function and gradient
-    func = setup_functional(params, hopf)
+    func = setup_functional(param, hopf)
 
     redu_functional = libhopf.ReducedFunctional(
         func,
@@ -377,7 +393,7 @@ def make_exp_params(study_name: str):
         The name of the parametric study
     """
 
-    DEFAULT_PARAMS = ExpParamBasic({
+    default_param = ExpParamBasic({
         'MeshName': f'M5_CB_GA3_CL{CLSCALE:.2f}',
         'LayerType': 'discrete',
         'Ecov': 2.5*10*1e3,
@@ -397,7 +413,7 @@ def make_exp_params(study_name: str):
         # TODO: The flow rate driven model seems to have a lot of numerical error
         # and fails when using PETSc's LU solver
         params = [
-            DEFAULT_PARAMS.substitute({
+            default_param.substitute({
                 'Functional': 'OnsetPressure',
                 'MeshName': f'M5_CB_GA3_CL{0.5:.2f}',
                 'LayerType': 'discrete',
@@ -415,7 +431,7 @@ def make_exp_params(study_name: str):
         )
         layer_types = ['discrete'] +['linear'] + len(range(5, 31, 5))*['linear']
         params = [
-            DEFAULT_PARAMS.substitute({
+            default_param.substitute({
                 'Functional': 'OnsetPressure',
                 'MeshName': mesh_name,
                 'LayerType': layer_type,
@@ -428,7 +444,7 @@ def make_exp_params(study_name: str):
         return params
     elif study_name == 'test_shape':
         params = [
-            DEFAULT_PARAMS.substitute({
+            default_param.substitute({
                 'Functional': 'OnsetPressure',
                 'MeshName': f'M5_CB_GA3_CL{0.5:.2f}',
                 'LayerType': 'discrete',
@@ -464,7 +480,7 @@ def make_exp_params(study_name: str):
 
         emods = [(ecov, ebod) for ecov, ebod in zip(emod_covs, emod_bods)]
         paramss = (
-            DEFAULT_PARAMS.substitute({
+            default_param.substitute({
                 'Functional': func_name,
                 'Ecov': emod_cov,
                 'Ebod': emod_bod,
@@ -503,7 +519,7 @@ def make_exp_params(study_name: str):
 
         emods = [(ecov, ebod) for ecov, ebod in zip(emod_covs, emod_bods)]
         paramss = (
-            DEFAULT_PARAMS.substitute({
+            default_param.substitute({
                 'Functional': func_name,
                 'Ecov': emod_cov,
                 'Ebod': emod_bod,
@@ -530,7 +546,7 @@ def make_exp_params(study_name: str):
 
         emods = [(ecov, ebod) for ecov, ebod in zip(emod_covs, emod_bods)]
         paramss = (
-            DEFAULT_PARAMS.substitute({
+            default_param.substitute({
                 'Functional': func_name,
                 'Ecov': emod_cov,
                 'Ebod': emod_bod,
@@ -566,7 +582,7 @@ def make_exp_params(study_name: str):
 
         emods = [(ecov, ebod) for ecov, ebod in zip(emod_covs, emod_bods)]
         paramss = (
-            DEFAULT_PARAMS.substitute({
+            default_param.substitute({
                 'Functional': func_name,
                 'Ecov': emod_cov,
                 'Ebod': emod_bod,
@@ -591,7 +607,7 @@ def make_exp_params(study_name: str):
 
         emods = [(ecov, ebod) for ecov, ebod in zip(emod_covs, emod_bods)]
         paramss = (
-            DEFAULT_PARAMS.substitute({
+            default_param.substitute({
                 'Functional': func_name,
                 'Ecov': emod_cov,
                 'Ebod': emod_bod,
@@ -643,7 +659,7 @@ def make_exp_params(study_name: str):
             'sep1', 'sep2', 'sep3', 'sep4'
         ]
         paramss = (
-            DEFAULT_PARAMS.substitute({
+            default_param.substitute({
                 'MeshName': mesh_name,
                 'LayerType': layer_type,
                 'Functional': func_name,
@@ -690,7 +706,7 @@ def make_exp_params(study_name: str):
             f'M5_CB_GA3_CL{clscale:.2f}' for clscale in (1, 0.5, 0.25)
         ]
         paramss = (
-            DEFAULT_PARAMS.substitute({
+            default_param.substitute({
                 'MeshName': mesh_name,
                 'Functional': func_name,
                 'Ecov': emod_cov,
@@ -733,7 +749,7 @@ def make_exp_params(study_name: str):
             f'M5_CB_GA3_CL{clscale:.2f}' for clscale in (0.5, 0.25, 0.125)
         ]
         paramss = (
-            DEFAULT_PARAMS.substitute({
+            default_param.substitute({
                 'MeshName': mesh_name,
                 'Functional': func_name,
                 'Ecov': emod_cov,
@@ -807,15 +823,15 @@ def make_norm(hopf_model: libhopf.HopfModel):
 
 
 def run_functional_sensitivity(
-        params: exputils.BaseParameters,
+        param: exputils.BaseParameters,
         output_dir='out/sensitivity',
         overwrite=False
     ):
     """
     Run an experiment where the sensitivity of a functional is saved
     """
-    rfunc, hopf, xhopf_n, p0, transform = setup_reduced_functional(params)
-    fpath = path.join(output_dir, params.to_str()+'.h5')
+    rfunc, hopf, xhopf_n, p0, transform = setup_reduced_functional(param)
+    fpath = path.join(output_dir, param.to_str()+'.h5')
     if not path.isfile(fpath) or overwrite:
         ## Compute 1st order sensitivity of the functional
         rfunc.set_prop(transform.apply(p0))
@@ -829,7 +845,7 @@ def run_functional_sensitivity(
         ## Compute 2nd order sensitivity of the functional
         norm = make_norm(hopf)
         redu_hess_context = libhopf.ReducedFunctionalHessianContext(
-            rfunc, transform, norm=norm, step_size=params['H']
+            rfunc, transform, norm=norm, step_size=param['H']
         )
         redu_hess_context.set_params(p0)
         mat = PETSc.Mat().createPython(p0.mshape*2)
@@ -841,12 +857,12 @@ def run_functional_sensitivity(
         eps.setDimensions(5, 25)
         eps.setProblemType(SLEPc.EPS.ProblemType.HEP)
 
-        if params['EigTarget'] == 'LARGEST_MAGNITUDE':
+        if param['EigTarget'] == 'LARGEST_MAGNITUDE':
             which_eig = SLEPc.EPS.Which.LARGEST_MAGNITUDE
-        elif params['EigTarget'] == 'LARGEST_REAL':
+        elif param['EigTarget'] == 'LARGEST_REAL':
             which_eig = SLEPc.EPS.Which.LARGEST_REAL
         else:
-            raise ValueError(f"Unknown `params['EigTarget']` key {params['EigTarget']}")
+            raise ValueError(f"Unknown `params['EigTarget']` key {param['EigTarget']}")
         eps.setWhichEigenpairs(which_eig)
         eps.setUp()
 
