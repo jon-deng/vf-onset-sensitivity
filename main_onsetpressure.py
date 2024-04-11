@@ -493,7 +493,7 @@ def make_exp_params(study_name: str):
         assert len(emod_covs) == len(emod_bods)
 
         emods = [(ecov, ebod) for ecov, ebod in zip(emod_covs, emod_bods)]
-        paramss = (
+        params = (
             default_param.substitute({
                 'Functional': func_name,
                 'Ecov': emod_cov,
@@ -504,7 +504,7 @@ def make_exp_params(study_name: str):
             for func_name, (emod_cov, emod_bod)
             in itertools.product(functional_names, emods)
         )
-        return paramss
+        return params
     elif study_name == 'main_sensitivity':
         functional_names = [
             'OnsetPressure',
@@ -532,7 +532,7 @@ def make_exp_params(study_name: str):
         assert len(emod_covs) == len(emod_bods)
 
         emods = [(ecov, ebod) for ecov, ebod in zip(emod_covs, emod_bods)]
-        paramss = (
+        params = (
             default_param.substitute({
                 'Functional': func_name,
                 'Ecov': emod_cov,
@@ -542,7 +542,7 @@ def make_exp_params(study_name: str):
             for func_name, (emod_cov, emod_bod), param_option
             in itertools.product(functional_names, emods, param_options)
         )
-        return paramss
+        return params
     elif study_name == 'main_sensitivity_flowdriven':
         functional_names = [
             'OnsetFlowRate',
@@ -559,7 +559,7 @@ def make_exp_params(study_name: str):
         assert len(emod_covs) == len(emod_bods)
 
         emods = [(ecov, ebod) for ecov, ebod in zip(emod_covs, emod_bods)]
-        paramss = (
+        params = (
             default_param.substitute({
                 'Functional': func_name,
                 'Ecov': emod_cov,
@@ -570,7 +570,7 @@ def make_exp_params(study_name: str):
             for func_name, (emod_cov, emod_bod), param_option
             in itertools.product(functional_names, emods, param_options)
         )
-        return paramss
+        return params
     elif study_name == 'main_coarse_sensitivity':
         functional_names = [
             'OnsetPressure',
@@ -595,7 +595,7 @@ def make_exp_params(study_name: str):
         assert len(emod_covs) == len(emod_bods)
 
         emods = [(ecov, ebod) for ecov, ebod in zip(emod_covs, emod_bods)]
-        paramss = (
+        params = (
             default_param.substitute({
                 'Functional': func_name,
                 'Ecov': emod_cov,
@@ -605,7 +605,7 @@ def make_exp_params(study_name: str):
             for func_name, (emod_cov, emod_bod), param_option
             in itertools.product(functional_names, emods, param_options)
         )
-        return paramss
+        return params
     elif study_name == 'test_sensitivity':
         functional_names = [
             'OnsetPressure',
@@ -620,7 +620,7 @@ def make_exp_params(study_name: str):
         assert len(emod_covs) == len(emod_bods)
 
         emods = [(ecov, ebod) for ecov, ebod in zip(emod_covs, emod_bods)]
-        paramss = (
+        params = (
             default_param.substitute({
                 'Functional': func_name,
                 'Ecov': emod_cov,
@@ -630,7 +630,7 @@ def make_exp_params(study_name: str):
             for func_name, (emod_cov, emod_bod), param_option
             in itertools.product(functional_names, emods, param_options)
         )
-        return paramss
+        return params
     elif study_name == 'separation_effect':
         functional_names = [
             'OnsetPressure'
@@ -672,7 +672,7 @@ def make_exp_params(study_name: str):
             # 'separation-inf',
             'sep1', 'sep2', 'sep3', 'sep4'
         ]
-        paramss = (
+        params = (
             default_param.substitute({
                 'MeshName': mesh_name,
                 'LayerType': layer_type,
@@ -696,7 +696,7 @@ def make_exp_params(study_name: str):
                 sep_points
             )
         )
-        return paramss
+        return params
     elif study_name == 'independence':
         functional_names = [
             'OnsetPressure'
@@ -719,7 +719,7 @@ def make_exp_params(study_name: str):
         mesh_names = [
             f'M5_CB_GA3_CL{clscale:.2f}' for clscale in (1, 0.5, 0.25)
         ]
-        paramss = (
+        params = (
             default_param.substitute({
                 'MeshName': mesh_name,
                 'Functional': func_name,
@@ -739,7 +739,7 @@ def make_exp_params(study_name: str):
                 eig_targets
             )
         )
-        return paramss
+        return params
     elif study_name == 'eig_target_effect':
         functional_names = [
             'OnsetPressure'
@@ -762,7 +762,7 @@ def make_exp_params(study_name: str):
         mesh_names = [
             f'M5_CB_GA3_CL{clscale:.2f}' for clscale in (0.5, 0.25, 0.125)
         ]
-        paramss = (
+        params = (
             default_param.substitute({
                 'MeshName': mesh_name,
                 'Functional': func_name,
@@ -782,7 +782,7 @@ def make_exp_params(study_name: str):
                 eig_targets
             )
         )
-        return paramss
+        return params
     else:
         raise ValueError("Unknown `study_name` '{study_name}'")
 
