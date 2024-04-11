@@ -20,6 +20,7 @@ import h5py
 import numpy as np
 from petsc4py import PETSc
 from slepc4py import SLEPc
+from scipy import optimize
 
 from blockarray import blockvec as bv, linalg as bla, h5utils
 from femvf.models.dynamical import (
@@ -305,7 +306,7 @@ def setup_reduced_functional(param: exputils.BaseParameters):
 
     Parameters
     ----------
-    params: exputils.BaseParameters
+    param: exputils.BaseParameters
         The experiment/case parameters
     """
     ## Load the model and set model properties
@@ -316,13 +317,13 @@ def setup_reduced_functional(param: exputils.BaseParameters):
     ## Setup the linearization/initial guess parameters
     transform, scale = setup_transform(param, hopf, _props)
 
-    param = transform.x.copy()
+    p = transform.x.copy()
     for key, subvec in _props.items():
-        if key in param:
-            param[key][:] = subvec
+        if key in p:
+            p[key][:] = subvec
 
-    if 'tmesh' in param:
-        param['tmesh'][:] = 0
+    if 'tmesh' in p:
+        p['tmesh'][:] = 0
 
     # Apply the scaling that's used for `Scale`
     if isinstance(transform, tfrm.TransformComposition):
@@ -334,10 +335,10 @@ def setup_reduced_functional(param: exputils.BaseParameters):
 
     if has_scale_transform:
         for key, val in scale.items():
-            if key in param:
-                param[key][:] = param.sub[key]/val
+            if key in p:
+                p[key][:] = p.sub[key]/val
 
-    prop = transform.apply(param)
+    prop = transform.apply(p)
     assert np.isclose(bv.norm(prop-_props), 0)
 
     ## Solve for the Hopf bifurcation
@@ -369,7 +370,7 @@ def setup_reduced_functional(param: exputils.BaseParameters):
     if info['status'] != 0:
         raise RuntimeError(
             f"Hopf solution at linearization point didn't converge with info: {info}"
-            f"; this happened for the parameter set {param}"
+            f"; this happened for the parameter set {p}"
         )
     hopf.set_state(xhopf_n)
 
@@ -380,7 +381,7 @@ def setup_reduced_functional(param: exputils.BaseParameters):
         func,
         libhopf.ReducedHopfModel(hopf, newton_params=newton_params)
     )
-    return redu_functional, hopf, xhopf_n, param, transform
+    return redu_functional, hopf, xhopf_n, p, transform
 
 
 def make_exp_params(study_name: str):
@@ -450,10 +451,23 @@ def make_exp_params(study_name: str):
                 'LayerType': 'discrete',
                 'Ecov': 6e4, 'Ebod': 6e4,
                 'BifParam': 'psub',
-                'ParamOption': 'Shape',
+                'ParamOption': 'TractionShape',
                 'H': h
             })
             for h in (1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9, 1e-10)
+        ]
+        return params
+    elif study_name == 'optimize_traction_shape':
+        params = [
+            default_param.substitute({
+                'Functional': 'OnsetPressure',
+                'MeshName': f'M5_CB_GA3_CL{0.5:.2f}',
+                'LayerType': 'discrete',
+                'Ecov': 6e4, 'Ebod': 6e4,
+                'BifParam': 'psub',
+                'ParamOption': 'TractionShape',
+                'H': 1e-3
+            })
         ]
         return params
     elif study_name == 'main_traction_shape':
@@ -839,8 +853,8 @@ def run_functional_sensitivity(
         # DEBUG:
         # breakpoint()
 
-        grad_props = rfunc.assem_dg_dprop()
-        grad_params = transform.apply_vjp(p0, grad_props)
+        grad_prop = rfunc.assem_dg_dprop()
+        grad_param = transform.apply_vjp(p0, grad_prop)
 
         ## Compute 2nd order sensitivity of the functional
         norm = make_norm(hopf)
@@ -884,7 +898,7 @@ def run_functional_sensitivity(
             ## Write out the gradient vectors
             for (key, vec) in zip(
                     ['grad_props', 'grad_param'],
-                    [grad_props, grad_params]
+                    [grad_prop, grad_param]
                 ):
                 h5utils.create_resizable_block_vector_group(
                     f.require_group(key), vec.labels, vec.bshape,
@@ -922,6 +936,49 @@ def run_functional_sensitivity(
     else:
         print(f"Skipping existing file '{fpath}'")
 
+def run_optimization(
+        param: exputils.BaseParameters,
+        output_dir='out/optimization',
+        overwrite=False
+    ):
+    rfunc, hopf, xhopf_n, p0, transform = setup_reduced_functional(param)
+    # breakpoint()
+
+    # `_p` represents the `BlockVector` representation of the optimization
+    # variable
+    # `p` is the raw numpy array, which is needed for `minimize`
+    # to interface with the gradient code, this is inserted into `_p`
+    _p = transform.x.copy()
+    def f(p):
+        print(f"Called with ||p|| {np.linalg.norm(p)}")
+        _p.set_mono(p)
+        prop = transform.apply(_p)
+        try:
+            rfunc.set_prop(prop)
+            fun = rfunc.assem_g()
+            grad_prop = rfunc.assem_dg_dprop()
+            grad = transform.apply_vjp(_p, grad_prop).to_mono_ndarray()
+        except RuntimeError as err:
+            print("Couldn't solve objective function for input. Returning NaN")
+            fun = np.nan
+            grad = np.nan * np.ones(p.shape)
+
+        return fun, grad
+
+    def callback(intermediate_result):
+        print(intermediate_result)
+
+    opt_options = {
+        'maxiter': 15
+    }
+    opt_info = optimize.minimize(
+        f, p0.to_mono_ndarray(),
+        method='BFGS', jac=True, callback=callback,
+        options=opt_options
+    )
+    print(opt_info)
+    breakpoint()
+
 
 if __name__ == '__main__':
     # Load the Hopf system
@@ -932,18 +989,34 @@ if __name__ == '__main__':
     argparser.add_argument('--clscale', type=float, default=1.0)
     argparser.add_argument('--overwrite', action='store_true')
     argparser.add_argument('--output-dir', type=str, default='out')
+    argparser.add_argument('--study-type', type=str, default='sensitivity')
     clargs = argparser.parse_args()
     CLSCALE = clargs.clscale
 
     params = make_exp_params(clargs.study_name)
 
-    def run(param_dict):
-        # TODO: Note the conversion of parameter dictionary to
-        # `Parameter` object here is hard-coded; you'll have to change this
-        # in the future if you change the study types.
-        param = ExpParamBasic(param_dict)
-        return run_functional_sensitivity(
-            param, output_dir=clargs.output_dir, overwrite=clargs.overwrite
+    # NOTE: Input as a parameter dictionary is needed to allow multiprocessing
+    if clargs.study_type == 'sensitivity':
+        def run(param_dict):
+            param = ExpParamBasic(param_dict)
+            return run_functional_sensitivity(
+                param, output_dir=clargs.output_dir, overwrite=clargs.overwrite
+            )
+    elif clargs.study_type == 'optimization':
+        def run(param_dict):
+            param = ExpParamBasic(param_dict)
+            return run_optimization(
+                param, output_dir=clargs.output_dir, overwrite=clargs.overwrite
+            )
+    elif clargs.study_type == 'test':
+        def run(param_dict):
+            param = ExpParamBasic(param_dict)
+            return run_optimization(
+                param, output_dir=clargs.output_dir, overwrite=clargs.overwrite
+            )
+    else:
+        raise ValueError(
+            f"Unknown option `--study-type` {clargs.study_type}"
         )
 
     if clargs.num_proc == 1:
