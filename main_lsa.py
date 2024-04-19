@@ -30,7 +30,7 @@ if __name__ == '__main__':
         mesh_path,
         sep_method='fixed',
         sep_vert_label='separation-inf',
-        bifparam_key=BIFPARAM_KEY
+        bifparam_key=BIFPARAM_KEY,
     )
 
     props0 = hopf_model.prop.copy()
@@ -41,7 +41,7 @@ if __name__ == '__main__':
     if BIFPARAM_KEY == 'qsub':
         lmbdas = np.arange(0, 100, 10)
     elif BIFPARAM_KEY == 'psub':
-        lmbdas = np.arange(0, 500, 25)*10
+        lmbdas = np.arange(0, 500, 25) * 10
     else:
         raise ValueError("")
 
@@ -57,12 +57,7 @@ if __name__ == '__main__':
     bad_fps = [xfp_info[1]['status'] != 0 for xfp_info in xfps_info]
 
     least_stable_modes = [
-        hopf.solve_least_stable_mode(
-            res,
-            xfp_info[0],
-            make_control(lmbda),
-            props0
-        )
+        hopf.solve_least_stable_mode(res, xfp_info[0], make_control(lmbda), props0)
         for lmbda, xfp_info in zip(lmbdas, xfps_info)
     ]
     least_stable_omegas = np.array([mode_info[0] for mode_info in least_stable_modes])
@@ -72,7 +67,13 @@ if __name__ == '__main__':
     axs[0].plot(lmbdas, least_stable_omegas.real)
     axs[1].plot(lmbdas, least_stable_omegas.imag)
     # Mark points with bad fixed point solutions with a 'o'
-    axs[0].plot(lmbdas[bad_fps], least_stable_omegas.real[bad_fps], marker='o', mfc='none', ls='none')
+    axs[0].plot(
+        lmbdas[bad_fps],
+        least_stable_omegas.real[bad_fps],
+        marker='o',
+        mfc='none',
+        ls='none',
+    )
 
     axs[0].set_ylabel("$\omega_{real}$")
     axs[1].set_ylabel("$\omega_{imag}$ $[\mathrm{rad}/\mathrm{s}]$")

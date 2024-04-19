@@ -1,4 +1,3 @@
-
 import sys
 import gmsh
 
@@ -6,6 +5,7 @@ gmsh.initialize(sys.argv)
 
 MSH_VER = 2.0
 SIZE_FACTOR = 8
+
 
 def proc_M5(medial_angle):
     """
@@ -25,6 +25,7 @@ def proc_M5(medial_angle):
 
     gmsh.model.add_physical_group(0, [10], name='separation-inf')
     gmsh.model.add_physical_group(0, [9], name='separation-sup')
+
 
 def proc_M5_split(medial_angle):
     """
@@ -46,6 +47,7 @@ def proc_M5_split(medial_angle):
     gmsh.model.add_physical_group(0, [2], name='separation-mid')
     gmsh.model.add_physical_group(0, [1], name='separation-sup')
 
+
 def proc_M5_split6(medial_angle):
     """
     Generate a mesh for the M5_CB_GA*_split6.STEP geometry
@@ -60,8 +62,7 @@ def proc_M5_split6(medial_angle):
     gmsh.model.add_physical_group(2, [8, 5, 4, 3, 2, 1, 7, 6], name='cover')
 
     gmsh.model.add_physical_group(
-        1, [25, 24, 23, 15, 12, 9, 6, 3, 22, 17],
-        name='pressure'
+        1, [25, 24, 23, 15, 12, 9, 6, 3, 22, 17], name='pressure'
     )
     gmsh.model.add_physical_group(1, [26, 30, 20], name='fixed')
 
@@ -72,6 +73,7 @@ def proc_M5_split6(medial_angle):
     gmsh.model.add_physical_group(0, [4], name='sep5')
     gmsh.model.add_physical_group(0, [3], name='sep6')
     gmsh.model.add_physical_group(0, [14], name='sep7')
+
 
 if __name__ == '__main__':
     clscale = gmsh.option.get_number('Mesh.MeshSizeFactor')

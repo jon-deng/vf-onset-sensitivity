@@ -56,7 +56,7 @@ from femvf.models.dynamical import base as dynbase, coupled as dyncoup
 from femvf.parameters import transform as paramzn
 from blockarray import h5utils, subops
 from blockarray import blockvec as bv, blockmat as bm, linalg as bla
-from blockarray.typing import (Labels)
+from blockarray.typing import Labels
 
 from . import functional
 
@@ -66,7 +66,7 @@ ListPair = Tuple[List[float], List[float]]
 SolverInfo = Mapping[str, Any]
 FixedPointSolver = Callable[
     [dynbase.BaseDynamicalModel, bv.BlockVector, bv.BlockVector],
-    Tuple[bv.BlockVector, SolverInfo]
+    Tuple[bv.BlockVector, SolverInfo],
 ]
 
 
@@ -74,6 +74,7 @@ def set_bifparam_fluid(model, control, bifparam, name='psub'):
     for n in range(len(model.fluids)):
         control[f'fluid{n}.{name}'] = bifparam
     return control
+
 
 def assem_dcontrol_dlambda_fluid(model, bifparam, name='psub'):
     dcontrol_dlambda = model.control.copy()
@@ -83,6 +84,7 @@ def assem_dcontrol_dlambda_fluid(model, bifparam, name='psub'):
     for n in range(num_fluid):
         dcontrol_dlambda[f'fluid{n}.{name}'] = 1.0
     return dcontrol_dlambda
+
 
 class HopfModel:
     """
@@ -104,14 +106,13 @@ class HopfModel:
     """
 
     def __init__(
-            self,
-            res: dyncoup.BaseDynamicalFSIModel,
-            dres: dyncoup.BaseLinearizedDynamicalFSIModel,
-            e_mode: Optional[bv.BlockVector]=None,
-            set_bifparam=None,
-            assem_dcontrol_dlambda=None
-
-        ):
+        self,
+        res: dyncoup.BaseDynamicalFSIModel,
+        dres: dyncoup.BaseLinearizedDynamicalFSIModel,
+        e_mode: Optional[bv.BlockVector] = None,
+        set_bifparam=None,
+        assem_dcontrol_dlambda=None,
+    ):
         bifparam_key = 'psub'
 
         self.res = res
@@ -127,11 +128,15 @@ class HopfModel:
             self.labels_mode_real,
             self.labels_mode_imag,
             self.labels_psub,
-            self.labels_omega) = _component_labels
+            self.labels_omega,
+        ) = _component_labels
 
         self.IDX_DIRICHLET = np.concatenate(
-            [list(bc.get_boundary_values().keys()) for bc in res.solid.residual.dirichlet_bcs],
-            dtype=np.int32
+            [
+                list(bc.get_boundary_values().keys())
+                for bc in res.solid.residual.dirichlet_bcs
+            ],
+            dtype=np.int32,
         )
 
         if e_mode is None:
@@ -173,14 +178,28 @@ class HopfModel:
 
     def apply_dirichlet_bvec(self, vec):
         """Zeros dirichlet associated indices on the Hopf state"""
-        for label in ['u', 'v', 'u_mode_real', 'v_mode_real', 'u_mode_imag', 'v_mode_imag']:
+        for label in [
+            'u',
+            'v',
+            'u_mode_real',
+            'v_mode_real',
+            'u_mode_imag',
+            'v_mode_imag',
+        ]:
             # zero the rows associated with each dirichlet DOF
             vec[label][self.IDX_DIRICHLET] = 0
 
     def apply_dirichlet_bmat(self, mat):
         """Zeros dirichlet associated indices"""
         # Apply dirichlet BC by zeroing appropriate matrix rows
-        row_labels = ['u', 'v', 'u_mode_real', 'v_mode_real', 'u_mode_imag', 'v_mode_imag']
+        row_labels = [
+            'u',
+            'v',
+            'u_mode_real',
+            'v_mode_real',
+            'u_mode_imag',
+            'v_mode_imag',
+        ]
         col_labels = self.state.labels[0]
         for row, col in itertools.product(row_labels, col_labels):
             submat = mat.sub[row, col]
@@ -191,7 +210,14 @@ class HopfModel:
 
     def zero_rows_dirichlet_bmat(self, mat):
         """Zeros rows associated with dirichlet indices"""
-        row_labels = ['u', 'v', 'u_mode_real', 'v_mode_real', 'u_mode_imag', 'v_mode_imag']
+        row_labels = [
+            'u',
+            'v',
+            'u_mode_real',
+            'v_mode_real',
+            'u_mode_imag',
+            'v_mode_imag',
+        ]
         col_labels = mat.labels[1]
         for row, col in itertools.product(row_labels, col_labels):
             submat = mat.sub[row, col]
@@ -201,7 +227,10 @@ class HopfModel:
         """Return the Hopf system residual"""
         ## Bind common required local variables
         res, dres = self.res, self.dres
-        mode_real_labels, mode_imag_labels = self.labels_mode_real, self.labels_mode_imag
+        mode_real_labels, mode_imag_labels = (
+            self.labels_mode_real,
+            self.labels_mode_imag,
+        )
         x = self.state
         ee = self.E_MODE
 
@@ -213,11 +242,11 @@ class HopfModel:
         res_state = res.assem_res().copy()
 
         dres.set_dstate(mode_real)
-        dres.set_dstatet(-float(omega)*mode_imag)
+        dres.set_dstatet(-float(omega) * mode_imag)
         res_mode_real = dres.assem_res().copy()
 
         dres.set_dstate(mode_imag)
-        dres.set_dstatet(float(omega)*mode_real)
+        dres.set_dstatet(float(omega) * mode_real)
         res_mode_imag = dres.assem_res().copy()
 
         res_psub = x[[self.bifparam_key]].copy()
@@ -228,7 +257,7 @@ class HopfModel:
 
         ret_bvec = bv.concatenate(
             (res_state, res_mode_real, res_mode_imag, res_psub, res_omega),
-            labels=self.state.labels
+            labels=self.state.labels,
         )
 
         self.apply_dirichlet_bvec(ret_bvec)
@@ -239,15 +268,18 @@ class HopfModel:
     def _NULL_MAT_STATE_STATE(self):
         x_state = self.state[self.labels_fp]
         mats = [
-            subops.zero_mat(row_size, col_size) if row_size != col_size
+            (
+                subops.zero_mat(row_size, col_size)
+                if row_size != col_size
                 else subops.diag_mat(row_size, diag=0)
+            )
             for row_size in x_state.bshape[0]
             for col_size in x_state.bshape[0]
         ]
         return bm.BlockMatrix(
             mats,
-            shape=x_state.shape+x_state.shape,
-            labels=x_state.labels+x_state.labels
+            shape=x_state.shape + x_state.shape,
+            labels=x_state.labels + x_state.labels,
         )
 
     @functools.cached_property
@@ -259,9 +291,7 @@ class HopfModel:
             for col_size in [1]
         ]
         return bm.BlockMatrix(
-            mats,
-            shape=x_state.shape+(1,),
-            labels=x_state.labels+((),)
+            mats, shape=x_state.shape + (1,), labels=x_state.labels + ((),)
         )
 
     @functools.cached_property
@@ -273,25 +303,22 @@ class HopfModel:
             for col_size in x_state.bshape[0]
         ]
         return bm.BlockMatrix(
-            mats,
-            shape=(1,)+x_state.shape,
-            labels=((),)+x_state.labels
+            mats, shape=(1,) + x_state.shape, labels=((),) + x_state.labels
         )
 
     @functools.cached_property
     def _NULL_MAT_SCALAR_SCALAR(self):
         mats = [subops.diag_mat(1, diag=0.0)]
-        return bm.BlockMatrix(
-            mats,
-            shape=(1, 1),
-            labels=((), ())
-        )
+        return bm.BlockMatrix(mats, shape=(1, 1), labels=((), ()))
 
     def assem_dres_dstate(self):
         """Return the Hopf system jacobian"""
         # Bind commonly used local vars
         res, dres = self.res, self.dres
-        mode_real_labels, mode_imag_labels = self.labels_mode_real, self.labels_mode_imag
+        mode_real_labels, mode_imag_labels = (
+            self.labels_mode_real,
+            self.labels_mode_imag,
+        )
         x = self.state
         ee = self.E_MODE
 
@@ -317,43 +344,33 @@ class HopfModel:
             dres_dstate.copy(),
             NULL_MAT_STATE_STATE,
             NULL_MAT_STATE_STATE,
-            bv.to_block_colmat(
-                bla.mult_mat_vec(dres_dcontrol, dcontrol_dlambda)
-            ),
-            NULL_MAT_STATE_SCALAR
+            bv.to_block_colmat(bla.mult_mat_vec(dres_dcontrol, dcontrol_dlambda)),
+            NULL_MAT_STATE_SCALAR,
         ]
 
         omega = x['omega'][0]
         # Set appropriate linearization directions
         dres.set_dstate(mode_real)
-        dres.set_dstatet(float(omega)*mode_imag)
+        dres.set_dstatet(float(omega) * mode_imag)
         dres_dcontrol = dres.assem_dres_dcontrol()
         jac_row1 = [
             dres.assem_dres_dstate(),
             dres_dstate.copy(),
-            -float(omega)*dres_dstatet.copy(),
-            bv.to_block_colmat(
-                bla.mult_mat_vec(dres_dcontrol, dcontrol_dlambda)
-            ),
-            bv.to_block_colmat(
-                bla.mult_mat_vec(-dres_dstatet, mode_imag)
-            )
+            -float(omega) * dres_dstatet.copy(),
+            bv.to_block_colmat(bla.mult_mat_vec(dres_dcontrol, dcontrol_dlambda)),
+            bv.to_block_colmat(bla.mult_mat_vec(-dres_dstatet, mode_imag)),
         ]
 
         # Set appropriate linearization directions
         dres.set_dstate(mode_imag)
-        dres.set_dstatet(-float(omega)*mode_real)
+        dres.set_dstatet(-float(omega) * mode_real)
         dres_dcontrol = dres.assem_dres_dcontrol()
         jac_row2 = [
             dres.assem_dres_dstate(),
-            float(omega)*dres_dstatet.copy(),
+            float(omega) * dres_dstatet.copy(),
             dres_dstate.copy(),
-            bv.to_block_colmat(
-                bla.mult_mat_vec(dres_dcontrol, dcontrol_dlambda)
-            ),
-            bv.to_block_colmat(
-                bla.mult_mat_vec(dres_dstatet, mode_real)
-            )
+            bv.to_block_colmat(bla.mult_mat_vec(dres_dcontrol, dcontrol_dlambda)),
+            bv.to_block_colmat(bla.mult_mat_vec(dres_dstatet, mode_real)),
         ]
 
         jac_row3 = [
@@ -361,7 +378,7 @@ class HopfModel:
             bv.to_block_rowmat(ee),
             NULL_MAT_SCALAR_STATE,
             NULL_MAT_SCALAR_SCALAR,
-            NULL_MAT_SCALAR_SCALAR
+            NULL_MAT_SCALAR_SCALAR,
         ]
 
         jac_row4 = [
@@ -369,11 +386,11 @@ class HopfModel:
             NULL_MAT_SCALAR_STATE,
             bv.to_block_rowmat(ee),
             NULL_MAT_SCALAR_SCALAR,
-            NULL_MAT_SCALAR_SCALAR
+            NULL_MAT_SCALAR_SCALAR,
         ]
 
         ret_mats = [jac_row0, jac_row1, jac_row2, jac_row3, jac_row4]
-        ret_labels = self.state.labels+self.state.labels
+        ret_labels = self.state.labels + self.state.labels
         ret_bmat = bm.concatenate(ret_mats, labels=ret_labels)
         return ret_bmat
 
@@ -381,11 +398,13 @@ class HopfModel:
         """Return the Hopf system jacobian wrt. model properties"""
         # Bind commonly used local vars
         res, dres = self.res, self.dres
-        (state_labels,
+        (
+            state_labels,
             mode_real_labels,
             mode_imag_labels,
             psub_labels,
-            omega_labels) = self.labels_hopf_components
+            omega_labels,
+        ) = self.labels_hopf_components
 
         mode_real = self.state[mode_real_labels]
         mode_imag = self.state[mode_imag_labels]
@@ -396,42 +415,39 @@ class HopfModel:
         row0 = [res.assem_dres_dprop().copy()]
 
         dres.set_dstate(mode_real)
-        dres.set_dstatet(-float(omega)*mode_imag)
+        dres.set_dstatet(-float(omega) * mode_imag)
         row1 = [dres.assem_dres_dprop().copy()]
 
         dres.set_dstate(mode_imag)
-        dres.set_dstatet(float(omega)*mode_real)
+        dres.set_dstatet(float(omega) * mode_real)
         row2 = [dres.assem_dres_dprop().copy()]
 
         _mats = [subops.zero_mat(1, m) for m in self.prop.bshape[0]]
         row3 = [
-            bm.BlockMatrix(
-                _mats, (1, len(_mats)), (psub_labels,)+self.prop.labels
-            )
+            bm.BlockMatrix(_mats, (1, len(_mats)), (psub_labels,) + self.prop.labels)
         ]
         row4 = [
-            bm.BlockMatrix(
-                _mats, (1, len(_mats)), (omega_labels,)+self.prop.labels
-            )
+            bm.BlockMatrix(_mats, (1, len(_mats)), (omega_labels,) + self.prop.labels)
         ]
 
         bmats = [row0, row1, row2, row3, row4]
-        return bm.concatenate(
-            bmats, labels=self.state.labels+self.prop.labels
-        )
+        return bm.concatenate(bmats, labels=self.state.labels + self.prop.labels)
 
-def _gen_hopf_state(res: 'HopfModel', bifparam_key='psub') -> Tuple[bv.BlockVector, List[Labels]]:
+
+def _gen_hopf_state(
+    res: 'HopfModel', bifparam_key='psub'
+) -> Tuple[bv.BlockVector, List[Labels]]:
     """
     Return the Hopf system state from the component dynamical systems
     """
     X_state = res.state.copy()
 
     _mode_real_vecs = [x for x in res.state.copy().sub_blocks.flat]
-    _mode_real_labels = [label+'_mode_real' for label in X_state.labels[0]]
+    _mode_real_labels = [label + '_mode_real' for label in X_state.labels[0]]
     X_mode_real = bv.BlockVector(_mode_real_vecs, labels=[_mode_real_labels])
 
     _mode_imag_vecs = [x for x in res.state.copy().sub_blocks.flat]
-    _mode_imag_labels = [label+'_mode_imag' for label in X_state.labels[0]]
+    _mode_imag_labels = [label + '_mode_imag' for label in X_state.labels[0]]
     X_mode_imag = bv.BlockVector(_mode_imag_vecs, labels=[_mode_imag_labels])
 
     # X_bifparam = res.control[[bifparam_key]].copy()
@@ -456,20 +472,21 @@ def _gen_hopf_state(res: 'HopfModel', bifparam_key='psub') -> Tuple[bv.BlockVect
         mode_real_labels,
         mode_imag_labels,
         bifparam_labels,
-        omega_labels
+        omega_labels,
     ]
     return ret, labels
 
+
 ## Functions for finding/bracketing Hopf bifurcations
 def gen_xhopf_0(
-        dyn_model: dynbase.BaseDynamicalModel,
-        prop: bv.BlockVector,
-        evec_ref: bv.BlockVector,
-        psubs: np.ndarray,
-        tol: float=100.0,
-        solve_fp_r: FixedPointSolver=None,
-        set_bifparam=None
-    ) -> bv.BlockVector:
+    dyn_model: dynbase.BaseDynamicalModel,
+    prop: bv.BlockVector,
+    evec_ref: bv.BlockVector,
+    psubs: np.ndarray,
+    tol: float = 100.0,
+    solve_fp_r: FixedPointSolver = None,
+    set_bifparam=None,
+) -> bv.BlockVector:
     """
     Generate an initial guess for the Hopf problem over a range of pressures
 
@@ -496,6 +513,7 @@ def gen_xhopf_0(
         set_bifparam = set_bifparam_fluid
 
     if solve_fp_r is None:
+
         def solve_fp_r(model, psub):
             return solve_fp(model, psub, set_bifparam=set_bifparam)
 
@@ -503,10 +521,7 @@ def gen_xhopf_0(
     dyn_control = dyn_model.control.copy()
 
     # Determine the least stable mode growth rate for each psub
-    sol_fps = [
-        solve_fp_r(dyn_model, psub)
-        for psub in psubs
-    ]
+    sol_fps = [solve_fp_r(dyn_model, psub) for psub in psubs]
     state_fps = [sol[0] for sol in sol_fps]
     info_fps = [sol[1] for sol in sol_fps]
 
@@ -523,42 +538,49 @@ def gen_xhopf_0(
         omega2 >= 0.0 and omega1 < 0.0
         for omega1, omega2 in zip(omegas_max[:-1], omegas_max[1:])
     ]
-    idxs_bif = np.arange(psubs.size-1)[has_transition]
+    idxs_bif = np.arange(psubs.size - 1)[has_transition]
     if idxs_bif.size == 0:
         raise RuntimeError("No Hopf bifurcations detected")
     elif idxs_bif.size > 1:
         warnings.warn(
             "Found more than one Hopf bifurcation parameter"
             "; using the smallest by default",
-            category=RuntimeWarning
+            category=RuntimeWarning,
         )
 
     # Use the bounding/bisection approach to locate a refined initial guess
     # in the interval containing a Hopf bifurcation
     idx_bif = idxs_bif[0]
     lbs = [psubs[idx_bif]]
-    ubs = [psubs[idx_bif+1]]
+    ubs = [psubs[idx_bif + 1]]
     bounds = (lbs, ubs)
     omega_lbs = [omegas_max[idx_bif]]
-    omega_ubs = [omegas_max[idx_bif+1]]
+    omega_ubs = [omegas_max[idx_bif + 1]]
     omega_pairs = (omega_lbs, omega_ubs)
     xhopf_0 = gen_xhopf_0_from_bounds(
-        dyn_model, prop, evec_ref, bounds, omega_pairs,
-        tol=tol, solve_fp_r=solve_fp_r, set_bifparam=set_bifparam
+        dyn_model,
+        prop,
+        evec_ref,
+        bounds,
+        omega_pairs,
+        tol=tol,
+        solve_fp_r=solve_fp_r,
+        set_bifparam=set_bifparam,
     )
     return xhopf_0
 
+
 def bound_ponset(
-        model: dynbase.BaseDynamicalModel,
-        control: bv.BlockVector,
-        prop: bv.BlockVector,
-        bound_pairs: ListPair,
-        omega_pairs: ListPair=None,
-        solve_fp_r: FixedPointSolver=None,
-        nsplit: int=2,
-        tol: float=100.0,
-        set_bifparam=None
-    ) -> Tuple[ListPair, ListPair]:
+    model: dynbase.BaseDynamicalModel,
+    control: bv.BlockVector,
+    prop: bv.BlockVector,
+    bound_pairs: ListPair,
+    omega_pairs: ListPair = None,
+    solve_fp_r: FixedPointSolver = None,
+    nsplit: int = 2,
+    tol: float = 100.0,
+    set_bifparam=None,
+) -> Tuple[ListPair, ListPair]:
     """
     Bound the onset pressure where a Hopf bifurcation occurs
 
@@ -584,6 +606,7 @@ def bound_ponset(
         set_bifparam = set_bifparam_fluid
 
     if solve_fp_r is None:
+
         def solve_fp_r(model, psub):
             return solve_fp(model, psub, set_bifparam=set_bifparam)
 
@@ -591,10 +614,7 @@ def bound_ponset(
     lbs, ubs = bound_pairs
 
     if omega_pairs is None:
-        _sol_fps = [
-            solve_fp_r(model, psub)
-            for psub in lbs
-        ]
+        _sol_fps = [solve_fp_r(model, psub) for psub in lbs]
         state_fps_lb = [sol[0] for sol in _sol_fps]
         info_fps = [sol[1] for sol in _sol_fps]
 
@@ -617,10 +637,7 @@ def bound_ponset(
         )
 
     # Filter bound pairs so only pairs that contain Hopf bifurcations are present
-    has_onset = [
-        lb < 0 and ub >= 0
-        for lb, ub in zip(*omega_pairs)
-    ]
+    has_onset = [lb < 0 and ub >= 0 for lb, ub in zip(*omega_pairs)]
 
     _lbs = [lb for lb, valid in zip(lbs, has_onset) if valid]
     _ubs = [ub for ub, valid in zip(ubs, has_onset) if valid]
@@ -632,7 +649,7 @@ def bound_ponset(
     # Check if the bound pairs containing onset all satisfy the tolerance;
     # if they do return the bounds,
     # and if they don't, split the bounds into smaller segments and retry
-    tols = [ub-lb for lb, ub in zip(lbs, ubs)]
+    tols = [ub - lb for lb, ub in zip(lbs, ubs)]
     if all([_tol <= tol for _tol in tols]):
         return (_lbs, _ubs), (_lomegas, _uomegas)
     else:
@@ -642,15 +659,15 @@ def bound_ponset(
         # lb/ub pair; the outer list corresponds to lb/ub segments and the inner
         # lists to interior point within the correponding segment
         bounds_points = [
-            list(np.linspace(lb, ub, nsplit+1)[1:-1])
-            for lb, ub in zip(_lbs, _ubs)
+            list(np.linspace(lb, ub, nsplit + 1)[1:-1]) for lb, ub in zip(_lbs, _ubs)
         ]
         bounds_omegas = [
             [
                 solve_least_stable_mode(
                     model,
                     solve_fp_r(model, psub)[0],
-                    set_bifparam(model, control, psub), prop
+                    set_bifparam(model, control, psub),
+                    prop,
                 )[0].real
                 for psub in psubs
             ]
@@ -659,38 +676,50 @@ def bound_ponset(
 
         # Join the computed interior points for each bound into a new set of bound pairs and omega pairs
         ret_lbs = [
-            x for lb, bound_points in zip(_lbs, bounds_points)
+            x
+            for lb, bound_points in zip(_lbs, bounds_points)
             for x in ([lb] + bound_points)
-            ]
+        ]
         ret_ubs = [
-            x for ub, bound_points in zip(_ubs, bounds_points)
+            x
+            for ub, bound_points in zip(_ubs, bounds_points)
             for x in (bound_points + [ub])
-            ]
+        ]
 
         ret_lomegas = [
-            x for lomega, omegas in zip(_lomegas, bounds_omegas)
+            x
+            for lomega, omegas in zip(_lomegas, bounds_omegas)
             for x in ([lomega] + omegas)
-            ]
+        ]
         ret_uomegas = [
-            x for uomega, omegas in zip(_uomegas, bounds_omegas)
+            x
+            for uomega, omegas in zip(_uomegas, bounds_omegas)
             for x in (omegas + [uomega])
-            ]
+        ]
         return bound_ponset(
-            model, control, prop, (ret_lbs, ret_ubs), (ret_lomegas, ret_uomegas),
-            nsplit=nsplit, tol=tol, solve_fp_r=solve_fp_r, set_bifparam=set_bifparam
+            model,
+            control,
+            prop,
+            (ret_lbs, ret_ubs),
+            (ret_lomegas, ret_uomegas),
+            nsplit=nsplit,
+            tol=tol,
+            solve_fp_r=solve_fp_r,
+            set_bifparam=set_bifparam,
         )
 
+
 def gen_xhopf_0_from_bounds(
-        dyn_model: dynbase.BaseDynamicalModel,
-        prop: bv.BlockVector,
-        evec_ref: bv.BlockVector,
-        bound_pairs: ListPair,
-        omega_pairs: Optional[ListPair]=None,
-        solve_fp_r: FixedPointSolver=None,
-        nsplit: int=2,
-        tol: float=100.0,
-        set_bifparam=None
-    ) -> bv.BlockVector:
+    dyn_model: dynbase.BaseDynamicalModel,
+    prop: bv.BlockVector,
+    evec_ref: bv.BlockVector,
+    bound_pairs: ListPair,
+    omega_pairs: Optional[ListPair] = None,
+    solve_fp_r: FixedPointSolver = None,
+    nsplit: int = 2,
+    tol: float = 100.0,
+    set_bifparam=None,
+) -> bv.BlockVector:
     """
     Generate an initial guess for a Hopf system by bounding the bifurcation point
 
@@ -721,8 +750,15 @@ def gen_xhopf_0_from_bounds(
 
     # Find lower/upper bounds for the Hopf bifurcation point
     (lbs, ubs), _ = bound_ponset(
-        dyn_model, control, prop, bound_pairs, omega_pairs=omega_pairs,
-        nsplit=nsplit, tol=tol, solve_fp_r=solve_fp_r, set_bifparam=set_bifparam
+        dyn_model,
+        control,
+        prop,
+        bound_pairs,
+        omega_pairs=omega_pairs,
+        nsplit=nsplit,
+        tol=tol,
+        solve_fp_r=solve_fp_r,
+        set_bifparam=set_bifparam,
     )
 
     if len(ubs) > 1:
@@ -736,15 +772,17 @@ def gen_xhopf_0_from_bounds(
     # Use the avg. of lower and upper bounds to generate an initial guess for
     # the bifurcation
     # First set the model subglottal pressure to the upper bound
-    psub = 1/2 * (lbs[0] + ubs[0])
+    psub = 1 / 2 * (lbs[0] + ubs[0])
     control = set_bifparam(dyn_model, control, psub)
 
     # Solve for the fixed point
     # x_fp0 = res.state.copy()
     # x_fp0[:] = 0.0
     if solve_fp_r is None:
+
         def solve_fp_r(model, psub):
-            return solve_fp(model, psub, psub_incr=250*10, set_bifparam=set_bifparam)
+            return solve_fp(model, psub, psub_incr=250 * 10, set_bifparam=set_bifparam)
+
     x_fp, _info = solve_fp_r(dyn_model, psub)
 
     # Solve for linear stability around the fixed point
@@ -761,9 +799,7 @@ def gen_xhopf_0_from_bounds(
     )
 
     x_omega = bv.convert_subtype_to_petsc(
-        bv.BlockVector(
-            [np.array([omegas[idx_max].imag])], labels=(('omega',),)
-        )
+        bv.BlockVector([np.array([omegas[idx_max].imag])], labels=(('omega',),))
     )
 
     x_psub = bv.convert_subtype_to_petsc(
@@ -774,12 +810,11 @@ def gen_xhopf_0_from_bounds(
     x_hopf = bv.concatenate(sub_bvecs, labels=((),))
     return x_hopf
 
+
 ## Functions for normalizing eigenvectors
 def normalize_eigvec_by_hopf(
-        evec_real: bv.BlockVector,
-        evec_imag: bv.BlockVector,
-        evec_ref: bv.BlockVector
-    ) -> Tuple[bv.BlockVector, bv.BlockVector]:
+    evec_real: bv.BlockVector, evec_imag: bv.BlockVector, evec_ref: bv.BlockVector
+) -> Tuple[bv.BlockVector, bv.BlockVector]:
     """
     Normalize an eigenvector by the Hopf system condition [Griewank1983]
 
@@ -792,37 +827,38 @@ def normalize_eigvec_by_hopf(
     _a = bla.dot(evec_ref, evec_imag)
     _b = bla.dot(evec_ref, evec_real)
 
-    a = _a/(_a**2+ _b**2)
-    b = _b/(_a**2+ _b**2)
+    a = _a / (_a**2 + _b**2)
+    b = _b / (_a**2 + _b**2)
 
-    nevec_real = a*evec_real - b*evec_imag
-    nevec_imag = b*evec_real + a*evec_imag
+    nevec_real = a * evec_real - b * evec_imag
+    nevec_imag = b * evec_real + a * evec_imag
     return nevec_real, nevec_imag
 
+
 def normalize_eigvec_by_norm(
-        evec_real: bv.BlockVector,
-        evec_imag: bv.BlockVector
-    ) -> Tuple[bv.BlockVector, bv.BlockVector]:
+    evec_real: bv.BlockVector, evec_imag: bv.BlockVector
+) -> Tuple[bv.BlockVector, bv.BlockVector]:
     """
     Scales real and imaginary components of an eigenvector so it has unit norm
     """
-    ampl = 1/(evec_real.norm()**2 + evec_imag.norm()**2)**0.5
-    return ampl*evec_real, ampl*evec_imag
+    ampl = 1 / (evec_real.norm() ** 2 + evec_imag.norm() ** 2) ** 0.5
+    return ampl * evec_real, ampl * evec_imag
+
 
 ## Functions for the dynamical model/system
 # The dynamical system corresponds to one block of the larger Hopf system
 # (i.e. `Hopf.res`)
 def solve_fp(
-        res: dyncoup.BaseDynamicalFSIModel,
-        psub_fin: float,
-        psub_ini: float=0,
-        psub_incr: float=5000,
-        xfp_0: Optional[bv.BlockVector]=None,
-        n_max: int=10,
-        method='newton',
-        iter_params=None,
-        set_bifparam=None
-    ) -> bv.BlockVector:
+    res: dyncoup.BaseDynamicalFSIModel,
+    psub_fin: float,
+    psub_ini: float = 0,
+    psub_incr: float = 5000,
+    xfp_0: Optional[bv.BlockVector] = None,
+    n_max: int = 10,
+    method='newton',
+    iter_params=None,
+    set_bifparam=None,
+) -> bv.BlockVector:
     """
     Solve for a fixed-point
 
@@ -856,13 +892,11 @@ def solve_fp(
 
         if method == 'newton':
             xfp_n, info = solve_fp_by_newton(
-                res, xfp_n, control_n, prop_n,
-                params=iter_params
+                res, xfp_n, control_n, prop_n, params=iter_params
             )
         elif method == 'picard':
             xfp_n, info = solve_fp_by_picard(
-                res, xfp_n, control_n, prop_n,
-                params=iter_params
+                res, xfp_n, control_n, prop_n, params=iter_params
             )
         else:
             raise ValueError(f"Unknown `method` {method}")
@@ -874,12 +908,12 @@ def solve_fp(
             load_steps_complete = True
         elif info['status'] != 0:
             # doesn't converge: half the loading step and try again
-            psub_incr = psub_incr/2
+            psub_incr = psub_incr / 2
             if n > n_max:
                 break
         else:
             # does converge: increment to the next loading step
-            psub_n = psub_n + min(psub_incr, psub_final-psub_n)
+            psub_n = psub_n + min(psub_incr, psub_final - psub_n)
 
         n += 1
 
@@ -893,13 +927,14 @@ def solve_fp(
 
     return xfp_n, info
 
+
 def solve_fp_by_newton(
-        res: dyncoup.BaseDynamicalFSIModel,
-        xfp_0: bv.BlockVector,
-        control: bv.BlockVector,
-        prop: bv.BlockVector,
-        params: Optional[Dict]=None
-    ) -> Tuple[bv.BlockVector, Dict]:
+    res: dyncoup.BaseDynamicalFSIModel,
+    xfp_0: bv.BlockVector,
+    control: bv.BlockVector,
+    prop: bv.BlockVector,
+    params: Optional[Dict] = None,
+) -> Tuple[bv.BlockVector, Dict]:
     """
     Solve for a fixed-point
 
@@ -927,8 +962,11 @@ def solve_fp_by_newton(
     # )
 
     IDX_DIRICHLET = np.concatenate(
-        [list(bc.get_boundary_values().keys()) for bc in res.solid.residual.dirichlet_bcs],
-        dtype=np.int32
+        [
+            list(bc.get_boundary_values().keys())
+            for bc in res.solid.residual.dirichlet_bcs
+        ],
+        dtype=np.int32,
     )
 
     def linear_subproblem_newton(xfp_n):
@@ -963,24 +1001,24 @@ def solve_fp_by_newton(
             dx_n = xfp_n.copy()
             dx_n.set_mono(_dx_n)
             return dx_n
+
         return assem_res, solve
 
     if params is None:
-        params = {
-            'maximum_iterations': 20
-        }
+        params = {'maximum_iterations': 20}
     xfp_n, info = nleq.newton_solve(
         xfp_0, linear_subproblem_newton, norm=bv.norm, params=params
     )
     return xfp_n, info
 
+
 def solve_fp_by_picard(
-        res: dyncoup.BaseDynamicalFSIModel,
-        xfp_0: bv.BlockVector,
-        control: bv.BlockVector,
-        prop: bv.BlockVector,
-        params: Optional[Dict]=None
-    ) -> Tuple[bv.BlockVector, Dict]:
+    res: dyncoup.BaseDynamicalFSIModel,
+    xfp_0: bv.BlockVector,
+    control: bv.BlockVector,
+    prop: bv.BlockVector,
+    params: Optional[Dict] = None,
+) -> Tuple[bv.BlockVector, Dict]:
     """
     Solve for a fixed-point
 
@@ -1002,8 +1040,11 @@ def solve_fp_by_picard(
     res.set_statet(res.statet)
 
     IDX_DIRICHLET = np.concatenate(
-        [list(bc.get_boundary_values().keys()) for bc in res.solid.residual.dirichlet_bcs],
-        dtype=np.int32
+        [
+            list(bc.get_boundary_values().keys())
+            for bc in res.solid.residual.dirichlet_bcs
+        ],
+        dtype=np.int32,
     )
 
     def linear_subproblem_solid(xsolid_n):
@@ -1015,9 +1056,7 @@ def solve_fp_by_picard(
             return _ret
 
         def solve(rhs_n):
-            jac_n = bm.convert_subtype_to_petsc(
-                res.solid.assem_dres_dstate()
-            )
+            jac_n = bm.convert_subtype_to_petsc(res.solid.assem_dres_dstate())
             _apply_dirichlet_bmat(jac_n, IDX_DIRICHLET)
 
             _jac_n = jac_n.to_mono_petsc()
@@ -1046,7 +1085,9 @@ def solve_fp_by_picard(
             """Return jac^-1 res"""
             # Solve for the solid phase deformation from the current fluid loading
             xsolid_0 = xfp_n[['u', 'v']]
-            xsolid_n, _ = nleq.newton_solve(xsolid_0, linear_subproblem_solid, norm=bv.norm)
+            xsolid_n, _ = nleq.newton_solve(
+                xsolid_0, linear_subproblem_solid, norm=bv.norm
+            )
 
             # Update solid deformation which will update the fluid loading
             res.state[['u', 'v']] = xsolid_n
@@ -1058,13 +1099,14 @@ def solve_fp_by_picard(
             xfluid_n = res.fluid.state - res.fluid.assem_res()
 
             return bv.concatenate([xsolid_n, xfluid_n])
+
         return assem_res, solve
 
     if params is None:
-        params = {
-            'maximum_iterations': 20
-        }
-    xfp_n, info = nleq.iterative_solve(xfp_0, linear_subproblem_fp, norm=bv.norm, params=params)
+        params = {'maximum_iterations': 20}
+    xfp_n, info = nleq.iterative_solve(
+        xfp_0, linear_subproblem_fp, norm=bv.norm, params=params
+    )
     return xfp_n, info
 
 
@@ -1074,6 +1116,7 @@ def _apply_dirichlet_bvec(vec, idx):
     for subvec in vec[['u', 'v']].sub_blocks:
         subvec.setValues(idx, np.zeros(idx.size))
     return vec
+
 
 def _apply_dirichlet_bmat(mat, idx, diag=1.0):
     """Applies the dirichlet BC to a matrix"""
@@ -1087,12 +1130,13 @@ def _apply_dirichlet_bmat(mat, idx, diag=1.0):
                 submat.zeroRows(idx, diag=0.0)
     return mat
 
+
 def solve_linear_stability(
-        res: dynbase.BaseDynamicalModel,
-        xfp: bv.BlockVector,
-        control: bv.BlockVector,
-        prop: bv.BlockVector,
-    ) -> Tuple[List[float], List[bv.BlockVector], List[bv.BlockVector]]:
+    res: dynbase.BaseDynamicalModel,
+    xfp: bv.BlockVector,
+    control: bv.BlockVector,
+    prop: bv.BlockVector,
+) -> Tuple[List[float], List[bv.BlockVector], List[bv.BlockVector]]:
     """
     Return a set of modes for the linear stability problem (lsa)
 
@@ -1118,8 +1162,11 @@ def solve_linear_stability(
     res.set_statet(res.statet)
 
     IDX_DIRICHLET = np.concatenate(
-        [list(bc.get_boundary_values().keys()) for bc in res.solid.residual.dirichlet_bcs],
-        dtype=np.int32
+        [
+            list(bc.get_boundary_values().keys())
+            for bc in res.solid.residual.dirichlet_bcs
+        ],
+        dtype=np.int32,
     )
 
     def apply_dirichlet_bmat(mat, diag=1.0):
@@ -1150,13 +1197,13 @@ def solve_linear_stability(
 
     # number of eigenvalues to solve for and dimension of subspace to approximate problem
     num_eig = 5
-    num_col = 10*num_eig
+    num_col = 10 * num_eig
     eps.setDimensions(num_eig, num_col)
     eps.setWhichEigenpairs(SLEPc.EPS.Which.LARGEST_MAGNITUDE)
     eps.solve()
 
     eigvals = np.array([eps.getEigenvalue(jj) for jj in range(eps.getConverged())])
-    omegas = -1/eigvals
+    omegas = -1 / eigvals
     # print("Omegas:", omegas)
 
     eigvecs_real = [res.state.copy() for jj in range(eps.getConverged())]
@@ -1172,12 +1219,13 @@ def solve_linear_stability(
 
     return omegas, eigvecs_real, eigvecs_imag
 
+
 def solve_least_stable_mode(
-        res: dynbase.BaseDynamicalModel,
-        xfp: bv.BlockVector,
-        control: bv.BlockVector,
-        prop: bv.BlockVector
-    ) -> Tuple[float, bv.BlockVector, bv.BlockVector, bv.BlockVector]:
+    res: dynbase.BaseDynamicalModel,
+    xfp: bv.BlockVector,
+    control: bv.BlockVector,
+    prop: bv.BlockVector,
+) -> Tuple[float, bv.BlockVector, bv.BlockVector, bv.BlockVector]:
     """
     Return modal information for the least stable mode of a dynamical system
 
@@ -1190,30 +1238,28 @@ def solve_least_stable_mode(
         The control and property vectors
     """
     # Solve for linear stability around the fixed point
-    omegas, eigvecs_real, eigvecs_imag = solve_linear_stability(
-        res, xfp, control, prop
-    )
+    omegas, eigvecs_real, eigvecs_imag = solve_linear_stability(res, xfp, control, prop)
 
     idx_max = np.argmax(omegas.real)
     return omegas[idx_max], eigvecs_real[idx_max], eigvecs_imag[idx_max], xfp
 
+
 ## Functions for the Hopf model/system
 def solve_hopf_by_newton(
-        hopf: HopfModel,
-        xhopf_0: bv.BlockVector,
-        prop: bv.BlockVector,
-        out=None, newton_params=None,
-        linear_solver='numpy'
-    ) -> Tuple[bv.BlockVector, Dict]:
+    hopf: HopfModel,
+    xhopf_0: bv.BlockVector,
+    prop: bv.BlockVector,
+    out=None,
+    newton_params=None,
+    linear_solver='numpy',
+) -> Tuple[bv.BlockVector, Dict]:
     """Solve the nonlinear Hopf problem using a newton method"""
     hopf.set_prop(prop)
 
     if out is None:
         out = xhopf_0.copy()
 
-    xhopf_0 = bv.BlockVector(
-        xhopf_0.larray, labels=hopf.state.labels
-    )
+    xhopf_0 = bv.BlockVector(xhopf_0.larray, labels=hopf.state.labels)
 
     def linear_subproblem(xhopf_n):
         """Linear subproblem of a Newton solver"""
@@ -1248,15 +1294,17 @@ def solve_hopf_by_newton(
             dx_n = xhopf_n.copy()
             dx_n.set_mono(_dx_n)
             return dx_n
+
         return assem_res, solve
 
     if newton_params is None:
-        newton_params = {
-            'maximum_iterations': 10
-        }
+        newton_params = {'maximum_iterations': 10}
 
-    out[:], info = nleq.newton_solve(xhopf_0, linear_subproblem, norm=bv.norm, params=newton_params)
+    out[:], info = nleq.newton_solve(
+        xhopf_0, linear_subproblem, norm=bv.norm, params=newton_params
+    )
     return out, info
+
 
 ## Functionality for reduced functionals
 class ReducedHopfModel:
@@ -1278,12 +1326,13 @@ class ReducedHopfModel:
     hopf_psub_intervals :
         Intervals of subglottal pressure to search for Hopf bifurcations.
     """
+
     def __init__(
-            self,
-            hopf: HopfModel,
-            hopf_psub_intervals: Optional[np.ndarray]=None,
-            newton_params: Optional[dict]=None
-        ):
+        self,
+        hopf: HopfModel,
+        hopf_psub_intervals: Optional[np.ndarray] = None,
+        newton_params: Optional[dict] = None,
+    ):
         self.hopf = hopf
         if hopf_psub_intervals is None:
             self.PSUB_INTERVALS = np.arange(0, 2600, 100) * 10
@@ -1336,7 +1385,7 @@ class ReducedHopfModel:
                 f"Newton solver exited with message '{info['message']}' "
                 f"after {info['num_iter']} iterations. "
                 "Attemping to retry with a better initial guess with.",
-                category=RuntimeWarning
+                category=RuntimeWarning,
             )
             xhopf_0 = gen_xhopf_0(
                 self.hopf.res, prop, self.hopf.E_MODE, self.PSUB_INTERVALS, tol=100.0
@@ -1366,6 +1415,7 @@ class ReducedHopfModel:
         Return the Hopf model state
         """
         return self.hist_state[-1]
+
 
 class ReducedFunctional:
     """
@@ -1399,10 +1449,8 @@ class ReducedFunctional:
     """
 
     def __init__(
-            self,
-            func: functional.GenericFunctional,
-            reduced_hopf_model: ReducedHopfModel
-        ):
+        self, func: functional.GenericFunctional, reduced_hopf_model: ReducedHopfModel
+    ):
         self.func = func
         self.rhopf_model = reduced_hopf_model
 
@@ -1440,18 +1488,15 @@ class ReducedFunctional:
         Return the functional gradient
         """
         return solve_reduced_gradient(
-            self.func,
-            self.rhopf_model.hopf,
-            self.state,
-            self.prop
+            self.func, self.rhopf_model.hopf, self.state, self.prop
         )
 
     def assem_d2g_dprop2(
-            self,
-            dprop: bv.BlockVector,
-            norm: Optional[Callable[[bv.BlockVector], float]]=None,
-            h: float=1
-        ) -> bv.BlockVector:
+        self,
+        dprop: bv.BlockVector,
+        norm: Optional[Callable[[bv.BlockVector], float]] = None,
+        h: float = 1,
+    ) -> bv.BlockVector:
         """
         Return the functional hessian-vector product
         """
@@ -1463,28 +1508,23 @@ class ReducedFunctional:
         unit_dprops[:] = dprop
 
         norm_dprops = norm(unit_dprops)
-        unit_dprops = unit_dprops/norm_dprops
+        unit_dprops = unit_dprops / norm_dprops
 
         # Approximate the HVP with a central difference
         def assem_grad(hopf_props):
             hopf = self.rhopf_model.hopf
 
             # hopf.set_prop(hopf_props)
-            hopf_state, info = solve_hopf_by_newton(
-                hopf, self.state, hopf_props
-            )
+            hopf_state, info = solve_hopf_by_newton(hopf, self.state, hopf_props)
             assert info['status'] == 0
 
             return solve_reduced_gradient(
-                self.func,
-                hopf,
-                hopf_state,
-                hopf_props
+                self.func, hopf, hopf_state, hopf_props
             ).copy()
 
         # CD
         alphas = [h, -h]
-        kernel = [1/(2*h), -1/(2*h)]
+        kernel = [1 / (2 * h), -1 / (2 * h)]
 
         # FD
         # alphas = [h, 0]
@@ -1492,18 +1532,19 @@ class ReducedFunctional:
 
         prop = self.prop
         dgs = [
-            k*assem_grad(prop + alpha*unit_dprops)
+            k * assem_grad(prop + alpha * unit_dprops)
             for k, alpha in zip(kernel, alphas)
         ]
         return norm_dprops * functools.reduce(operator.add, dgs)
 
+
 def solve_reduced_gradient(
-        functional: functional.GenericFunctional,
-        hopf: HopfModel,
-        state: bv.BlockVector,
-        prop: bv.BlockVector,
-        linear_solver='numpy'
-    ) -> bv.BlockVector:
+    functional: functional.GenericFunctional,
+    hopf: HopfModel,
+    state: bv.BlockVector,
+    prop: bv.BlockVector,
+    linear_solver='numpy',
+) -> bv.BlockVector:
     """Solve for the reduced gradient of a functional"""
     for obj in (functional, hopf):
         obj.set_state(state)
@@ -1557,11 +1598,8 @@ class OptGradManager:
     """
 
     def __init__(
-            self,
-            redu_grad: ReducedFunctional,
-            f: h5py.Group,
-            param: paramzn.Transform
-        ):
+        self, redu_grad: ReducedFunctional, f: h5py.Group, param: paramzn.Transform
+    ):
         self.redu_grad = redu_grad
         self.f = f
         self.param = param
@@ -1582,7 +1620,8 @@ class OptGradManager:
         )
         h5utils.create_resizable_block_vector_group(
             f.create_group('hopf_state'),
-            redu_grad.rhopf_model.hopf.state.labels, redu_grad.rhopf_model.hopf.state.bshape
+            redu_grad.rhopf_model.hopf.state.labels,
+            redu_grad.rhopf_model.hopf.state.bshape,
         )
         f.create_dataset('objective', (0,), maxshape=(None,))
 
@@ -1607,30 +1646,32 @@ class OptGradManager:
         """
         ## Record current state to h5 file
         # Record the current parameter set
-        h5utils.append_block_vector_to_group(
-            self.f['parameters'], p
-        )
+        h5utils.append_block_vector_to_group(self.f['parameters'], p)
 
         hopf_state = self.redu_grad.rhopf_model.hist_state[-1]
-        h5utils.append_block_vector_to_group(
-            self.f['hopf_state'], hopf_state
-        )
+        h5utils.append_block_vector_to_group(self.f['hopf_state'], hopf_state)
 
         hopf_props = self.redu_grad.prop
-        h5utils.append_block_vector_to_group(
-            self.f['hopf_props'], hopf_props
-        )
+        h5utils.append_block_vector_to_group(self.f['hopf_props'], hopf_props)
 
-        self.f['hopf_newton_num_iter'].resize(self.f['hopf_newton_num_iter'].size+1, axis=0)
+        self.f['hopf_newton_num_iter'].resize(
+            self.f['hopf_newton_num_iter'].size + 1, axis=0
+        )
         self.f['hopf_newton_num_iter'][-1] = info['num_iter']
 
-        self.f['hopf_newton_status'].resize(self.f['hopf_newton_status'].size+1, axis=0)
+        self.f['hopf_newton_status'].resize(
+            self.f['hopf_newton_status'].size + 1, axis=0
+        )
         self.f['hopf_newton_status'][-1] = info['status']
 
-        self.f['hopf_newton_rel_err'].resize(self.f['hopf_newton_rel_err'].size+1, axis=0)
+        self.f['hopf_newton_rel_err'].resize(
+            self.f['hopf_newton_rel_err'].size + 1, axis=0
+        )
         self.f['hopf_newton_rel_err'][-1] = info['rel_errs'][-1]
 
-        self.f['hopf_newton_abs_err'].resize(self.f['hopf_newton_abs_err'].size+1, axis=0)
+        self.f['hopf_newton_abs_err'].resize(
+            self.f['hopf_newton_abs_err'].size + 1, axis=0
+        )
         self.f['hopf_newton_abs_err'][-1] = info['abs_errs'][-1]
 
     def set_prop(self, p):
@@ -1654,7 +1695,7 @@ class OptGradManager:
             warnings.warn(
                 "ReducedGradient couldn't solve/find a Hopf bifurcation for the "
                 f"current parameter set due to error '{err}'",
-                category=RuntimeWarning
+                category=RuntimeWarning,
             )
             solver_failure = True
 
@@ -1678,9 +1719,10 @@ class OptGradManager:
 
         # Record the current objective function and gradient
         h5utils.append_block_vector_to_group(self.f['grad'], _dg_dp)
-        self.f['objective'].resize(self.f['objective'].size+1, axis=0)
+        self.f['objective'].resize(self.f['objective'].size + 1, axis=0)
         self.f['objective'][-1] = g
         return g, dg_dp
+
 
 ## petsc4py 'Context' objects
 class ReducedFunctionalHessianContext:
@@ -1689,13 +1731,14 @@ class ReducedFunctionalHessianContext:
     """
 
     def __init__(
-            self,
-            reduced_functional: ReducedFunctional,
-            transform: paramzn.Transform,
-            norm: Optional[Callable[[bv.BlockVector], float]]=None,
-            step_size: Optional[float]=1.0
-        ):
+        self,
+        reduced_functional: ReducedFunctional,
+        transform: paramzn.Transform,
+        norm: Optional[Callable[[bv.BlockVector], float]] = None,
+        step_size: Optional[float] = 1.0,
+    ):
         if norm is None:
+
             def norm(vec: bv.BlockVector):
                 return vec.norm()
 
@@ -1708,9 +1751,7 @@ class ReducedFunctionalHessianContext:
 
     def set_params(self, params: bv.BlockVector):
         self.params[:] = params
-        return self.rfunctional.set_prop(
-            self.transform.apply(params)
-        )
+        return self.rfunctional.set_prop(self.transform.apply(params))
 
     def mult(self, mat: PETSc.Mat, x: PETSc.Vec, y: PETSc.Vec):
         bx = self.transform.x.copy()

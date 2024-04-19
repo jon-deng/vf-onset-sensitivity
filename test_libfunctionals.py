@@ -1,6 +1,7 @@
 """
 Testing code for finding hopf bifurcations of coupled FE VF models
 """
+
 # import sys
 from os import path
 import numbers
@@ -23,9 +24,11 @@ EBODY = 5e3 * 10
 ECOV = 5e3 * 10
 PSUB = 450 * 10
 
+
 def _test_taylor(*args, **kwargs):
     alphas, errs, magnitudes, conv_rates = taylor_convergence(*args, **kwargs)
     assert pass_taylor_convergence_test(errs, magnitudes, conv_rates)
+
 
 def pass_taylor_convergence_test(errs, magnitudes, conv_rates, relerr_tol=1e-5):
     """
@@ -33,7 +36,7 @@ def pass_taylor_convergence_test(errs, magnitudes, conv_rates, relerr_tol=1e-5):
     """
     is_taylor2 = np.all(np.isclose(conv_rates, 2, rtol=0.1, atol=0.1))
     with np.errstate(invalid='ignore'):
-        rel_errs = np.where(errs == 0, 0, errs/magnitudes)
+        rel_errs = np.where(errs == 0, 0, errs / magnitudes)
     is_relerr = np.all(np.isclose(rel_errs, 0, atol=relerr_tol))
     if is_taylor2:
         return True
@@ -42,11 +45,8 @@ def pass_taylor_convergence_test(errs, magnitudes, conv_rates, relerr_tol=1e-5):
     else:
         return False
 
-@pytest.fixture(
-    params=[
-        'M5_CB_GA3_CL0.50'
-    ]
-)
+
+@pytest.fixture(params=['M5_CB_GA3_CL0.50'])
 def mesh_path(request):
     mesh_name = request.param
     mesh_dir = './mesh'
@@ -54,19 +54,23 @@ def mesh_path(request):
 
     return mesh_path
 
+
 @pytest.fixture()
 def setup_hopf_model(mesh_path):
     """
     Return a hopf model
     """
-    hopf, *_ = load_hopf_model(mesh_path, sep_method='smoothmin', sep_vert_label='separation')
+    hopf, *_ = load_hopf_model(
+        mesh_path, sep_method='smoothmin', sep_vert_label='separation'
+    )
     return hopf
+
 
 @pytest.fixture(
     params=[
         libfuncs.OnsetPressureFunctional,
         libfuncs.GlottalWidthErrorFunctional,
-        libfuncs.StrainEnergyFunctional
+        libfuncs.StrainEnergyFunctional,
     ]
 )
 def func(setup_hopf_model, request):
@@ -75,6 +79,7 @@ def func(setup_hopf_model, request):
     """
     FunctionalClass = request.param
     return FunctionalClass(setup_hopf_model)
+
 
 @pytest.fixture()
 def setup_linearization(func, setup_hopf_model):
@@ -98,8 +103,8 @@ def setup_linearization(func, setup_hopf_model):
     dprop[:] = 0
     dprop['emod'] = 1.0
 
-
     return (state0, props0), (dstate, dprop)
+
 
 def set_linearization(func, state, prop):
     """
@@ -107,6 +112,7 @@ def set_linearization(func, state, prop):
     """
     func.set_state(state)
     func.set_prop(prop)
+
 
 def test_assem_dg_dstate(func, setup_linearization):
     """Test the functional `state` derivative"""
@@ -121,7 +127,8 @@ def test_assem_dg_dstate(func, setup_linearization):
         func.set_state(x)
         return bla.dot(func.assem_dg_dstate(), dx)
 
-    _test_taylor(state, dstate, res, jac, norm=lambda x: (x**2)**0.5)
+    _test_taylor(state, dstate, res, jac, norm=lambda x: (x**2) ** 0.5)
+
 
 def test_assem_dg_dprop(func, setup_linearization):
     """Test the functional `prop` derivative"""
@@ -136,35 +143,41 @@ def test_assem_dg_dprop(func, setup_linearization):
         func.set_prop(x)
         return bla.dot(func.assem_dg_dprop(), dx)
 
-    _test_taylor(prop, dprop, res, jac, norm=lambda x: (x**2)**0.5)
+    _test_taylor(prop, dprop, res, jac, norm=lambda x: (x**2) ** 0.5)
 
 
 @pytest.fixture(
     params=[
         (libfuncs.OnsetPressureFunctional, libfuncs.OnsetPressureFunctional),
         (libfuncs.GlottalWidthErrorFunctional, libfuncs.OnsetPressureFunctional),
-        (libfuncs.OnsetPressureFunctional, 5)
+        (libfuncs.OnsetPressureFunctional, 5),
     ]
 )
 def setup_funcs(setup_hopf_model, request):
     """Return functional pairs"""
+
     def create_func(FuncClass):
         if isinstance(FuncClass, type):
             return FuncClass(setup_hopf_model)
         else:
             value = FuncClass
             return value
+
     return [create_func(x) for x in request.param]
+
 
 @pytest.fixture(
     params=[
-        operator.add, operator.mul, operator.truediv,
+        operator.add,
+        operator.mul,
+        operator.truediv,
         # operator.pow
     ]
 )
 def setup_binary_op(request):
     """Return a binary operation"""
     return request.param
+
 
 def test_binary_op(setup_binary_op, setup_funcs):
     """Test binary operations on functionals"""
@@ -173,10 +186,12 @@ def test_binary_op(setup_binary_op, setup_funcs):
 
     # The correct functional value should be the operation applied on the
     # individual functional values
-    g_correct = setup_binary_op(*[
-        func if isinstance(func, numbers.Number) else func.assem_g()
-        for func in setup_funcs
-    ])
+    g_correct = setup_binary_op(
+        *[
+            func if isinstance(func, numbers.Number) else func.assem_g()
+            for func in setup_funcs
+        ]
+    )
 
     # The tested functional is the operation applied on the functional objects
     # to create a DerivedFunctional

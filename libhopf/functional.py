@@ -19,6 +19,7 @@ from . import signal
 
 # pylint: disable=abstract-method
 
+
 class GenericFunctional:
     """
     All functionals have to supply the below functions
@@ -114,6 +115,7 @@ class DerivedFunctional(GenericFunctional):
     """
     Derived functional are computed from other functionals
     """
+
     def __init__(self, funcs: List[GenericFunctional]):
         self.funcs = tuple(funcs)
 
@@ -129,12 +131,14 @@ class DerivedFunctional(GenericFunctional):
         for func in self.funcs:
             func.set_prop(prop)
 
+
 class BinaryFunctional(DerivedFunctional):
     def __init__(self, a: GenericFunctional, b: GenericFunctional):
         self.a = a
         self.b = b
 
         super().__init__((a, b))
+
 
 class UnaryFunctional(DerivedFunctional):
     def __init__(self, a: GenericFunctional, scalar=0.0):
@@ -154,15 +158,23 @@ class Sum(BinaryFunctional):
     def assem_dg_dprop(self):
         return self.a.assem_dg_dprop() + self.b.assem_dg_dprop()
 
+
 class Product(BinaryFunctional):
     def assem_g(self):
         return self.a.assem_g() * self.b.assem_g()
 
     def assem_dg_dstate(self):
-        return self.a.assem_g()*self.b.assem_dg_dstate() + self.a.assem_dg_dstate()*self.b.assem_g()
+        return (
+            self.a.assem_g() * self.b.assem_dg_dstate()
+            + self.a.assem_dg_dstate() * self.b.assem_g()
+        )
 
     def assem_dg_dprop(self):
-        return self.a.assem_g()*self.b.assem_dg_dprop() + self.a.assem_dg_dprop()*self.b.assem_g()
+        return (
+            self.a.assem_g() * self.b.assem_dg_dprop()
+            + self.a.assem_dg_dprop() * self.b.assem_g()
+        )
+
 
 class ScalarSum(UnaryFunctional):
     def assem_g(self):
@@ -174,15 +186,17 @@ class ScalarSum(UnaryFunctional):
     def assem_dg_dprop(self):
         return self.a.assem_dg_dprop()
 
+
 class ScalarPower(UnaryFunctional):
     def assem_g(self):
         return self.a.assem_g() ** self.C
 
     def assem_dg_dstate(self):
-        return self.C * self.a.assem_g()**(self.C-1) * self.a.assem_dg_dstate()
+        return self.C * self.a.assem_g() ** (self.C - 1) * self.a.assem_dg_dstate()
 
     def assem_dg_dprop(self):
-        return self.C * self.a.assem_g()**(self.C-1) * self.a.assem_dg_dprop()
+        return self.C * self.a.assem_g() ** (self.C - 1) * self.a.assem_dg_dprop()
+
 
 class ScalarProduct(UnaryFunctional):
     def assem_g(self):
@@ -203,6 +217,7 @@ class BaseFunctional(GenericFunctional):
         f(x, p)
     where x is the Hopf state vector, and p are the model properties.
     """
+
     def __init__(self, model: 'libhopf.HopfModel'):
         self.model = model
 
@@ -219,6 +234,7 @@ class BaseFunctional(GenericFunctional):
 
     def set_prop(self, prop):
         self.model.set_prop(prop)
+
 
 class OnsetFlowRateFunctional(BaseFunctional):
     """
@@ -244,6 +260,7 @@ class OnsetFlowRateFunctional(BaseFunctional):
         dg_dprops[:] = 0
         return dg_dprops
 
+
 class OnsetPressureFunctional(BaseFunctional):
     """
     Represents a functional returning the onset pressure
@@ -266,6 +283,7 @@ class OnsetPressureFunctional(BaseFunctional):
         dg_dprops = self.prop.copy()
         dg_dprops[:] = 0
         return dg_dprops
+
 
 class SubglottalPressureFunctional(BaseFunctional):
     """
@@ -290,6 +308,7 @@ class SubglottalPressureFunctional(BaseFunctional):
         dg_dprops[:] = 0
         return dg_dprops
 
+
 class SubglottalFlowRateFunctional(BaseFunctional):
     """
     Represents a functional returning the flow rate
@@ -313,6 +332,7 @@ class SubglottalFlowRateFunctional(BaseFunctional):
         dg_dprops[:] = 0
         return dg_dprops
 
+
 class OnsetFrequencyFunctional(BaseFunctional):
     """
     Represents a functional returning the onset frequency
@@ -332,6 +352,7 @@ class OnsetFrequencyFunctional(BaseFunctional):
         dg_dprops[:] = 0
         return dg_dprops
 
+
 class AbsOnsetFrequencyFunctional(BaseFunctional):
     """
     Represents a functional returning the onset frequency
@@ -350,6 +371,7 @@ class AbsOnsetFrequencyFunctional(BaseFunctional):
         dg_dprops = self.prop.copy()
         dg_dprops[:] = 0
         return dg_dprops
+
 
 class GlottalWidthErrorFunctional(BaseFunctional):
     """
@@ -371,7 +393,7 @@ class GlottalWidthErrorFunctional(BaseFunctional):
 
         def _err(state, prop):
             gw_hopf = eval_gw(state, prop)
-            return jnp.sum(weights*(gw_ref - gw_hopf)**2)
+            return jnp.sum(weights * (gw_ref - gw_hopf) ** 2)
 
         self._err = _err
         self._grad_state_err = jax.grad(_err, argnums=0)
@@ -381,16 +403,21 @@ class GlottalWidthErrorFunctional(BaseFunctional):
         return self._err(self.state.to_mono_ndarray(), self.prop.to_mono_ndarray())
 
     def assem_dg_dstate(self):
-        _dg_dstate = self._grad_state_err(self.state.to_mono_ndarray(), self.prop.to_mono_ndarray())
+        _dg_dstate = self._grad_state_err(
+            self.state.to_mono_ndarray(), self.prop.to_mono_ndarray()
+        )
         dg_dstate = self.state.copy()
         dg_dstate.set_mono(_dg_dstate)
         return dg_dstate
 
     def assem_dg_dprop(self):
-        _dg_dprops = self._grad_props_err(self.state.to_mono_ndarray(), self.prop.to_mono_ndarray())
+        _dg_dprops = self._grad_props_err(
+            self.state.to_mono_ndarray(), self.prop.to_mono_ndarray()
+        )
         dg_dprops = self.prop.copy()
         dg_dprops.set_mono(_dg_dprops)
         return dg_dprops
+
 
 class StrainEnergyFunctional(BaseFunctional):
 
@@ -407,7 +434,7 @@ class StrainEnergyFunctional(BaseFunctional):
         cauchy_stress = uflcontinuum.stress_isotropic(inf_strain, emod, nu)
         dx = dfn.Measure('dx', mesh)
 
-        strain_energy = ufl.inner(cauchy_stress, inf_strain)*dx
+        strain_energy = ufl.inner(cauchy_stress, inf_strain) * dx
         self.assem_strain_energy = CachedFormAssembler(strain_energy)
         dstrain_energy_du = dfn.derivative(strain_energy, dis)
         self.assem_dstrain_energy_du = CachedFormAssembler(dstrain_energy_du)
@@ -431,10 +458,12 @@ class StrainEnergyFunctional(BaseFunctional):
         dg_dprops['emod'] = dg_demod
         return dg_dprops
 
+
 class ModulusGradientNormSqr(BaseFunctional):
     """
     Returns the L2 norm (^2) of the gradient of the modulus
     """
+
     def __init__(self, model):
         super().__init__(model)
 
