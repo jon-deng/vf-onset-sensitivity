@@ -30,14 +30,15 @@ def _split_mono_hopf_state(state, sizes):
     )
 
 
-def make_glottal_width(hopf, num_points=100):
+def make_glottal_area(hopf, num_points=100):
     """
     Return a glottal width signal
     """
+    NDIM = hopf.res.solid.residual.mesh().topology().dim()
     XREF = np.array(hopf.res.solid.XREF)
 
     IDX_U = slice(0, hopf.res.state['u'].size)
-    IDX_MEDIAL = hopf.res.fsimap.dofs_solid
+    IDX_MEDIAL_CORONAL = np.array([fsimap.dofs_solid for fsimap in hopf.res._fsimaps])
 
     YMID = float(hopf.res.prop['ymid'][0])
     if 'zeta_min' in hopf.res.prop:
@@ -45,13 +46,13 @@ def make_glottal_width(hopf, num_points=100):
     else:
         ZETA = 1e-4
 
-    S = np.array(hopf.dres.fluid.residual.mesh())  # can also be res
+    S = np.array(hopf.dres.fluids[0].residual.mesh())  # can also be res
 
     HOPF_COMPONENT_SIZES = tuple(
         [hopf.state[labels].mshape[0] for labels in hopf.labels_hopf_components]
     )
 
-    def glottal_width(state, camp):
+    def glottal_area(state, camp):
         (xfp, mode_real, mode_imag, psub, omega) = _split_mono_hopf_state(
             state, HOPF_COMPONENT_SIZES
         )
@@ -59,12 +60,12 @@ def make_glottal_width(hopf, num_points=100):
 
         # get the reference position of the surface
         ucur = xfp[IDX_U] + XREF
-        ymedial_ref = ucur[1::2][IDX_MEDIAL]
+        ymedial_ref = ucur[1::NDIM][IDX_MEDIAL_CORONAL]
 
         u_mode_real = mode_real[IDX_U]
         u_mode_imag = mode_imag[IDX_U]
         u_mode = u_mode_real + 1j * u_mode_imag
-        ymedial_mode = u_mode[1::2][IDX_MEDIAL]
+        ymedial_mode = u_mode[1::NDIM][IDX_MEDIAL_CORONAL]
 
         ymedial_signal = jnp.real(
             ymedial_ref
@@ -90,4 +91,4 @@ def make_glottal_width(hopf, num_points=100):
 
         return min_area
 
-    return glottal_width
+    return glottal_area

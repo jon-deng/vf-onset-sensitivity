@@ -2,6 +2,9 @@
 Testing code for finding hopf bifurcations of coupled FE VF models
 """
 
+from typing import Tuple
+from numpy.typing import NDArray
+
 # import sys
 from os import path
 import numbers
@@ -9,10 +12,11 @@ import operator
 import pytest
 
 import numpy as np
-from blockarray import linalg as bla
+from blockarray import linalg as bla, blockvec as bv
 
 from libhopf import functional as libfuncs
 from libhopf.setup import load_hopf_model, set_default_props
+from libhopf import hopf
 
 from libtest import taylor_convergence
 
@@ -24,13 +28,17 @@ EBODY = 5e3 * 10
 ECOV = 5e3 * 10
 PSUB = 450 * 10
 
+Functional = libfuncs.BaseFunctional
+
 
 def _test_taylor(*args, **kwargs):
     alphas, errs, magnitudes, conv_rates = taylor_convergence(*args, **kwargs)
     assert pass_taylor_convergence_test(errs, magnitudes, conv_rates)
 
 
-def pass_taylor_convergence_test(errs, magnitudes, conv_rates, relerr_tol=1e-5):
+def pass_taylor_convergence_test(
+    errs: NDArray, magnitudes: NDArray, conv_rates: NDArray, relerr_tol: float = 1e-5
+):
     """
     Return whether a set of errors passes the Taylor convergence test
     """
@@ -56,7 +64,7 @@ def mesh_path(request):
 
 
 @pytest.fixture()
-def setup_hopf_model(mesh_path):
+def hopf_model(mesh_path):
     """
     Return a hopf model
     """
@@ -73,20 +81,24 @@ def setup_hopf_model(mesh_path):
         libfuncs.StrainEnergyFunctional,
     ]
 )
-def func(setup_hopf_model, request):
+def func(hopf_model, request) -> libfuncs.BaseFunctional:
     """
     Return a hopf model functional to test
     """
     FunctionalClass = request.param
-    return FunctionalClass(setup_hopf_model)
+    return FunctionalClass(hopf_model)
 
 
 @pytest.fixture()
-def setup_linearization(func, setup_hopf_model):
+def linearization(
+    hopf_model: hopf.HopfModel,
+) -> Tuple[
+    Tuple[bv.BlockVector, bv.BlockVector], Tuple[bv.BlockVector, bv.BlockVector]
+]:
     """
     Return a linearzation point and direction
     """
-    hopf = setup_hopf_model
+    hopf = hopf_model
 
     state0 = hopf.state.copy()
     state0['u'] = np.random.rand(*state0['u'].shape)
@@ -106,7 +118,7 @@ def setup_linearization(func, setup_hopf_model):
     return (state0, props0), (dstate, dprop)
 
 
-def set_linearization(func, state, prop):
+def set_linearization(func: Functional, state: bv.BlockVector, prop: bv.BlockVector):
     """
     Set the linearization point for a functional
     """
@@ -114,9 +126,9 @@ def set_linearization(func, state, prop):
     func.set_prop(prop)
 
 
-def test_assem_dg_dstate(func, setup_linearization):
+def test_assem_dg_dstate(func: Functional, linearization):
     """Test the functional `state` derivative"""
-    (state, prop), (dstate, dprop) = setup_linearization
+    (state, prop), (dstate, dprop) = linearization
     set_linearization(func, state, prop)
 
     def res(x):
@@ -130,9 +142,9 @@ def test_assem_dg_dstate(func, setup_linearization):
     _test_taylor(state, dstate, res, jac, norm=lambda x: (x**2) ** 0.5)
 
 
-def test_assem_dg_dprop(func, setup_linearization):
+def test_assem_dg_dprop(func: Functional, linearization):
     """Test the functional `prop` derivative"""
-    (state, prop), (dstate, dprop) = setup_linearization
+    (state, prop), (dstate, dprop) = linearization
     set_linearization(func, state, prop)
 
     def res(x):
@@ -153,12 +165,12 @@ def test_assem_dg_dprop(func, setup_linearization):
         (libfuncs.OnsetPressureFunctional, 5),
     ]
 )
-def setup_funcs(setup_hopf_model, request):
+def setup_funcs(hopf_model: hopf.HopfModel, request):
     """Return functional pairs"""
 
     def create_func(FuncClass):
         if isinstance(FuncClass, type):
-            return FuncClass(setup_hopf_model)
+            return FuncClass(hopf_model)
         else:
             value = FuncClass
             return value
@@ -198,4 +210,4 @@ def test_binary_op(setup_binary_op, setup_funcs):
     g_op = setup_binary_op(*setup_funcs).assem_g()
 
     print(g_op, g_correct)
-    assert g_op == g_correct
+    assert (g_op == g_correct) or (np.isnan(g_op) and np.isnan(g_correct))

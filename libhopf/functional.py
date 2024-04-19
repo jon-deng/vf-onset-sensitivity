@@ -389,7 +389,7 @@ class GlottalWidthErrorFunctional(BaseFunctional):
 
         assert weights.size == gw_ref.size
 
-        eval_gw = signal.make_glottal_width(model, gw_ref.size)
+        eval_gw = signal.make_glottal_area(model, gw_ref.size)
 
         def _err(state, prop):
             gw_hopf = eval_gw(state, prop)
