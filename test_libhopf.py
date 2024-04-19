@@ -280,8 +280,6 @@ class TestHopfModel:
         assert np.isclose(bv.dot(dx_adj, dx), bv.dot(dy_adj, dy), rtol=1e-9, atol=1e-9)
 
 
-# NOTE: The parameters don't result in a hopf bifurcation being found for this
-# one
 class TestHopfUtilities:
     """
     Test utility functions for the Hopf bifurcation system
@@ -290,8 +288,8 @@ class TestHopfUtilities:
     @pytest.fixture()
     def bound_pairs(self):
         """Return lower/upper subglottal pressure bounds"""
-        lbs = [400.0 * 10]
-        ubs = [600.0 * 10]
+        lbs = [100.0 * 10]
+        ubs = [800.0 * 10]
         return (lbs, ubs)
 
     def test_bound_hopf_bifurcations(
@@ -565,8 +563,7 @@ class TestReducedFunctional:
         _, prop = xhopf_prop
 
         props = [
-            bv.concatenate_vec([prop + alpha * dprop])
-            for alpha in np.linspace(0, 100, 3)
+            bv.concatenate([prop + alpha * dprop]) for alpha in np.linspace(0, 100, 3)
         ]
         return props
 
