@@ -547,7 +547,7 @@ def rhopf(hopf_model: HopfModel):
     Return a reduced Hopf model
     """
     rhopf = hopf.ReducedHopfModel(
-        hopf_model, hopf_psub_intervals=10 * np.array([1.0, 800.0, 1600.0])
+        hopf_model, lambda_intervals=10 * np.array([1.0, 800.0, 1600.0])
     )
     return rhopf
 
@@ -618,7 +618,7 @@ class TestReducedFunctional:
         """
         Test `ReducedFunctional.set_prop` solves for a Hopf bifurcation
         """
-        hopf_model = rfunctional.rhopf_model.hopf
+        hopf_model = rfunctional.rhopf_model.hopf_model
         for prop in props:
             # For each property in a list of properties to test, set the properties
             # of the ReducedFunctional; the ReducedFunctional should handle solving the

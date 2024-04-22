@@ -2,7 +2,7 @@
 Conduct a sensitivity study of onset pressure and frequency
 """
 
-from typing import Mapping
+from typing import Mapping, Optional, Any
 from numpy.typing import NDArray
 
 import argparse
@@ -227,7 +227,7 @@ def setup_transform(
     elif param['ParamOption'] == 'TractionShape':
         const_vals.pop('umesh')
 
-        K, NU = 1e1, 0.4
+        K, NU = 1e4, 0.2
 
         ## Apply a fixed `DirichletBC` on the first facet at the origin
         # and a fixed y coordinate along the bottom surface
@@ -277,8 +277,8 @@ def setup_transform(
         extract = tfrm.ExtractSubset(traction_shape.x, keys_to_extract=('tmesh',))
 
         const_subset = tfrm.ConstantSubset(traction_shape.y, const_vals=const_vals)
-        scale = tfrm.Scale(const_subset.y, scale=parameter_scales)
-        transform = extract * traction_shape * scale * const_subset
+        # scale = tfrm.Scale(const_subset.y, scale=parameter_scales)
+        transform = extract * traction_shape * const_subset
         # transform = traction_shape * const_subset
         # transform = traction_shape * scale
     else:
@@ -287,7 +287,12 @@ def setup_transform(
     return transform, parameter_scales
 
 
-def setup_reduced_functional(param: exputils.BaseParameters):
+def setup_reduced_functional(
+        param: exputils.BaseParameters,
+        lambda_tol: float = 10,
+        lambda_intervals: NDArray=10*np.array([0, 500, 1000, 1500]), 
+        newton_params: Optional[Mapping[str, Any]] = None
+    ):
     """
     Return a reduced functional + additional stuff
 
@@ -363,8 +368,14 @@ def setup_reduced_functional(param: exputils.BaseParameters):
     ## Load the functional/objective function and gradient
     func = setup_functional(param, hopf)
 
+    redu_hopf_model = libhopf.ReducedHopfModel(
+        hopf, 
+        lambda_tol=lambda_tol, 
+        lambda_intervals=lambda_intervals, 
+        newton_params=newton_params
+    )
     redu_functional = libhopf.ReducedFunctional(
-        func, libhopf.ReducedHopfModel(hopf, newton_params=newton_params)
+        func, redu_hopf_model
     )
     return redu_functional, hopf, xhopf_n, p, transform
 
@@ -990,10 +1001,11 @@ def run_optimization(
     def f(p):
         print(f"Called with ||p|| {np.linalg.norm(p)}")
         K = 1e-1
+        C = 1e4
         obj_reg = K * 1 / 2 * np.linalg.norm(p) ** 2
         grad_reg = K * p
         obj, grad = objective(p, rfunc, transform)
-        return obj + obj_reg, grad + grad_reg
+        return C * obj + obj_reg, C * grad + grad_reg
 
     def callback(intermediate_result):
         print(intermediate_result)
@@ -1002,7 +1014,7 @@ def run_optimization(
     opt_info = optimize.minimize(
         f,
         p0.to_mono_ndarray(),
-        method='CG',
+        method='BFGS',
         jac=True,
         callback=callback,
         options=opt_options,
