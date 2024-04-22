@@ -1371,9 +1371,12 @@ class ReducedHopfModel:
         # Use the latest state from previously cached Hopf states as an
         # initial guess
         xhopf_0 = self.hist_state[-1]
-        xhopf_n, info = solve_hopf_by_newton(
-            self.hopf, xhopf_0, prop, newton_params=self._newton_params
-        )
+        try:
+            xhopf_n, info = solve_hopf_by_newton(
+                self.hopf, xhopf_0, prop, newton_params=self._newton_params
+            )
+        except np.linalg.LinAlgError as err:
+            info = {'status': -1, 'message': str(err), 'num_iter': 0}
 
         # If the Hopf system doesn't converge from the previous initial state
         # try a new initial state computed from locating a Hopf bifurcation
@@ -1382,7 +1385,7 @@ class ReducedHopfModel:
             warnings.warn(
                 "Unable to solve Hopf system with Newton method using"
                 " initial guess from previous Hopf state."
-                f"Newton solver exited with message '{info['message']}' "
+                f"Newton solver exited with message \"{info['message']}\" "
                 f"after {info['num_iter']} iterations. "
                 "Attemping to retry with a better initial guess with.",
                 category=RuntimeWarning,
