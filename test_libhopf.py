@@ -422,7 +422,7 @@ def xhopf_params(hopf_model: HopfModel, param: BVec):
     return xhopf, p0, parameterization
 
 
-@pytest.fixture(params=[('emod', 1e2), ('umesh', 1.0e-4)])
+@pytest.fixture(params=[('emod', 10 * 1e3), ('umesh', 1.0e-3)])
 def dprop_dir(request):
     return request.param
 
