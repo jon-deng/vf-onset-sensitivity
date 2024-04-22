@@ -25,6 +25,7 @@ from libtest import taylor_convergence
 
 HopfModel = hopf.HopfModel
 BVec = bv.BlockVector
+BVecPair = Tuple[BVec, BVec]
 BMat = bm.BlockMatrix
 
 
@@ -130,7 +131,7 @@ class TestHopfModel:
         return dstate
 
     def test_assem_dres_dstate(
-        self, hopf_model: HopfModel, xhopf_prop: Tuple[BVec, BVec], dstate: BVec
+        self, hopf_model: HopfModel, xhopf_prop: BVecPair, dstate: BVec
     ):
         """Test `HopfModel.assem_dres_dstate`"""
         state, prop = xhopf_prop
@@ -151,7 +152,7 @@ class TestHopfModel:
         taylor_convergence(state, dstate, hopf_res, hopf_jac)
 
     def test_assem_dres_dstate_adjoint(
-        self, hopf_model: HopfModel, xhopf_prop: Tuple[BVec, BVec], dstate: BVec
+        self, hopf_model: HopfModel, xhopf_prop: BVecPair, dstate: BVec
     ):
         """
         Test the adjoint of `HopfModel.assem_dres_dstate`
@@ -177,7 +178,7 @@ class TestHopfModel:
         self._test_operator_adjoint(dres_dstate, dres_dstate_adj, dstate, dres_adj)
 
     def test_assem_dres_dstate_inv(
-        self, hopf_model: HopfModel, xhopf_prop: Tuple[BVec, BVec], dstate: BVec
+        self, hopf_model: HopfModel, xhopf_prop: BVecPair, dstate: BVec
     ):
         """Test `HopfModel.assem_dres_dstate`"""
         state, prop = xhopf_prop
@@ -221,7 +222,7 @@ class TestHopfModel:
         return dprop
 
     def test_assem_dres_dprop(
-        self, hopf_model: HopfModel, xhopf_prop: Tuple[BVec, BVec], dprop: BVec
+        self, hopf_model: HopfModel, xhopf_prop: BVecPair, dprop: BVec
     ):
         """Test `HopfModel.assem_dres_dprop`"""
         state, prop = xhopf_prop
@@ -242,7 +243,7 @@ class TestHopfModel:
         taylor_convergence(prop, dprop, hopf_res, hopf_jac)
 
     def test_assem_dres_dprop_adjoint(
-        self, hopf_model: HopfModel, xhopf_prop: Tuple[BVec, BVec], dprop: BVec
+        self, hopf_model: HopfModel, xhopf_prop: BVecPair, dprop: BVec
     ):
         """
         Test the adjoint of `HopfModel.assem_dres_dprop`
@@ -341,9 +342,15 @@ class TestHopfUtilities:
         """Test `solve_hopf_newton`"""
         xhopf_0 = setup_xhopf_0
         xhopf, info = hopf.solve_hopf_by_newton(hopf_model, xhopf_0, prop)
+        print(info)
 
 
-@pytest.fixture(params=[transform.TractionShape, transform.Identity])
+@pytest.fixture(
+    params=[
+        transform.TractionShape,
+        # transform.Identity
+    ]
+)
 def parameterization(hopf_model: HopfModel, request):
     """
     Return a parameterization
@@ -358,7 +365,6 @@ def param(hopf_model: HopfModel, parameterization):
     p0 = parameterization.x.copy()
     p0['emod'][:] = 10 * 1e3 * 10
     p0['rho'] = 1
-    p0['rho_air'] = 1.225e-3
     p0['nu'] = 0.45
     p0['eta'] = 5
 
@@ -398,7 +404,7 @@ def solve_linearization(hopf_model: HopfModel, prop: BVec):
 
 
 @pytest.fixture()
-def xhopf_prop(hopf_model: HopfModel, prop: BVec):
+def xhopf_prop(hopf_model: HopfModel, prop: BVec) -> BVecPair:
     """
     Return a linearization point corresponding to a Hopf bifurcation
     """
@@ -454,7 +460,9 @@ class TestFunctionalGradient:
     # The below operators represent 'reduced' operators on the residual
     # This operator represents the map between property changes and state
     # through the implicit function theorem on the Hopf system residual
-    def test_dstate_dprop(self, hopf_model: HopfModel, xhopf_prop, dprop: BVec):
+    def test_dstate_dprop(
+        self, hopf_model: HopfModel, xhopf_prop: BVecPair, dprop: BVec
+    ):
         """Test a combined operator of `HopfModel`"""
         xhopf, prop = xhopf_prop
 
@@ -492,7 +500,7 @@ class TestFunctionalGradient:
     # def test_dstate_dprop_adjoint():
 
     def test_solve_reduced_gradient(
-        self, functional, hopf_model: HopfModel, xhopf_prop, dprop: BVec
+        self, functional, hopf_model: HopfModel, xhopf_prop: BVecPair, dprop: BVec
     ):
         """
         Test `solve_reduced_gradient`
@@ -538,7 +546,9 @@ def rhopf(hopf_model: HopfModel):
     """
     Return a reduced Hopf model
     """
-    rhopf = hopf.ReducedHopfModel(hopf_model)
+    rhopf = hopf.ReducedHopfModel(
+        hopf_model, hopf_psub_intervals=10 * np.array([1.0, 800.0, 1600.0])
+    )
     return rhopf
 
 
@@ -558,12 +568,12 @@ class TestReducedFunctional:
     """
 
     @pytest.fixture()
-    def props(self, xhopf_prop, dprop: BVec):
+    def props(self, xhopf_prop: BVecPair, dprop: BVec):
         """Return an iterable of `Hopf.prop` vectors"""
         _, prop = xhopf_prop
 
         props = [
-            bv.concatenate([prop + alpha * dprop]) for alpha in np.linspace(0, 100, 3)
+            bv.concatenate([prop + alpha * dprop]) for alpha in np.linspace(0, 10, 3)
         ]
         return props
 
@@ -581,18 +591,18 @@ class TestReducedFunctional:
         scale['umesh'][:] = 1e-3
 
         # Mass matrices for the different vector spaces
-        forms = hopf_model.res.solid.residual.form
+        form = hopf_model.res.solid.residual.form
         import dolfin as dfn
 
-        dx = forms['measure.dx']
-        u = dfn.TrialFunction(forms['coeff.prop.emod'].function_space())
-        v = dfn.TestFunction(forms['coeff.prop.emod'].function_space())
+        dx = hopf_model.res.solid.residual.measure('dx')
+        u = dfn.TrialFunction(form['coeff.prop.emod'].function_space())
+        v = dfn.TestFunction(form['coeff.prop.emod'].function_space())
         M_EMOD = dfn.assemble(dfn.inner(u, v) * dx, tensor=dfn.PETScMatrix()).mat()
 
         # The `...[0]` is hard-coded because I did something weird with storing the
         # mesh displacement/shape property
-        u = dfn.TrialFunction(forms['coeff.prop.umesh'][0].function_space())
-        v = dfn.TestFunction(forms['coeff.prop.umesh'][0].function_space())
+        u = dfn.TrialFunction(form['coeff.prop.umesh'].function_space())
+        v = dfn.TestFunction(form['coeff.prop.umesh'].function_space())
         M_SHAPE = dfn.assemble(dfn.inner(u, v) * dx, tensor=dfn.PETScMatrix()).mat()
 
         def scaled_norm(x):
@@ -604,7 +614,7 @@ class TestReducedFunctional:
 
         return scaled_norm
 
-    def test_set_prop(self, rfunctional, props):
+    def test_set_prop(self, rfunctional: hopf.ReducedFunctional, props):
         """
         Test `ReducedFunctional.set_prop` solves for a Hopf bifurcation
         """
@@ -622,16 +632,41 @@ class TestReducedFunctional:
             hopf_model.set_prop(rfunctional.rhopf_model.prop)
             print(bla.norm(hopf_model.assem_res()))
 
-    def test_assem_d2g_dprop2(self, rfunctional, xhopf_prop, dprop: BVec, norm):
+    def test_assem_dg_dprop(
+        self,
+        rfunctional: hopf.ReducedFunctional,
+        xhopf_prop: BVecPair,
+        dprop: BVec,
+    ):
+        """
+        Test `ReducedFunctional.assem_dg_dprop`
+        """
+        xhopf, prop = xhopf_prop
+
+        def assem_g(prop):
+            rfunctional.set_prop(prop)
+            return rfunctional.assem_g()
+
+        def assem_dg(prop, dprop):
+            rfunctional.set_prop(prop)
+            return bv.dot(rfunctional.assem_dg_dprop(), dprop)
+
+        alphas, errs, mags, conv_rates = taylor_convergence(
+            prop, dprop, assem_g, assem_dg, norm=lambda x: np.linalg.norm(x)
+        )
+
+    def test_assem_d2g_dprop2(
+        self,
+        rfunctional: hopf.ReducedFunctional,
+        xhopf_prop: BVecPair,
+        dprop: BVec,
+        norm,
+    ):
         """
         Test `ReducedFunctional.assem_d2g_dprop2`
         """
-        h = 1e-3
+        h = 1e-6
         xhopf, prop = xhopf_prop
-
-        # norm_dprop = norm(dprop)
-        # unit_dprop = dprop/norm_dprop
-        # unit_dprop.print_summary()
 
         def assem_grad(prop):
             # print(bla.norm(prop))
@@ -655,7 +690,7 @@ class TestOptGradManager:
     """
 
     @pytest.fixture()
-    def params(self, parameterization, xhopf_prop, dprop):
+    def params(self, parameterization, xhopf_prop: BVecPair, dprop):
         """
         Return a sequence of parameters
         """
