@@ -5,9 +5,9 @@ The Hopf bifurcation system represents the conditions for a Hopf bifurcation.
 The model dynamical system here is given by:
 
 .. math::
-    $F(x_t, x; ...) = 0,
+    F(x_t, x; ...) = 0,
 
-where :math:`x_t` is the state time derivative and :math:`x`$` is the state.
+where :math:`x_t` is the state time derivative and :math:`x` is the state.
 
 The first condition is a fixed point:
 
@@ -1312,42 +1312,39 @@ class ReducedHopfModel:
     Represent a Hopf bifurcation state as a function of parameters
 
     This class handles solving the implicit Hopf system
+    .. math::
         F(x; p)
-    for the Hopf state
-        x(p)
+    for the Hopf state :math:`x(p)`
 
     Parameters
     ----------
-    functional : libfunctionals.GenericFunctional
-    res : HopfModel
-    newton_params :
-        dictionary specifying newton solver parameters for solving the Hopf
-        system
-    hopf_psub_intervals :
-        Intervals of subglottal pressure to search for Hopf bifurcations.
+    hopf_model : HopfModel
+    newton_params : Optional[Mapping[str, Any]]
+        Newton solver parameters for solving the Hopf system
+    intervals : Optional[np.ndarray]
+        Intervals of the bifurcation parameter to search for Hopf bifurcations
     """
 
     def __init__(
         self,
-        hopf: HopfModel,
-        hopf_psub_intervals: Optional[np.ndarray] = None,
-        newton_params: Optional[dict] = None,
+        hopf_model: HopfModel,
+        intervals: Optional[np.ndarray] = None,
+        newton_params: Optional[Mapping[str, Any]] = None,
     ):
-        self.hopf = hopf
-        if hopf_psub_intervals is None:
-            self.PSUB_INTERVALS = np.arange(0, 2600, 100) * 10
+        self.hopf_model = hopf_model
+        if intervals is None:
+            self.INTERVALS = np.arange(0, 2600, 100) * 10
         else:
-            self.PSUB_INTERVALS = np.array(hopf_psub_intervals)
+            self.INTERVALS = np.array(intervals)
 
-        self._hist_state = [self.hopf.state.copy()]
-        self._hist_props = [self.hopf.prop.copy()]
+        self._hist_state = [self.hopf_model.state.copy()]
+        self._hist_props = [self.hopf_model.prop.copy()]
 
         if newton_params is None:
             newton_params = {}
         self._newton_params = newton_params
 
-        # The current Hopf state + properties at the linearization point
-        self._props = self.hopf.prop.copy()
+        self._prop = self.hopf_model.prop.copy()
 
     @property
     def hist_props(self):
@@ -1359,21 +1356,20 @@ class ReducedHopfModel:
 
     @property
     def prop(self):
-        return self._props
+        return self._prop
 
     def set_prop(self, prop: bv.BlockVector):
         """
-        Set the Hopf system properties
-        """
-        # self.prop[:] = prop
-        # self.hopf.set_prop(self.prop)
+        Set the Hopf system property vector
 
+        This implictly computes the Hopf state for the given property
+        """
         # Use the latest state from previously cached Hopf states as an
         # initial guess
         xhopf_0 = self.hist_state[-1]
         try:
             xhopf_n, info = solve_hopf_by_newton(
-                self.hopf, xhopf_0, prop, newton_params=self._newton_params
+                self.hopf_model, xhopf_0, prop, newton_params=self._newton_params
             )
         except np.linalg.LinAlgError as err:
             info = {'status': -1, 'message': str(err), 'num_iter': 0}
@@ -1391,13 +1387,19 @@ class ReducedHopfModel:
                 category=RuntimeWarning,
             )
             xhopf_0 = gen_xhopf_0(
-                self.hopf.res, prop, self.hopf.E_MODE, self.PSUB_INTERVALS, tol=100.0
+                self.hopf_model.res,
+                prop,
+                self.hopf_model.E_MODE,
+                self.INTERVALS,
+                tol=100.0,
             )
-            xhopf_0 = bv.BlockVector(xhopf_0.blocks, labels=self.hopf.state.labels)
+            xhopf_0 = bv.BlockVector(
+                xhopf_0.blocks, labels=self.hopf_model.state.labels
+            )
 
             # Retry the Newton solver with the better initial guess
             xhopf_n, info = solve_hopf_by_newton(
-                self.hopf, xhopf_0, prop, newton_params=self._newton_params
+                self.hopf_model, xhopf_0, prop, newton_params=self._newton_params
             )
 
             if info['status'] != 0:
@@ -1409,7 +1411,7 @@ class ReducedHopfModel:
 
         self.hist_state.append(xhopf_n.copy())
         self.hist_props.append(prop.copy())
-        self.hopf.set_state(xhopf_n)
+        self.hopf_model.set_state(xhopf_n)
 
         return xhopf_n, info
 
@@ -1458,8 +1460,8 @@ class ReducedFunctional:
         self.rhopf_model = reduced_hopf_model
 
         # The current Hopf state + properties at the linearization point
-        self._props = self.rhopf_model.hopf.prop.copy()
-        self._state = self.rhopf_model.hopf.state.copy()
+        self._props = self.rhopf_model.hopf_model.prop.copy()
+        self._state = self.rhopf_model.hopf_model.state.copy()
 
     @property
     def prop(self) -> bv.BlockVector:
@@ -1491,7 +1493,7 @@ class ReducedFunctional:
         Return the functional gradient
         """
         return solve_reduced_gradient(
-            self.func, self.rhopf_model.hopf, self.state, self.prop
+            self.func, self.rhopf_model.hopf_model, self.state, self.prop
         )
 
     def assem_d2g_dprop2(
@@ -1515,7 +1517,7 @@ class ReducedFunctional:
 
         # Approximate the HVP with a central difference
         def assem_grad(hopf_props):
-            hopf = self.rhopf_model.hopf
+            hopf = self.rhopf_model.hopf_model
 
             # hopf.set_prop(hopf_props)
             hopf_state, info = solve_hopf_by_newton(hopf, self.state, hopf_props)
@@ -1623,8 +1625,8 @@ class OptGradManager:
         )
         h5utils.create_resizable_block_vector_group(
             f.create_group('hopf_state'),
-            redu_grad.rhopf_model.hopf.state.labels,
-            redu_grad.rhopf_model.hopf.state.bshape,
+            redu_grad.rhopf_model.hopf_model.state.labels,
+            redu_grad.rhopf_model.hopf_model.state.bshape,
         )
         f.create_dataset('objective', (0,), maxshape=(None,))
 
