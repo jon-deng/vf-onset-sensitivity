@@ -77,10 +77,12 @@ SetBifParam = Callable[
 ]
 
 
-def set_bif_param_fluid(model, control, bifparam, name='psub'):
+def set_bif_param_fluid(model, control, prop, bifparam, name='psub'):
+    ret_control = control.copy()
+    ret_prop = prop.copy()
     for n in range(len(model.fluids)):
-        control[f'fluid{n}.{name}'] = bifparam
-    return control
+        ret_control[f'fluid{n}.{name}'] = bifparam
+    return ret_control, ret_prop
 
 
 def assem_dcontrol_dlambda_fluid(model, bifparam, name='psub'):
@@ -117,7 +119,7 @@ class HopfModel:
         res: dyncoup.BaseDynamicalFSIModel,
         dres: dyncoup.BaseLinearizedDynamicalFSIModel,
         e_mode: Optional[bv.BlockVector] = None,
-        set_bifparam=None,
+        set_bif_param=None,
         assem_dcontrol_dlambda=None,
     ):
         bifparam_key = 'psub'
@@ -152,9 +154,9 @@ class HopfModel:
         self.E_MODE = e_mode
 
         self.bifparam_key = bifparam_key
-        if set_bifparam is None:
-            set_bifparam = set_bif_param_fluid
-        self.set_bifparam = set_bifparam
+        if set_bif_param is None:
+            set_bif_param = set_bif_param_fluid
+        self.set_bif_param = set_bif_param
         if assem_dcontrol_dlambda is None:
             assem_dcontrol_dlambda = assem_dcontrol_dlambda_fluid
         self.assem_dcontrol_dlambda = assem_dcontrol_dlambda
@@ -178,10 +180,11 @@ class HopfModel:
         for model in (self.res, self.dres):
             model.set_state(xhopf[self.labels_fp])
 
-            control = self.set_bifparam(
-                model, model.control, xhopf[self.bifparam_key][0]
+            control, prop = self.set_bif_param(
+                model, model.control, model.prop, xhopf[self.bifparam_key][0]
             )
             model.set_control(control)
+            model.set_prop(prop)
 
     def apply_dirichlet_bvec(self, vec):
         """Zeros dirichlet associated indices on the Hopf state"""
@@ -537,11 +540,10 @@ def solve_hopf_by_range(
     if solve_fp_r is None:
 
         def solve_fp_r(model, psub):
-            return solve_fp(model, psub, set_bifparam=set_bif_param)
+            return solve_fp(model, psub, set_bif_param=set_bif_param)
 
     dyn_model.set_control(control)
     dyn_model.set_prop(prop)
-    dyn_control = control.copy()
 
     # Determine the least stable mode growth rate for each psub
     sol_fps = [solve_fp_r(dyn_model, psub) for psub in bif_param_range]
@@ -550,7 +552,7 @@ def solve_hopf_by_range(
 
     omegas_max = [
         solve_least_stable_mode(
-            dyn_model, xfp, set_bif_param(dyn_model, dyn_control, psub), prop
+            dyn_model, xfp, *set_bif_param(dyn_model, control, prop, psub)
         )[0].real
         for xfp, psub in zip(state_fps, bif_param_range)
     ]
@@ -669,7 +671,7 @@ def solve_hopf_by_brackets(
     # the bifurcation
     # First set the model subglottal pressure to the upper bound
     psub = 1 / 2 * (lbs[0] + ubs[0])
-    control = set_bif_param(dyn_model, control, psub)
+    control, prop = set_bif_param(dyn_model, control, prop, psub)
 
     # Solve for the fixed point
     # x_fp0 = res.state.copy()
@@ -677,7 +679,7 @@ def solve_hopf_by_brackets(
     if solve_fp_r is None:
 
         def solve_fp_r(model, psub):
-            return solve_fp(model, psub, psub_incr=250 * 10, set_bifparam=set_bif_param)
+            return solve_fp(model, psub, psub_incr=250 * 10, set_bif_param=set_bif_param)
 
     x_fp, _info = solve_fp_r(dyn_model, psub)
 
@@ -751,7 +753,7 @@ def bracket_bif_param(
 
     if solve_fp_r is None:
         def solve_fp_r(model, psub):
-            x, info = solve_fp(model, psub, set_bifparam=set_bif_param)
+            x, info = solve_fp(model, psub, set_bif_param=set_bif_param)
 
             if info['status'] != 0:
                 raise RuntimeError("Couldn't solve fixed point")
@@ -778,7 +780,7 @@ def bracket_bif_param(
         omega_lbs = [
             (
                 solve_least_stable_mode(
-                    dyn_model, xfp, set_bif_param(dyn_model, control, lb), prop
+                    dyn_model, xfp, *set_bif_param(dyn_model, control, prop, lb)
                 )[0].real
                 if valid_pair
                 else np.nan
@@ -788,7 +790,7 @@ def bracket_bif_param(
         omega_ubs = [
             (
                 solve_least_stable_mode(
-                    dyn_model, xfp, set_bif_param(dyn_model, control, ub), prop
+                    dyn_model, xfp, *set_bif_param(dyn_model, control, prop, ub)
                 )[0].real
                 if valid_pair
                 else np.nan
@@ -828,8 +830,7 @@ def bracket_bif_param(
                 solve_least_stable_mode(
                     dyn_model,
                     solve_fp_r(dyn_model, psub)[0],
-                    set_bif_param(dyn_model, control, psub),
-                    prop,
+                    *set_bif_param(dyn_model, control, prop, psub)
                 )[0].real
                 for psub in psubs
             ]
@@ -917,15 +918,15 @@ def solve_fp(
     n_max: int = 10,
     method='newton',
     iter_params=None,
-    set_bifparam=None,
+    set_bif_param=None,
 ) -> bv.BlockVector:
     """
     Solve for a fixed-point
 
     This high-level solver uses intermediate loading steps in `psub`.
     """
-    if set_bifparam is None:
-        set_bifparam = set_bif_param_fluid
+    if set_bif_param is None:
+        set_bif_param = set_bif_param_fluid
 
     # The target final subglottal pressure
     psub_final = psub_fin
@@ -948,7 +949,7 @@ def solve_fp(
     load_steps_complete = False
     while not load_steps_complete:
 
-        control_n = set_bifparam(res, control_n, psub_n)
+        control_n, prop_n = set_bif_param(res, control_n, prop_n, psub_n)
 
         if method == 'newton':
             xfp_n, info = solve_fp_by_newton(
