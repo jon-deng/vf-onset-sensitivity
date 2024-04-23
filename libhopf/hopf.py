@@ -539,14 +539,16 @@ def solve_hopf_by_range(
 
     if solve_fp_r is None:
 
-        def solve_fp_r(model, psub):
-            return solve_fp(model, psub, set_bif_param=set_bif_param)
+        def solve_fp_r(model, control, prop, bif_param):
+            return solve_fp(
+                model, control, prop, bif_param, set_bif_param=set_bif_param
+            )
 
     dyn_model.set_control(control)
     dyn_model.set_prop(prop)
 
     # Determine the least stable mode growth rate for each psub
-    sol_fps = [solve_fp_r(dyn_model, psub) for psub in bif_param_range]
+    sol_fps = [solve_fp_r(dyn_model, control, prop, psub) for psub in bif_param_range]
     state_fps = [sol[0] for sol in sol_fps]
     info_fps = [sol[1] for sol in sol_fps]
 
@@ -640,6 +642,18 @@ def solve_hopf_by_brackets(
     if set_bif_param is None:
         set_bif_param = set_bif_param_fluid
 
+    if solve_fp_r is None:
+
+        def solve_fp_r(model, control, prop, bif_param):
+            return solve_fp(
+                model,
+                control,
+                prop,
+                bif_param,
+                psub_incr=250 * 10,
+                set_bif_param=set_bif_param,
+            )
+
     dyn_model.set_prop(prop)
     dyn_model.set_control(control)
     control = control.copy()
@@ -672,16 +686,7 @@ def solve_hopf_by_brackets(
     # First set the model subglottal pressure to the upper bound
     psub = 1 / 2 * (lbs[0] + ubs[0])
     control, prop = set_bif_param(dyn_model, control, prop, psub)
-
-    # Solve for the fixed point
-    # x_fp0 = res.state.copy()
-    # x_fp0[:] = 0.0
-    if solve_fp_r is None:
-
-        def solve_fp_r(model, psub):
-            return solve_fp(model, psub, psub_incr=250 * 10, set_bif_param=set_bif_param)
-
-    x_fp, _info = solve_fp_r(dyn_model, psub)
+    x_fp, _info = solve_fp_r(dyn_model, control, prop, psub)
 
     # Solve for linear stability around the fixed point
     omegas, eigvecs_real, eigvecs_imag = solve_linear_stability(
@@ -752,8 +757,11 @@ def bracket_bif_param(
         set_bif_param = set_bif_param_fluid
 
     if solve_fp_r is None:
-        def solve_fp_r(model, psub):
-            x, info = solve_fp(model, psub, set_bif_param=set_bif_param)
+
+        def solve_fp_r(model, control, prop, bif_param):
+            x, info = solve_fp(
+                model, control, prop, bif_param, set_bif_param=set_bif_param
+            )
 
             if info['status'] != 0:
                 raise RuntimeError("Couldn't solve fixed point")
@@ -763,12 +771,12 @@ def bracket_bif_param(
     lbs, ubs = bif_param_brackets
 
     if growth_rates is None:
-        solver_results = [solve_fp_r(dyn_model, psub) for psub in lbs]
+        solver_results = [solve_fp_r(dyn_model, control, prop, psub) for psub in lbs]
         info_fps = [result[1] for result in solver_results]
         valid_lbs = [info['status'] == 0 for info in info_fps]
         state_fps_lb = [result[0] for result in solver_results]
 
-        solver_results = [solve_fp_r(dyn_model, psub) for psub in ubs]
+        solver_results = [solve_fp_r(dyn_model, control, prop, psub) for psub in ubs]
         info_fps = [result[1] for result in solver_results]
         valid_ubs = [info['status'] == 0 for info in info_fps]
         state_fps_ub = [result[0] for result in solver_results]
@@ -829,8 +837,8 @@ def bracket_bif_param(
             [
                 solve_least_stable_mode(
                     dyn_model,
-                    solve_fp_r(dyn_model, psub)[0],
-                    *set_bif_param(dyn_model, control, prop, psub)
+                    solve_fp_r(dyn_model, control, prop, psub)[0],
+                    *set_bif_param(dyn_model, control, prop, psub),
                 )[0].real
                 for psub in psubs
             ]
@@ -911,6 +919,8 @@ def normalize_eigvec_by_norm(
 # (i.e. `Hopf.res`)
 def solve_fp(
     res: dyncoup.BaseDynamicalFSIModel,
+    control: bv.BlockVector,
+    prop: bv.BlockVector,
     psub_fin: float,
     psub_ini: float = 0,
     psub_incr: float = 5000,
@@ -936,8 +946,8 @@ def solve_fp(
     # fixed-point solve
     n = 0
     psub_n = psub_ini
-    control_n = res.control.copy()
-    prop_n = res.prop.copy()
+    control_n = control.copy()
+    prop_n = prop.copy()
     if xfp_0 is None:
         xfp_n = res.state.copy()
         xfp_n[:] = 0.0
