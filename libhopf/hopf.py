@@ -511,15 +511,15 @@ def solve_hopf_by_range(
         property vector
 
         This differs from `solve_fp` which requires more information.
-    bif_param_intervals:
+    bif_param_range: np.ndarray
         The range of bifurcation parameters to search for Hopf bifurcations
 
-        `bif_param_intervals` should be a purely increasing (or decreasing) array of
-        values. Intervals between successive points in `bif_param_intervals` will be
+        `bif_param_range` should be a purely increasing (or decreasing) array of
+        values. Intervals between successive points in `bif_param_range` will be
         tested to see if a Hopf bifurcation occurs.
 
         For example if when the bifurcation parameter transitions from
-        `bif_param_intervals[0]` to `bif_param_intervals[1]` and the linearized
+        `bif_param_range[0]` to `bif_param_range[1]` and the linearized
         dynamics growth rate transitions from negative to positive, then a Hopf
         bifurcation occurs in between.
     bif_param_tol: float
@@ -529,6 +529,7 @@ def solve_hopf_by_range(
 
         See [Griewank1983] for more details.
     set_bif_param: SetBifParam
+        A function that returns the model control and property given a bifurcation parameter
     """
     if set_bif_param is None:
         set_bif_param = set_bif_param_fluid
@@ -630,6 +631,8 @@ def solve_hopf_by_brackets(
         found.
     bif_param_tol: float
         The tolerance on the brackets
+    set_bif_param: SetBifParam
+        A function that returns the model control and property given a bifurcation parameter
     """
 
     if set_bif_param is None:
@@ -712,8 +715,8 @@ def bracket_bif_param(
     growth_rates: Optional[ListPair] = None,
     solve_fp_r: Optional[SolveFixedPoint] = None,
     num_sub_brackets: int = 2,
-    bif_param_tol: float = 100.0,
-    set_bif_param=None,
+    bif_param_tol: float = 1.0,
+    set_bif_param: Optional[SetBifParam] = None,
 ) -> Tuple[ListPair, ListPair]:
     """
     Bracket the bifurcation parameter where a Hopf bifurcation occurs
@@ -724,7 +727,7 @@ def bracket_bif_param(
         The dynamical system model
     control, prop: bv.BlockVector
         The dynamical system's control and property vectors
-    bif_param_brackets : ListPair
+    bif_param_brackets: ListPair
         A tuple of brackets, `(lbs, ubs)`, for the bifurcation parameter
 
         Each interval tested to see if a Hopf bifurcation occurs. For example, the
@@ -738,14 +741,15 @@ def bracket_bif_param(
 
         This is done recursively until a refined bracket on the Hopf bifurcation is
         found.
-    bif_param_tol:
+    bif_param_tol: float
         The tolerance on the brackets
+    set_bif_param: SetBifParam
+        A function that returns the model control and property given a bifurcation parameter
     """
     if set_bif_param is None:
         set_bif_param = set_bif_param_fluid
 
     if solve_fp_r is None:
-
         def solve_fp_r(model, psub):
             x, info = solve_fp(model, psub, set_bifparam=set_bif_param)
 
