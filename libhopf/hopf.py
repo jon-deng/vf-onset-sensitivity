@@ -67,7 +67,7 @@ DynamicalModel = dynbase.BaseDynamicalModel
 
 SolverInfo = Mapping[str, Any]
 SolveFixedPoint = Callable[
-    [DynamicalModel, bv.BlockVector, bv.BlockVector],
+    [DynamicalModel, bv.BlockVector, bv.BlockVector, float],
     Tuple[bv.BlockVector, SolverInfo],
 ]
 
@@ -548,15 +548,11 @@ def solve_hopf_by_range(
     dyn_model.set_prop(prop)
 
     # Determine the least stable mode growth rate for each psub
-    sol_fps = [solve_fp_r(dyn_model, control, prop, psub) for psub in bif_param_range]
-    state_fps = [sol[0] for sol in sol_fps]
-    info_fps = [sol[1] for sol in sol_fps]
-
     omegas_max = [
-        solve_least_stable_mode(
-            dyn_model, xfp, *set_bif_param(dyn_model, control, prop, psub)
+        solve_least_stable_mode_r(
+            dyn_model, control, prop, bif_param, set_bif_param, solve_fp_r
         )[0].real
-        for xfp, psub in zip(state_fps, bif_param_range)
+        for bif_param in bif_param_range
     ]
 
     # Determine if an interval has a bifurcation by checking if the growth rate
@@ -681,28 +677,18 @@ def solve_hopf_by_brackets(
             f" ({bif_param_brackets[0]}, {bif_param_brackets[1]})"
         )
 
-    # Use the avg. of lower and upper bounds to generate an initial guess for
-    # the bifurcation
-    # First set the model subglottal pressure to the upper bound
+    # Use the average of bracket bounds as the bifurcation parameter value
     psub = 1 / 2 * (lbs[0] + ubs[0])
-    control, prop = set_bif_param(dyn_model, control, prop, psub)
-    x_fp, _info = solve_fp_r(dyn_model, control, prop, psub)
-
-    # Solve for linear stability around the fixed point
-    omegas, eigvecs_real, eigvecs_imag = solve_linear_stability(
-        dyn_model, x_fp, control, prop
+    omega, x_mode_real, x_mode_imag, x_fp = solve_least_stable_mode_r(
+        dyn_model, control, prop, psub, set_bif_param, solve_fp_r
     )
-    idx_max = np.argmax(omegas.real)
-
-    x_mode_real = eigvecs_real[idx_max]
-    x_mode_imag = eigvecs_imag[idx_max]
 
     x_mode_real, x_mode_imag = normalize_eigvec_by_hopf(
         x_mode_real, x_mode_imag, eigvec_ref
     )
 
     x_omega = bv.convert_subtype_to_petsc(
-        bv.BlockVector([np.array([omegas[idx_max].imag])], labels=(('omega',),))
+        bv.BlockVector([np.array([omega.imag])], labels=(('omega',),))
     )
 
     x_psub = bv.convert_subtype_to_petsc(
@@ -762,122 +748,120 @@ def bracket_bif_param(
             x, info = solve_fp(
                 model, control, prop, bif_param, set_bif_param=set_bif_param
             )
-
-            if info['status'] != 0:
-                raise RuntimeError("Couldn't solve fixed point")
             return x, info
 
-    # If real omega are not supplied for each bound pair, compute it here
+    # If `growth_rates` aren't supplied compute them here
     lbs, ubs = bif_param_brackets
-
     if growth_rates is None:
-        solver_results = [solve_fp_r(dyn_model, control, prop, psub) for psub in lbs]
-        info_fps = [result[1] for result in solver_results]
-        valid_lbs = [info['status'] == 0 for info in info_fps]
-        state_fps_lb = [result[0] for result in solver_results]
-
-        solver_results = [solve_fp_r(dyn_model, control, prop, psub) for psub in ubs]
-        info_fps = [result[1] for result in solver_results]
-        valid_ubs = [info['status'] == 0 for info in info_fps]
-        state_fps_ub = [result[0] for result in solver_results]
-
-        valid_bound_pairs = [
-            valid_lb and valid_ub for valid_lb, valid_ub in zip(valid_lbs, valid_ubs)
-        ]
-
         omega_lbs = [
-            (
-                solve_least_stable_mode(
-                    dyn_model, xfp, *set_bif_param(dyn_model, control, prop, lb)
-                )[0].real
-                if valid_pair
-                else np.nan
-            )
-            for xfp, lb, valid_pair in zip(state_fps_lb, lbs, valid_bound_pairs)
+            solve_least_stable_mode_r(
+                dyn_model, control, prop, lb, set_bif_param, solve_fp_r
+            )[0].real for lb in lbs
         ]
         omega_ubs = [
-            (
-                solve_least_stable_mode(
-                    dyn_model, xfp, *set_bif_param(dyn_model, control, prop, ub)
-                )[0].real
-                if valid_pair
-                else np.nan
-            )
-            for xfp, ub, valid_pair in zip(state_fps_ub, ubs, valid_bound_pairs)
+            solve_least_stable_mode_r(
+                dyn_model, control, prop, ub, set_bif_param, solve_fp_r
+            )[0].real for ub in ubs
         ]
         growth_rates = (omega_lbs, omega_ubs)
 
-    # Filter bound pairs so only pairs that contain Hopf bifurcations are present
-    pairs_have_onset = [lb < 0 and ub >= 0 for lb, ub in zip(*growth_rates)]
+    # Filter the list of brackets so only brackets that
+    # - contain Hopf bifurcations
+    # - and have valid growth rates at bounds (bad fixed-point solutions will result in `nan`)
+    # are present
+    _brackets_has_onset = [
+        (omega_lb < 0 and omega_ub >= 0) and not (np.isnan(omega_lb) or np.isnan(omega_ub))
+        for omega_lb, omega_ub in zip(*growth_rates)
+    ]
 
-    _lbs = [lb for lb, has_onset in zip(lbs, pairs_have_onset) if has_onset]
-    _ubs = [ub for ub, has_onset in zip(ubs, pairs_have_onset) if has_onset]
+    valid_lbs = [lb for lb, has_onset in zip(lbs, _brackets_has_onset) if has_onset]
+    valid_ubs = [ub for ub, has_onset in zip(ubs, _brackets_has_onset) if has_onset]
 
-    lomegas, uomegas = growth_rates
-    _lomegas = [lb for lb, has_onset in zip(lomegas, pairs_have_onset) if has_onset]
-    _uomegas = [ub for ub, has_onset in zip(uomegas, pairs_have_onset) if has_onset]
+    _omegas_lb, _omegas_ub = growth_rates
+    valid_omegas_lb = [lb for lb, has_onset in zip(_omegas_lb, _brackets_has_onset) if has_onset]
+    valid_omegas_ub = [ub for ub, has_onset in zip(_omegas_ub, _brackets_has_onset) if has_onset]
 
-    # Check if the bound pairs containing onset all satisfy the tolerance;
-    # if they do return the bounds,
-    # and if they don't, split the bounds into smaller segments and retry
-    tols = [ub - lb for lb, ub in zip(lbs, ubs)]
-    if all([_tol <= bif_param_tol for _tol in tols]):
-        return (_lbs, _ubs), (_lomegas, _uomegas)
-    else:
-        # Split each lb/ub segment into `nsplit` segments and calculate stability
-        # at the interior points separating segments
-        # This is a nested list containing a list of interior point for each
-        # lb/ub pair; the outer list corresponds to lb/ub segments and the inner
-        # lists to interior point within the correponding segment
-        bounds_points = [
-            list(np.linspace(lb, ub, num_sub_brackets + 1)[1:-1])
-            for lb, ub in zip(_lbs, _ubs)
-        ]
-        bounds_omegas = [
-            [
-                solve_least_stable_mode(
-                    dyn_model,
-                    solve_fp_r(dyn_model, control, prop, psub)[0],
-                    *set_bif_param(dyn_model, control, prop, psub),
+    # Split any brackets that don't satisfy the tolerance into smaller brackets
+    # until they do
+    ret_lb = []
+    ret_ub = []
+    ret_omegas_lb = []
+    ret_omegas_ub = []
+    for lb, ub, omega_lb, omega_ub in zip(valid_lbs, valid_ubs, valid_omegas_lb, valid_omegas_ub):
+        tol = ub-lb
+        if tol <= bif_param_tol:
+            ret_lb.append(lb)
+            ret_ub.append(ub)
+            ret_omegas_lb.append(omega_lb)
+            ret_omegas_ub.append(omega_ub)
+        else:
+            # Split the bracket into `num_sub_brackets`
+            bracket_interior = list(np.linspace(lb, ub, num_sub_brackets + 1)[1:-1])
+            omegas_interior = [
+                solve_least_stable_mode_r(
+                    dyn_model, control, prop, psub, set_bif_param, solve_fp_r
                 )[0].real
-                for psub in psubs
+                for psub in bracket_interior
             ]
-            for psubs in bounds_points
-        ]
+            split_lbs = [lb] + bracket_interior
+            split_ubs = bracket_interior + [ub]
 
-        # Join the computed interior points for each bound into a new set of bound pairs and omega pairs
-        ret_lbs = [
-            x
-            for lb, bound_points in zip(_lbs, bounds_points)
-            for x in ([lb] + bound_points)
-        ]
-        ret_ubs = [
-            x
-            for ub, bound_points in zip(_ubs, bounds_points)
-            for x in (bound_points + [ub])
-        ]
+            split_omegas_lb = [omega_lb] + omegas_interior
+            split_omegas_ub = omegas_interior + [omega_ub]
 
-        ret_lomegas = [
-            x
-            for lomega, omegas in zip(_lomegas, bounds_omegas)
-            for x in ([lomega] + omegas)
-        ]
-        ret_uomegas = [
-            x
-            for uomega, omegas in zip(_uomegas, bounds_omegas)
-            for x in (omegas + [uomega])
-        ]
-        return bracket_bif_param(
-            dyn_model,
-            control,
-            prop,
-            (ret_lbs, ret_ubs),
-            (ret_lomegas, ret_uomegas),
-            num_sub_brackets=num_sub_brackets,
-            bif_param_tol=bif_param_tol,
-            solve_fp_r=solve_fp_r,
-            set_bif_param=set_bif_param,
+            split_brackets, split_omegas = bracket_bif_param(
+                dyn_model,
+                control,
+                prop,
+                (split_lbs, split_ubs),
+                (split_omegas_lb, split_omegas_ub),
+                num_sub_brackets=num_sub_brackets,
+                bif_param_tol=bif_param_tol,
+                solve_fp_r=solve_fp_r,
+                set_bif_param=set_bif_param,
+            )
+            ret_lb += split_brackets[0]
+            ret_ub += split_brackets[1]
+            ret_omegas_lb += split_omegas[0]
+            ret_omegas_ub += split_omegas[1]
+
+    return (ret_lb, ret_ub), (ret_omegas_lb, ret_omegas_ub)
+
+
+def solve_least_stable_mode_r(
+    dyn_model: DynamicalModel,
+    control: bv.BlockVector,
+    prop: bv.BlockVector,
+    bif_param: float,
+    set_bif_param: SetBifParam,
+    solve_fp_r: SolveFixedPoint,
+):
+    """
+    Return the least stable mode
+
+    Parameters
+    ----------
+    dyn_model: DynamicalModel
+        The dynamical system model
+    control, prop: bv.BlockVector
+        The dynamical system's control and property vectors
+    bif_param: float
+        The value of the bifurcation parameter
+    set_bif_param: SetBifParam
+        A function that returns the model control and property given a bifurcation parameter
+    """
+
+    # If a fixed-point is succesfully solved, we can return the least stable mode
+    # information at the fixed-point otherwise we'll return a `np.nan`
+    xfp, solver_info = solve_fp_r(dyn_model, control, prop, bif_param)
+    if solver_info['status'] == 0:
+        return solve_least_stable_mode(
+            dyn_model, xfp, *set_bif_param(dyn_model, control, prop, bif_param)
         )
+    else:
+        nan_mode = dyn_model.state.copy()
+        nan_mode[:] = np.nan
+        return np.nan, nan_mode, nan_mode, xfp
 
 
 ## Functions for normalizing eigenvectors
