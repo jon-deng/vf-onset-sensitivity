@@ -63,14 +63,21 @@ from . import functional
 # pylint: disable=invalid-name
 ListPair = Tuple[List[float], List[float]]
 
+DynamicalModel = dynbase.BaseDynamicalModel
+
 SolverInfo = Mapping[str, Any]
-FixedPointSolver = Callable[
-    [dynbase.BaseDynamicalModel, bv.BlockVector, bv.BlockVector],
+SolveFixedPoint = Callable[
+    [DynamicalModel, bv.BlockVector, bv.BlockVector],
     Tuple[bv.BlockVector, SolverInfo],
 ]
 
+SetBifParam = Callable[
+    [DynamicalModel, bv.BlockVector, bv.BlockVector, float],
+    Tuple[bv.BlockVector, bv.BlockVector],
+]
 
-def set_bifparam_fluid(model, control, bifparam, name='psub'):
+
+def set_bif_param_fluid(model, control, bifparam, name='psub'):
     for n in range(len(model.fluids)):
         control[f'fluid{n}.{name}'] = bifparam
     return control
@@ -146,7 +153,7 @@ class HopfModel:
 
         self.bifparam_key = bifparam_key
         if set_bifparam is None:
-            set_bifparam = set_bifparam_fluid
+            set_bifparam = set_bif_param_fluid
         self.set_bifparam = set_bifparam
         if assem_dcontrol_dlambda is None:
             assem_dcontrol_dlambda = assem_dcontrol_dlambda_fluid
@@ -478,58 +485,73 @@ def _gen_hopf_state(
 
 
 ## Functions for finding/bracketing Hopf bifurcations
-def gen_xhopf_0(
-    dyn_model: dynbase.BaseDynamicalModel,
+def solve_hopf_by_range(
+    dyn_model: DynamicalModel,
+    control: bv.BlockVector,
     prop: bv.BlockVector,
-    evec_ref: bv.BlockVector,
-    psubs: np.ndarray,
-    tol: float = 100.0,
-    solve_fp_r: FixedPointSolver = None,
-    set_bifparam=None,
+    bif_param_range: np.ndarray,
+    bif_param_tol: float = 100.0,
+    set_bif_param: Optional[SetBifParam] = None,
+    eigvec_ref: Optional[bv.BlockVector] = None,
+    solve_fp_r: Optional[SolveFixedPoint] = None,
 ) -> bv.BlockVector:
     """
-    Generate an initial guess for the Hopf problem over a range of pressures
+    Generate an initial guess for a Hopf bifurcation state
+
+    See [Griewank1983] for more details.
 
     Parameters
     ----------
-    hopf :
-        The hopf system model
-    prop: bv.BlockVector
-        The hopf residual properties
-    evec_ref: bv.BlockVector
-        A reference vector to normalize eigenvectors against
-    psubs :
-        The range of pressures to check for Hopf bifurcations. The system will
-        try to find hopf bifurcations between `psubs[0]` and `psubs[1]`,
-        `psubs[1]` and `psubs[2]`, etc.
-    tol :
-        The tolerance to determine the subglottal pressure to
-    solve_fp_r :
+    dyn_model: DynamicalModel
+        The dynamical system model
+    control, prop: bv.BlockVector
+        The dynamical system's control and property vectors
+    solve_fp_r: SolveFixedPoint
         A callable that solves for a fixed point from only a control and
-        property vector. This differs from `solve_fp` which requires more
-        information.
+        property vector
+
+        This differs from `solve_fp` which requires more information.
+    bif_param_intervals:
+        The range of bifurcation parameters to search for Hopf bifurcations
+
+        `bif_param_intervals` should be a purely increasing (or decreasing) array of
+        values. Intervals between successive points in `bif_param_intervals` will be
+        tested to see if a Hopf bifurcation occurs.
+
+        For example if when the bifurcation parameter transitions from
+        `bif_param_intervals[0]` to `bif_param_intervals[1]` and the linearized
+        dynamics growth rate transitions from negative to positive, then a Hopf
+        bifurcation occurs in between.
+    bif_param_tol: float
+        A tolerance on how accurately the bifurcation parameter should be determined
+    eigvec_ref: Optional[bv.BlockVector]
+        A reference vector to normalize eigenvectors against
+
+        See [Griewank1983] for more details.
+    set_bif_param: SetBifParam
     """
-    if set_bifparam is None:
-        set_bifparam = set_bifparam_fluid
+    if set_bif_param is None:
+        set_bif_param = set_bif_param_fluid
 
     if solve_fp_r is None:
 
         def solve_fp_r(model, psub):
-            return solve_fp(model, psub, set_bifparam=set_bifparam)
+            return solve_fp(model, psub, set_bifparam=set_bif_param)
 
+    dyn_model.set_control(control)
     dyn_model.set_prop(prop)
-    dyn_control = dyn_model.control.copy()
+    dyn_control = control.copy()
 
     # Determine the least stable mode growth rate for each psub
-    sol_fps = [solve_fp_r(dyn_model, psub) for psub in psubs]
+    sol_fps = [solve_fp_r(dyn_model, psub) for psub in bif_param_range]
     state_fps = [sol[0] for sol in sol_fps]
     info_fps = [sol[1] for sol in sol_fps]
 
     omegas_max = [
         solve_least_stable_mode(
-            dyn_model, xfp, set_bifparam(dyn_model, dyn_control, psub), prop
+            dyn_model, xfp, set_bif_param(dyn_model, dyn_control, psub), prop
         )[0].real
-        for xfp, psub in zip(state_fps, psubs)
+        for xfp, psub in zip(state_fps, bif_param_range)
     ]
 
     # Determine if an interval has a bifurcation by checking if the growth rate
@@ -538,7 +560,7 @@ def gen_xhopf_0(
         omega2 >= 0.0 and omega1 < 0.0
         for omega1, omega2 in zip(omegas_max[:-1], omegas_max[1:])
     ]
-    idxs_bif = np.arange(psubs.size - 1)[has_transition]
+    idxs_bif = np.arange(bif_param_range.size - 1)[has_transition]
     if idxs_bif.size == 0:
         raise RuntimeError("No Hopf bifurcations detected")
     elif idxs_bif.size > 1:
@@ -551,106 +573,241 @@ def gen_xhopf_0(
     # Use the bounding/bisection approach to locate a refined initial guess
     # in the interval containing a Hopf bifurcation
     idx_bif = idxs_bif[0]
-    lbs = [psubs[idx_bif]]
-    ubs = [psubs[idx_bif + 1]]
+    lbs = [bif_param_range[idx_bif]]
+    ubs = [bif_param_range[idx_bif + 1]]
     bounds = (lbs, ubs)
     omega_lbs = [omegas_max[idx_bif]]
     omega_ubs = [omegas_max[idx_bif + 1]]
     omega_pairs = (omega_lbs, omega_ubs)
-    xhopf_0 = gen_xhopf_0_from_bounds(
+    xhopf_0 = solve_hopf_by_brackets(
         dyn_model,
+        control,
         prop,
-        evec_ref,
         bounds,
-        omega_pairs,
-        tol=tol,
+        bif_param_tol=bif_param_tol,
         solve_fp_r=solve_fp_r,
-        set_bifparam=set_bifparam,
+        set_bif_param=set_bif_param,
+        growth_rates=omega_pairs,
+        eigvec_ref=eigvec_ref,
     )
     return xhopf_0
 
 
-def bound_ponset(
-    model: dynbase.BaseDynamicalModel,
+def solve_hopf_by_brackets(
+    dyn_model: DynamicalModel,
     control: bv.BlockVector,
     prop: bv.BlockVector,
-    bound_pairs: ListPair,
-    omega_pairs: ListPair = None,
-    solve_fp_r: FixedPointSolver = None,
-    nsplit: int = 2,
-    tol: float = 100.0,
-    set_bifparam=None,
-) -> Tuple[ListPair, ListPair]:
+    bif_param_brackets: ListPair,
+    bif_param_tol: float = 1.0,
+    set_bif_param: Optional[SetBifParam] = None,
+    solve_fp_r: Optional[SolveFixedPoint] = None,
+    eigvec_ref: Optional[bv.BlockVector] = None,
+    growth_rates: Optional[ListPair] = None,
+    num_sub_brackets: int = 2,
+) -> bv.BlockVector:
     """
-    Bound the onset pressure where a Hopf bifurcation occurs
+    Return a Hopf bifurcation state by recursively bracketing the bifurcation parameter
 
     Parameters
     ----------
-    model :
-        The dynamical model
-    bound_pairs :
-        A tuple of lower bounds (lbs) and upper bounds (ubs) of the bifurcation
-        parameter (psub) to test if a Hopf bifurcation occurs. Each interval
-        between `lbs[i]` to `ubs[i]` is tested to see if an eigenvalue switches
-        sign indicating a Hopf bifurcation.
-    omega_pairs :
-        The corresponding maximum real eigenvalue components at the lower/upper
-        bounds.
-    nsplit :
-        The number of intervals to split a lower/upper bound range to search
-        for a refined bound on the Hopf bifurcation.
-    tol :
-        The tolerance on the lower/upper bound range.
+    dyn_model: DynamicalModel
+        The dynamical system model
+    control, prop: bv.BlockVector
+        The dynamical system's control and property vectors
+    bif_param_brackets: ListPair
+        A tuple of brackets, `(lbs, ubs)`, for the bifurcation parameter
+
+        Each interval tested to see if a Hopf bifurcation occurs. For example, the
+        interval between `lbs[i]` to `ubs[i]` will be tested to see if the most unstable
+        mode's growth rate (eigenvalue) switches sign, which indicates a Hopf
+        bifurcation.
+    growth_rates: Optional[ListPair]
+        The most unstable mode at the lower/upper bracket bounds
+    num_sub_brackets: int
+        The number of sub-brackets to split a bracket into
+
+        This is done recursively until a refined bracket on the Hopf bifurcation is
+        found.
+    bif_param_tol: float
+        The tolerance on the brackets
     """
-    if set_bifparam is None:
-        set_bifparam = set_bifparam_fluid
+
+    if set_bif_param is None:
+        set_bif_param = set_bif_param_fluid
+
+    dyn_model.set_prop(prop)
+    dyn_model.set_control(control)
+    control = control.copy()
+
+    # Find lower/upper bounds for the Hopf bifurcation point
+    (lbs, ubs), _ = bracket_bif_param(
+        dyn_model,
+        control,
+        prop,
+        bif_param_brackets,
+        growth_rates=growth_rates,
+        num_sub_brackets=num_sub_brackets,
+        bif_param_tol=bif_param_tol,
+        solve_fp_r=solve_fp_r,
+        set_bif_param=set_bif_param,
+    )
+
+    print("Lower and upper bounds", lbs, ubs)
+
+    if len(ubs) > 1:
+        warnings.warn("More than one Hopf bifurcation point found")
+    if len(ubs) == 0:
+        raise RuntimeError(
+            "No Hopf bifurcation found between bounds"
+            f" ({bif_param_brackets[0]}, {bif_param_brackets[1]})"
+        )
+
+    # Use the avg. of lower and upper bounds to generate an initial guess for
+    # the bifurcation
+    # First set the model subglottal pressure to the upper bound
+    psub = 1 / 2 * (lbs[0] + ubs[0])
+    control = set_bif_param(dyn_model, control, psub)
+
+    # Solve for the fixed point
+    # x_fp0 = res.state.copy()
+    # x_fp0[:] = 0.0
+    if solve_fp_r is None:
+
+        def solve_fp_r(model, psub):
+            return solve_fp(model, psub, psub_incr=250 * 10, set_bifparam=set_bif_param)
+
+    x_fp, _info = solve_fp_r(dyn_model, psub)
+
+    # Solve for linear stability around the fixed point
+    omegas, eigvecs_real, eigvecs_imag = solve_linear_stability(
+        dyn_model, x_fp, control, prop
+    )
+    idx_max = np.argmax(omegas.real)
+
+    x_mode_real = eigvecs_real[idx_max]
+    x_mode_imag = eigvecs_imag[idx_max]
+
+    x_mode_real, x_mode_imag = normalize_eigvec_by_hopf(
+        x_mode_real, x_mode_imag, eigvec_ref
+    )
+
+    x_omega = bv.convert_subtype_to_petsc(
+        bv.BlockVector([np.array([omegas[idx_max].imag])], labels=(('omega',),))
+    )
+
+    x_psub = bv.convert_subtype_to_petsc(
+        bv.BlockVector([np.array([psub])], labels=(('psub',),))
+    )
+
+    sub_bvecs = [x_fp, x_mode_real, x_mode_imag, x_psub, x_omega]
+    x_hopf = bv.concatenate(sub_bvecs, labels=((),))
+    return x_hopf
+
+
+def bracket_bif_param(
+    dyn_model: DynamicalModel,
+    control: bv.BlockVector,
+    prop: bv.BlockVector,
+    bif_param_brackets: ListPair,
+    growth_rates: Optional[ListPair] = None,
+    solve_fp_r: Optional[SolveFixedPoint] = None,
+    num_sub_brackets: int = 2,
+    bif_param_tol: float = 100.0,
+    set_bif_param=None,
+) -> Tuple[ListPair, ListPair]:
+    """
+    Bracket the bifurcation parameter where a Hopf bifurcation occurs
+
+    Parameters
+    ----------
+    dyn_model: DynamicalModel
+        The dynamical system model
+    control, prop: bv.BlockVector
+        The dynamical system's control and property vectors
+    bif_param_brackets : ListPair
+        A tuple of brackets, `(lbs, ubs)`, for the bifurcation parameter
+
+        Each interval tested to see if a Hopf bifurcation occurs. For example, the
+        interval between `lbs[i]` to `ubs[i]` will be tested to see if the most unstable
+        mode's growth rate (eigenvalue) switches sign, which indicates a Hopf
+        bifurcation.
+    growth_rates: Optional[ListPair]
+        The most unstable mode at the lower/upper bracket bounds
+    num_sub_brackets: int
+        The number of sub-brackets to split a bracket into
+
+        This is done recursively until a refined bracket on the Hopf bifurcation is
+        found.
+    bif_param_tol:
+        The tolerance on the brackets
+    """
+    if set_bif_param is None:
+        set_bif_param = set_bif_param_fluid
 
     if solve_fp_r is None:
 
         def solve_fp_r(model, psub):
-            return solve_fp(model, psub, set_bifparam=set_bifparam)
+            x, info = solve_fp(model, psub, set_bifparam=set_bif_param)
+
+            if info['status'] != 0:
+                raise RuntimeError("Couldn't solve fixed point")
+            return x, info
 
     # If real omega are not supplied for each bound pair, compute it here
-    lbs, ubs = bound_pairs
+    lbs, ubs = bif_param_brackets
 
-    if omega_pairs is None:
-        _sol_fps = [solve_fp_r(model, psub) for psub in lbs]
-        state_fps_lb = [sol[0] for sol in _sol_fps]
-        info_fps = [sol[1] for sol in _sol_fps]
+    if growth_rates is None:
+        solver_results = [solve_fp_r(dyn_model, psub) for psub in lbs]
+        info_fps = [result[1] for result in solver_results]
+        valid_lbs = [info['status'] == 0 for info in info_fps]
+        state_fps_lb = [result[0] for result in solver_results]
 
-        _sol_fps = [solve_fp_r(model, psub) for psub in ubs]
-        state_fps_ub = [sol[0] for sol in _sol_fps]
-        info_fps = [sol[1] for sol in _sol_fps]
-        omega_pairs = (
-            [
+        solver_results = [solve_fp_r(dyn_model, psub) for psub in ubs]
+        info_fps = [result[1] for result in solver_results]
+        valid_ubs = [info['status'] == 0 for info in info_fps]
+        state_fps_ub = [result[0] for result in solver_results]
+
+        valid_bound_pairs = [
+            valid_lb and valid_ub for valid_lb, valid_ub in zip(valid_lbs, valid_ubs)
+        ]
+
+        omega_lbs = [
+            (
                 solve_least_stable_mode(
-                    model, xfp, set_bifparam(model, control, lb), prop
+                    dyn_model, xfp, set_bif_param(dyn_model, control, lb), prop
                 )[0].real
-                for xfp, lb in zip(state_fps_lb, lbs)
-            ],
-            [
+                if valid_pair
+                else np.nan
+            )
+            for xfp, lb, valid_pair in zip(state_fps_lb, lbs, valid_bound_pairs)
+        ]
+        omega_ubs = [
+            (
                 solve_least_stable_mode(
-                    model, xfp, set_bifparam(model, control, ub), prop
+                    dyn_model, xfp, set_bif_param(dyn_model, control, ub), prop
                 )[0].real
-                for xfp, ub in zip(state_fps_ub, ubs)
-            ],
-        )
+                if valid_pair
+                else np.nan
+            )
+            for xfp, ub, valid_pair in zip(state_fps_ub, ubs, valid_bound_pairs)
+        ]
+        growth_rates = (omega_lbs, omega_ubs)
 
     # Filter bound pairs so only pairs that contain Hopf bifurcations are present
-    has_onset = [lb < 0 and ub >= 0 for lb, ub in zip(*omega_pairs)]
+    pairs_have_onset = [lb < 0 and ub >= 0 for lb, ub in zip(*growth_rates)]
 
-    _lbs = [lb for lb, valid in zip(lbs, has_onset) if valid]
-    _ubs = [ub for ub, valid in zip(ubs, has_onset) if valid]
+    _lbs = [lb for lb, has_onset in zip(lbs, pairs_have_onset) if has_onset]
+    _ubs = [ub for ub, has_onset in zip(ubs, pairs_have_onset) if has_onset]
 
-    lomegas, uomegas = omega_pairs
-    _lomegas = [lb for lb, valid in zip(lomegas, has_onset) if valid]
-    _uomegas = [ub for ub, valid in zip(uomegas, has_onset) if valid]
+    lomegas, uomegas = growth_rates
+    _lomegas = [lb for lb, has_onset in zip(lomegas, pairs_have_onset) if has_onset]
+    _uomegas = [ub for ub, has_onset in zip(uomegas, pairs_have_onset) if has_onset]
 
     # Check if the bound pairs containing onset all satisfy the tolerance;
     # if they do return the bounds,
     # and if they don't, split the bounds into smaller segments and retry
     tols = [ub - lb for lb, ub in zip(lbs, ubs)]
-    if all([_tol <= tol for _tol in tols]):
+    if all([_tol <= bif_param_tol for _tol in tols]):
         return (_lbs, _ubs), (_lomegas, _uomegas)
     else:
         # Split each lb/ub segment into `nsplit` segments and calculate stability
@@ -659,14 +816,15 @@ def bound_ponset(
         # lb/ub pair; the outer list corresponds to lb/ub segments and the inner
         # lists to interior point within the correponding segment
         bounds_points = [
-            list(np.linspace(lb, ub, nsplit + 1)[1:-1]) for lb, ub in zip(_lbs, _ubs)
+            list(np.linspace(lb, ub, num_sub_brackets + 1)[1:-1])
+            for lb, ub in zip(_lbs, _ubs)
         ]
         bounds_omegas = [
             [
                 solve_least_stable_mode(
-                    model,
-                    solve_fp_r(model, psub)[0],
-                    set_bifparam(model, control, psub),
+                    dyn_model,
+                    solve_fp_r(dyn_model, psub)[0],
+                    set_bif_param(dyn_model, control, psub),
                     prop,
                 )[0].real
                 for psub in psubs
@@ -696,119 +854,17 @@ def bound_ponset(
             for uomega, omegas in zip(_uomegas, bounds_omegas)
             for x in (omegas + [uomega])
         ]
-        return bound_ponset(
-            model,
+        return bracket_bif_param(
+            dyn_model,
             control,
             prop,
             (ret_lbs, ret_ubs),
             (ret_lomegas, ret_uomegas),
-            nsplit=nsplit,
-            tol=tol,
+            num_sub_brackets=num_sub_brackets,
+            bif_param_tol=bif_param_tol,
             solve_fp_r=solve_fp_r,
-            set_bifparam=set_bifparam,
+            set_bif_param=set_bif_param,
         )
-
-
-def gen_xhopf_0_from_bounds(
-    dyn_model: dynbase.BaseDynamicalModel,
-    prop: bv.BlockVector,
-    evec_ref: bv.BlockVector,
-    bound_pairs: ListPair,
-    omega_pairs: Optional[ListPair] = None,
-    solve_fp_r: FixedPointSolver = None,
-    nsplit: int = 2,
-    tol: float = 100.0,
-    set_bifparam=None,
-) -> bv.BlockVector:
-    """
-    Generate an initial guess for a Hopf system by bounding the bifurcation point
-
-    Parameters
-    ----------
-    dyn_model :
-        The dynamical system model
-    bound_pairs :
-        A tuple of lower (lbs) and upper bounds (ubs) of `psub` intervals.
-        Each interval is used to test if a Hopf bifurcation occurs.
-        i.e. the interval between `lbs[i]` to `ubs[i]` is tested to see if an
-        eigenvalue switches sign which indicates a Hopf bifurcation.
-    omega_pairs :
-        The corresponding maximum real eigenvalue components at the lower/upper
-        bounds.
-    nsplit :
-        The number of intervals to split a lower/upper bound range to search
-        for a refined bound on the Hopf bifurcation.
-    tol :
-        The tolerance on the lower/upper bound range.
-    """
-
-    if set_bifparam is None:
-        set_bifparam = set_bifparam_fluid
-
-    dyn_model.set_prop(prop)
-    control = dyn_model.control.copy()
-
-    # Find lower/upper bounds for the Hopf bifurcation point
-    (lbs, ubs), _ = bound_ponset(
-        dyn_model,
-        control,
-        prop,
-        bound_pairs,
-        omega_pairs=omega_pairs,
-        nsplit=nsplit,
-        tol=tol,
-        solve_fp_r=solve_fp_r,
-        set_bifparam=set_bifparam,
-    )
-
-    if len(ubs) > 1:
-        warnings.warn("More than one Hopf bifurcation point found")
-    if len(ubs) == 0:
-        raise RuntimeError(
-            "No Hopf bifurcation found between bounds"
-            f" ({bound_pairs[0]}, {bound_pairs[1]})"
-        )
-
-    # Use the avg. of lower and upper bounds to generate an initial guess for
-    # the bifurcation
-    # First set the model subglottal pressure to the upper bound
-    psub = 1 / 2 * (lbs[0] + ubs[0])
-    control = set_bifparam(dyn_model, control, psub)
-
-    # Solve for the fixed point
-    # x_fp0 = res.state.copy()
-    # x_fp0[:] = 0.0
-    if solve_fp_r is None:
-
-        def solve_fp_r(model, psub):
-            return solve_fp(model, psub, psub_incr=250 * 10, set_bifparam=set_bifparam)
-
-    x_fp, _info = solve_fp_r(dyn_model, psub)
-
-    # Solve for linear stability around the fixed point
-    omegas, eigvecs_real, eigvecs_imag = solve_linear_stability(
-        dyn_model, x_fp, control, prop
-    )
-    idx_max = np.argmax(omegas.real)
-
-    x_mode_real = eigvecs_real[idx_max]
-    x_mode_imag = eigvecs_imag[idx_max]
-
-    x_mode_real, x_mode_imag = normalize_eigvec_by_hopf(
-        x_mode_real, x_mode_imag, evec_ref
-    )
-
-    x_omega = bv.convert_subtype_to_petsc(
-        bv.BlockVector([np.array([omegas[idx_max].imag])], labels=(('omega',),))
-    )
-
-    x_psub = bv.convert_subtype_to_petsc(
-        bv.BlockVector([np.array([psub])], labels=(('psub',),))
-    )
-
-    sub_bvecs = [x_fp, x_mode_real, x_mode_imag, x_psub, x_omega]
-    x_hopf = bv.concatenate(sub_bvecs, labels=((),))
-    return x_hopf
 
 
 ## Functions for normalizing eigenvectors
@@ -865,7 +921,7 @@ def solve_fp(
     This high-level solver uses intermediate loading steps in `psub`.
     """
     if set_bifparam is None:
-        set_bifparam = set_bifparam_fluid
+        set_bifparam = set_bif_param_fluid
 
     # The target final subglottal pressure
     psub_final = psub_fin
@@ -922,7 +978,8 @@ def solve_fp(
     if info['status'] != 0:
         warnings.warn(
             "Fixed-point solver did not converge with (status, message): "
-            f"({info['status']}, {info['message']})"
+            f"({info['status']}, {info['message']})",
+            RuntimeWarning,
         )
 
     return xfp_n, info
@@ -1132,7 +1189,7 @@ def _apply_dirichlet_bmat(mat, idx, diag=1.0):
 
 
 def solve_linear_stability(
-    res: dynbase.BaseDynamicalModel,
+    res: DynamicalModel,
     xfp: bv.BlockVector,
     control: bv.BlockVector,
     prop: bv.BlockVector,
@@ -1221,7 +1278,7 @@ def solve_linear_stability(
 
 
 def solve_least_stable_mode(
-    res: dynbase.BaseDynamicalModel,
+    res: DynamicalModel,
     xfp: bv.BlockVector,
     control: bv.BlockVector,
     prop: bv.BlockVector,
@@ -1332,7 +1389,7 @@ class ReducedHopfModel:
         hopf_model: HopfModel,
         newton_params: Optional[Mapping[str, Any]] = None,
         lambda_intervals: Optional[np.ndarray] = None,
-        lambda_tol: float = 100
+        lambda_tol: float = 100,
     ):
         self.hopf_model = hopf_model
 
@@ -1362,16 +1419,15 @@ class ReducedHopfModel:
         This implictly computes the Hopf state for the given property
         """
         # Generate an initial guess for the Hopf bifurcation state
-        xhopf_0 = gen_xhopf_0(
+        xhopf_0 = solve_hopf_by_range(
             self.hopf_model.res,
+            self.hopf_model.res.control,
             prop,
             self.hopf_model.E_MODE,
             self.LAMBDA_INTERVALS,
-            tol=self.LAMBDA_TOL,
+            bif_param_tol=self.LAMBDA_TOL,
         )
-        xhopf_0 = bv.BlockVector(
-            xhopf_0.blocks, labels=self.hopf_model.state.labels
-        )
+        xhopf_0 = bv.BlockVector(xhopf_0.blocks, labels=self.hopf_model.state.labels)
 
         # Compute a Hopf bifurcation state from the initial guess, using a Newton
         # method

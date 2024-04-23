@@ -303,7 +303,7 @@ class TestHopfUtilities:
         dyn_prop = hopf_model.res.prop
         dyn_control = hopf_model.res.control
 
-        bounds, omegas = hopf.bound_ponset(
+        bounds, omegas = hopf.bracket_bif_param(
             dyn_model, dyn_control, dyn_prop, bound_pairs
         )
         print(f"Hopf bifurcations between {bounds[0]} and {bounds[1]}")
@@ -317,9 +317,14 @@ class TestHopfUtilities:
 
         dyn_model = hopf_model.res
         dyn_prop = dyn_model.prop
+        dyn_control = dyn_model.control
 
-        xhopf_0 = hopf.gen_xhopf_0_from_bounds(
-            dyn_model, dyn_prop, hopf_model.E_MODE, bound_pairs
+        xhopf_0 = hopf.solve_hopf_by_brackets(
+            dyn_model,
+            dyn_control,
+            dyn_prop,
+            bound_pairs,
+            eigvec_ref=hopf_model.E_MODE,
         )
 
         xhopf_n, info = hopf.solve_hopf_by_newton(hopf_model, xhopf_0, prop)
@@ -331,10 +336,11 @@ class TestHopfUtilities:
         hopf_model.set_prop(prop)
 
         dyn_model = hopf_model.res
+        dyn_control = dyn_model.control
         dyn_prop = dyn_model.prop
 
-        xhopf_0 = hopf.gen_xhopf_0_from_bounds(
-            dyn_model, dyn_prop, hopf_model.E_MODE, bound_pairs
+        xhopf_0 = hopf.solve_hopf_by_brackets(
+            dyn_model, dyn_control, dyn_prop, bound_pairs, eigvec_ref=hopf_model.E_MODE
         )
         return xhopf_0
 
@@ -396,9 +402,12 @@ def solve_linearization(hopf_model: HopfModel, prop: BVec):
     `prop` - the Hopf model properties
     """
     hopf_model.set_prop(prop)
+    control = hopf_model.res.control
     psubs = np.arange(1, 1000, 100) * 10
     xhopf_0 = hopf_model.state.copy()
-    xhopf_0[:] = hopf.gen_xhopf_0(hopf_model.res, prop, hopf_model.E_MODE, psubs)
+    xhopf_0[:] = hopf.solve_hopf_by_range(
+        hopf_model.res, control, prop, hopf_model.E_MODE, psubs
+    )
     xhopf, info = hopf.solve_hopf_by_newton(hopf_model, xhopf_0, prop)
     return xhopf, info
 

@@ -288,11 +288,11 @@ def setup_transform(
 
 
 def setup_reduced_functional(
-        param: exputils.BaseParameters,
-        lambda_tol: float = 10,
-        lambda_intervals: NDArray=10*np.array([0, 500, 1000, 1500]), 
-        newton_params: Optional[Mapping[str, Any]] = None
-    ):
+    param: exputils.BaseParameters,
+    lambda_tol: float = 10,
+    lambda_intervals: NDArray = 10 * np.array([0, 500, 1000, 1500]),
+    newton_params: Optional[Mapping[str, Any]] = None,
+):
     """
     Return a reduced functional + additional stuff
 
@@ -346,8 +346,8 @@ def setup_reduced_functional(
         else:
             raise ValueError("")
 
-        xhopf_0[:] = libhopf.gen_xhopf_0(
-            hopf.res, prop, hopf.E_MODE, bifparams, tol=bifparam_tol
+        xhopf_0[:] = libhopf.solve_hopf_by_range(
+            hopf.res, prop, hopf.E_MODE, bifparams, bif_param_tol=bifparam_tol
         )
 
     newton_params = {
@@ -369,14 +369,12 @@ def setup_reduced_functional(
     func = setup_functional(param, hopf)
 
     redu_hopf_model = libhopf.ReducedHopfModel(
-        hopf, 
-        lambda_tol=lambda_tol, 
-        lambda_intervals=lambda_intervals, 
-        newton_params=newton_params
+        hopf,
+        lambda_tol=lambda_tol,
+        lambda_intervals=lambda_intervals,
+        newton_params=newton_params,
     )
-    redu_functional = libhopf.ReducedFunctional(
-        func, redu_hopf_model
-    )
+    redu_functional = libhopf.ReducedFunctional(func, redu_hopf_model)
     return redu_functional, hopf, xhopf_n, p, transform
 
 
@@ -989,7 +987,9 @@ def run_functional_sensitivity(
 def run_optimization(
     param: exputils.BaseParameters, output_dir='out/optimization', overwrite=False
 ):
-    rfunc, hopf, xhopf_n, p0, transform = setup_reduced_functional(param)
+    rfunc, hopf, xhopf_n, p0, transform = setup_reduced_functional(
+        param, lambda_tol=10.0, lambda_intervals=10 * np.array([0, 500, 1000, 1500])
+    )
     # breakpoint()
 
     # `_p` represents the `BlockVector` representation of the optimization
@@ -999,13 +999,17 @@ def run_optimization(
     _p = transform.x.copy()
 
     def f(p):
-        print(f"Called with ||p|| {np.linalg.norm(p)}")
-        K = 1e-1
-        C = 1e4
-        obj_reg = K * 1 / 2 * np.linalg.norm(p) ** 2
-        grad_reg = K * p
-        obj, grad = objective(p, rfunc, transform)
-        return C * obj + obj_reg, C * grad + grad_reg
+        with warnings.catch_warnings():
+            warnings.simplefilter('always')
+            K = 0.0
+            C = 1e0
+            obj_reg = K * 1 / 2 * np.linalg.norm(p) ** 2
+            grad_reg = K * p
+            obj, grad = objective(p, rfunc, transform)
+            print(f"Called objective function with ||p|| {np.linalg.norm(p)}")
+            print(f"Objective function returned f {obj}")
+            print(f"Objective function returned ||grad|| {np.linalg.norm(grad)}")
+            return C * obj + obj_reg, C * grad + grad_reg
 
     def callback(intermediate_result):
         print(intermediate_result)
@@ -1014,7 +1018,7 @@ def run_optimization(
     opt_info = optimize.minimize(
         f,
         p0.to_mono_ndarray(),
-        method='BFGS',
+        method='L-BFGS-B',
         jac=True,
         callback=callback,
         options=opt_options,
