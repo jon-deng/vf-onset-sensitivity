@@ -557,11 +557,10 @@ def solve_hopf_by_range(
 
     # Use the bounding/bisection approach to locate a refined initial guess
     # in the intervals
-    bounds = [
-        (lb, ub) for lb, ub in zip(bif_param_range[:-1], bif_param_range[1:])
-    ]
+    bounds = [(lb, ub) for lb, ub in zip(bif_param_range[:-1], bif_param_range[1:])]
     omega_pairs = [
-        (omega_lb, omega_ub) for omega_lb, omega_ub in zip(omegas_max[:-1], omegas_max[1:])
+        (omega_lb, omega_ub)
+        for omega_lb, omega_ub in zip(omegas_max[:-1], omegas_max[1:])
     ]
     xhopf_0 = solve_hopf_by_brackets(
         dyn_model,
@@ -736,84 +735,14 @@ def bracket_bif_param(
             )
             return x, info
 
-    # If `growth_rates` aren't supplied compute them here
-    if growth_rates is None:
-        growth_rates = [
-            tuple(
-                solve_least_stable_mode_r(
-                    dyn_model, control, prop, bif_param, set_bif_param, solve_fp_r
-                )[0].real for bif_param in bracket
-            )
-            for bracket in bif_param_brackets
-        ]
+    def f(bif_param):
+        return solve_least_stable_mode_r(
+            dyn_model, control, prop, bif_param, set_bif_param, solve_fp_r
+        )[0].real
 
-    # Filter the list of brackets so only brackets that
-    # - contain Hopf bifurcations
-    # - and have valid growth rates at bounds (bad fixed-point solutions will result in `nan`)
-    # are present
-    _brackets_has_onset = [
-        (omega_lb < 0 and omega_ub >= 0) and not (np.isnan(omega_lb) or np.isnan(omega_ub))
-        for (omega_lb, omega_ub) in growth_rates
-    ]
-    valid_brackets = [
-        bracket
-        for bracket, has_onset in zip(bif_param_brackets, _brackets_has_onset)
-        if has_onset
-    ]
-    valid_growth_rates = [
-        bracket_growth_rate
-        for bracket_growth_rate, has_onset in zip(growth_rates, _brackets_has_onset)
-        if has_onset
-    ]
-
-    # Split any brackets that don't satisfy the tolerance into smaller brackets
-    # until they do
-    ret_brackets = []
-    ret_bracket_growth_rates = []
-    for bracket, bracket_growth_rate in zip(valid_brackets, valid_growth_rates):
-        lb, ub = bracket
-        omega_lb, omega_ub = bracket_growth_rate
-        tol = bracket[1] - bracket[0]
-        if tol <= bif_param_tol:
-            ret_brackets.append(bracket)
-            ret_bracket_growth_rates.append(bracket_growth_rate)
-        else:
-            # Split the bracket into `num_sub_brackets`
-            bracket_interior = list(
-                np.linspace(bracket[0], bracket[1], num_sub_brackets + 1)[1:-1]
-            )
-            omega_interior = [
-                solve_least_stable_mode_r(
-                    dyn_model, control, prop, psub, set_bif_param, solve_fp_r
-                )[0].real
-                for psub in bracket_interior
-            ]
-            split_brackets = (
-                [(lb, bracket_interior[0])]
-                + [(a, b) for a, b in zip(bracket_interior[:-1], bracket_interior[1:])]
-                + [(bracket_interior[-1], ub)]
-            )
-            split_growth_rates = (
-                [(omega_lb, omega_interior[0])]
-                + [(a, b) for a, b in zip(omega_interior[:-1], omega_interior[1:])]
-                + [(omega_interior[-1], omega_ub)]
-            )
-
-            _brackets, _bracket_growth_rates = bracket_bif_param(
-                dyn_model,
-                control,
-                prop,
-                split_brackets,
-                split_growth_rates,
-                num_sub_brackets=num_sub_brackets,
-                bif_param_tol=bif_param_tol,
-                solve_fp_r=solve_fp_r,
-                set_bif_param=set_bif_param,
-            )
-            ret_brackets += _brackets
-            ret_bracket_growth_rates += _bracket_growth_rates
-
-    return ret_brackets, ret_bracket_growth_rates
+    return bracket_zero_crossings(
+        f, bif_param_brackets, growth_rates, num_sub_brackets, tol=bif_param_tol
+    )
 
 
 def solve_least_stable_mode_r(
@@ -850,6 +779,93 @@ def solve_least_stable_mode_r(
         nan_mode = dyn_model.state.copy()
         nan_mode[:] = np.nan
         return np.nan, nan_mode, nan_mode, xfp
+
+
+def bracket_zero_crossings(
+    f: Callable[[float], float],
+    bracket_xs: ListPair,
+    bracket_ys: Optional[ListPair] = None,
+    num_sub_brackets: int = 2,
+    tol: float = 1.0,
+) -> Tuple[ListPair, ListPair]:
+    """
+    Bracket inputs where a function crosses 0
+
+    Parameters
+    ----------
+    f: Callable[[float], float]
+        A function representing :math:`f: x \leftarrow y`
+    bracket_xs: ListPair
+        A list of input brackets to check for zero-crossings
+    bracket_ys: Optional[ListPair] = None
+        A list of function values at input brackets
+    num_sub_brackets: int = 2
+        The number of sub-intervals to split a bracket
+    tol: float = 1.0
+    """
+    for bracket_x in bracket_xs:
+        assert len(bracket_x) == 2
+
+    # If `growth_rates` aren't supplied compute them here
+    if bracket_ys is None:
+        bracket_ys = [
+            tuple(f(bif_param) for bif_param in bracket) for bracket in bracket_xs
+        ]
+
+    # Filter the list of brackets so only brackets that
+    # - contain zero-crossings
+    # - and have valid function values at bounds (bad funciton inputs can return `nan`)
+    # are present
+    _brackets_has_crossing = [
+        (y_lb < 0 and y_ub >= 0) and not (np.isnan(y_lb) or np.isnan(y_ub))
+        for (y_lb, y_ub) in bracket_ys
+    ]
+    valid_bracket_xs = [
+        bracket
+        for bracket, has_onset in zip(bracket_xs, _brackets_has_crossing)
+        if has_onset
+    ]
+    valid_bracket_ys = [
+        bracket_growth_rate
+        for bracket_growth_rate, has_onset in zip(bracket_ys, _brackets_has_crossing)
+        if has_onset
+    ]
+
+    # Split any brackets that don't satisfy the tolerance into smaller brackets
+    # until they do
+    ret_brackets = []
+    ret_bracket_fs = []
+    for bracket_x, bracket_y in zip(valid_bracket_xs, valid_bracket_ys):
+        x_lb, x_ub = bracket_x
+        y_lb, y_ub = bracket_y
+        x_tol = bracket_x[1] - bracket_x[0]
+        if x_tol <= tol:
+            ret_brackets.append(bracket_x)
+            ret_bracket_fs.append(bracket_y)
+        else:
+            # Split the bracket into `num_sub_brackets`
+            x_interior = list(
+                np.linspace(bracket_x[0], bracket_x[1], num_sub_brackets + 1)[1:-1]
+            )
+            y_interior = [f(x) for x in x_interior]
+            split_bracket_xs = (
+                [(x_lb, x_interior[0])]
+                + [(a, b) for a, b in zip(x_interior[:-1], x_interior[1:])]
+                + [(x_interior[-1], x_ub)]
+            )
+            split_bracket_ys = (
+                [(y_lb, y_interior[0])]
+                + [(a, b) for a, b in zip(y_interior[:-1], y_interior[1:])]
+                + [(y_interior[-1], y_ub)]
+            )
+
+            _brackets, _bracket_growth_rates = bracket_zero_crossings(
+                f, split_bracket_xs, split_bracket_ys, num_sub_brackets, tol=tol
+            )
+            ret_brackets += _brackets
+            ret_bracket_fs += _bracket_growth_rates
+
+    return ret_brackets, ret_bracket_fs
 
 
 ## Functions for normalizing eigenvectors
