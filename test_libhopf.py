@@ -291,7 +291,7 @@ class TestHopfUtilities:
         """Return lower/upper subglottal pressure bounds"""
         lbs = [100.0 * 10]
         ubs = [800.0 * 10]
-        return (lbs, ubs)
+        return [(lb, ub) for lb, ub in zip(lbs, ubs)]
 
     def test_bound_hopf_bifurcations(
         self, hopf_model: HopfModel, prop: BVec, bound_pairs
@@ -303,11 +303,12 @@ class TestHopfUtilities:
         dyn_prop = hopf_model.res.prop
         dyn_control = hopf_model.res.control
 
+        # breakpoint()
         bounds, omegas = hopf.bracket_bif_param(
             dyn_model, dyn_control, dyn_prop, bound_pairs
         )
-        print(f"Hopf bifurcations between {bounds[0]} and {bounds[1]}")
-        print(f"with growth rates between {omegas[0]} and {omegas[1]}")
+        print(f"Hopf bifurcations between {bounds}")
+        print(f"with growth rates between {omegas}")
 
     def test_gen_hopf_initial_guess_from_bounds(
         self, hopf_model: HopfModel, prop: BVec, bound_pairs

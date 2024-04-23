@@ -61,7 +61,7 @@ from blockarray.typing import Labels
 from . import functional
 
 # pylint: disable=invalid-name
-ListPair = Tuple[List[float], List[float]]
+ListPair = List[Tuple[float, float]]
 
 DynamicalModel = dynbase.BaseDynamicalModel
 
@@ -555,31 +555,14 @@ def solve_hopf_by_range(
         for bif_param in bif_param_range
     ]
 
-    # Determine if an interval has a bifurcation by checking if the growth rate
-    # flips from negative to positive
-    has_transition = [
-        omega2 >= 0.0 and omega1 < 0.0
-        for omega1, omega2 in zip(omegas_max[:-1], omegas_max[1:])
-    ]
-    idxs_bif = np.arange(bif_param_range.size - 1)[has_transition]
-    if idxs_bif.size == 0:
-        raise RuntimeError("No Hopf bifurcations detected")
-    elif idxs_bif.size > 1:
-        warnings.warn(
-            "Found more than one Hopf bifurcation parameter"
-            "; using the smallest by default",
-            category=RuntimeWarning,
-        )
-
     # Use the bounding/bisection approach to locate a refined initial guess
-    # in the interval containing a Hopf bifurcation
-    idx_bif = idxs_bif[0]
-    lbs = [bif_param_range[idx_bif]]
-    ubs = [bif_param_range[idx_bif + 1]]
-    bounds = (lbs, ubs)
-    omega_lbs = [omegas_max[idx_bif]]
-    omega_ubs = [omegas_max[idx_bif + 1]]
-    omega_pairs = (omega_lbs, omega_ubs)
+    # in the intervals
+    bounds = [
+        (lb, ub) for lb, ub in zip(bif_param_range[:-1], bif_param_range[1:])
+    ]
+    omega_pairs = [
+        (omega_lb, omega_ub) for omega_lb, omega_ub in zip(omegas_max[:-1], omegas_max[1:])
+    ]
     xhopf_0 = solve_hopf_by_brackets(
         dyn_model,
         control,
@@ -655,7 +638,7 @@ def solve_hopf_by_brackets(
     control = control.copy()
 
     # Find lower/upper bounds for the Hopf bifurcation point
-    (lbs, ubs), _ = bracket_bif_param(
+    brackets, _ = bracket_bif_param(
         dyn_model,
         control,
         prop,
@@ -667,18 +650,18 @@ def solve_hopf_by_brackets(
         set_bif_param=set_bif_param,
     )
 
-    print("Lower and upper bounds", lbs, ubs)
-
-    if len(ubs) > 1:
-        warnings.warn("More than one Hopf bifurcation point found")
-    if len(ubs) == 0:
-        raise RuntimeError(
-            "No Hopf bifurcation found between bounds"
-            f" ({bif_param_brackets[0]}, {bif_param_brackets[1]})"
+    if len(brackets) == 0:
+        raise RuntimeError("No Hopf bifurcations detected")
+    elif len(brackets) > 1:
+        warnings.warn(
+            "Found more than one Hopf bifurcation parameter"
+            "; using the smallest by default",
+            category=RuntimeWarning,
         )
 
     # Use the average of bracket bounds as the bifurcation parameter value
-    psub = 1 / 2 * (lbs[0] + ubs[0])
+    lb, ub = brackets[0]
+    psub = 1 / 2 * (lb + ub)
     omega, x_mode_real, x_mode_imag, x_fp = solve_least_stable_mode_r(
         dyn_model, control, prop, psub, set_bif_param, solve_fp_r
     )
@@ -739,6 +722,9 @@ def bracket_bif_param(
     set_bif_param: SetBifParam
         A function that returns the model control and property given a bifurcation parameter
     """
+    for bracket in bif_param_brackets:
+        assert len(bracket) == 2
+
     if set_bif_param is None:
         set_bif_param = set_bif_param_fluid
 
@@ -751,19 +737,15 @@ def bracket_bif_param(
             return x, info
 
     # If `growth_rates` aren't supplied compute them here
-    lbs, ubs = bif_param_brackets
     if growth_rates is None:
-        omega_lbs = [
-            solve_least_stable_mode_r(
-                dyn_model, control, prop, lb, set_bif_param, solve_fp_r
-            )[0].real for lb in lbs
+        growth_rates = [
+            tuple(
+                solve_least_stable_mode_r(
+                    dyn_model, control, prop, bif_param, set_bif_param, solve_fp_r
+                )[0].real for bif_param in bracket
+            )
+            for bracket in bif_param_brackets
         ]
-        omega_ubs = [
-            solve_least_stable_mode_r(
-                dyn_model, control, prop, ub, set_bif_param, solve_fp_r
-            )[0].real for ub in ubs
-        ]
-        growth_rates = (omega_lbs, omega_ubs)
 
     # Filter the list of brackets so only brackets that
     # - contain Hopf bifurcations
@@ -771,61 +753,67 @@ def bracket_bif_param(
     # are present
     _brackets_has_onset = [
         (omega_lb < 0 and omega_ub >= 0) and not (np.isnan(omega_lb) or np.isnan(omega_ub))
-        for omega_lb, omega_ub in zip(*growth_rates)
+        for (omega_lb, omega_ub) in growth_rates
     ]
-
-    valid_lbs = [lb for lb, has_onset in zip(lbs, _brackets_has_onset) if has_onset]
-    valid_ubs = [ub for ub, has_onset in zip(ubs, _brackets_has_onset) if has_onset]
-
-    _omegas_lb, _omegas_ub = growth_rates
-    valid_omegas_lb = [lb for lb, has_onset in zip(_omegas_lb, _brackets_has_onset) if has_onset]
-    valid_omegas_ub = [ub for ub, has_onset in zip(_omegas_ub, _brackets_has_onset) if has_onset]
+    valid_brackets = [
+        bracket
+        for bracket, has_onset in zip(bif_param_brackets, _brackets_has_onset)
+        if has_onset
+    ]
+    valid_growth_rates = [
+        bracket_growth_rate
+        for bracket_growth_rate, has_onset in zip(growth_rates, _brackets_has_onset)
+        if has_onset
+    ]
 
     # Split any brackets that don't satisfy the tolerance into smaller brackets
     # until they do
-    ret_lb = []
-    ret_ub = []
-    ret_omegas_lb = []
-    ret_omegas_ub = []
-    for lb, ub, omega_lb, omega_ub in zip(valid_lbs, valid_ubs, valid_omegas_lb, valid_omegas_ub):
-        tol = ub-lb
+    ret_brackets = []
+    ret_bracket_growth_rates = []
+    for bracket, bracket_growth_rate in zip(valid_brackets, valid_growth_rates):
+        lb, ub = bracket
+        omega_lb, omega_ub = bracket_growth_rate
+        tol = bracket[1] - bracket[0]
         if tol <= bif_param_tol:
-            ret_lb.append(lb)
-            ret_ub.append(ub)
-            ret_omegas_lb.append(omega_lb)
-            ret_omegas_ub.append(omega_ub)
+            ret_brackets.append(bracket)
+            ret_bracket_growth_rates.append(bracket_growth_rate)
         else:
             # Split the bracket into `num_sub_brackets`
-            bracket_interior = list(np.linspace(lb, ub, num_sub_brackets + 1)[1:-1])
-            omegas_interior = [
+            bracket_interior = list(
+                np.linspace(bracket[0], bracket[1], num_sub_brackets + 1)[1:-1]
+            )
+            omega_interior = [
                 solve_least_stable_mode_r(
                     dyn_model, control, prop, psub, set_bif_param, solve_fp_r
                 )[0].real
                 for psub in bracket_interior
             ]
-            split_lbs = [lb] + bracket_interior
-            split_ubs = bracket_interior + [ub]
+            split_brackets = (
+                [(lb, bracket_interior[0])]
+                + [(a, b) for a, b in zip(bracket_interior[:-1], bracket_interior[1:])]
+                + [(bracket_interior[-1], ub)]
+            )
+            split_growth_rates = (
+                [(omega_lb, omega_interior[0])]
+                + [(a, b) for a, b in zip(omega_interior[:-1], omega_interior[1:])]
+                + [(omega_interior[-1], omega_ub)]
+            )
 
-            split_omegas_lb = [omega_lb] + omegas_interior
-            split_omegas_ub = omegas_interior + [omega_ub]
-
-            split_brackets, split_omegas = bracket_bif_param(
+            _brackets, _bracket_growth_rates = bracket_bif_param(
                 dyn_model,
                 control,
                 prop,
-                (split_lbs, split_ubs),
-                (split_omegas_lb, split_omegas_ub),
+                split_brackets,
+                split_growth_rates,
                 num_sub_brackets=num_sub_brackets,
                 bif_param_tol=bif_param_tol,
                 solve_fp_r=solve_fp_r,
                 set_bif_param=set_bif_param,
             )
-            ret_lb += split_brackets[0]
-            ret_ub += split_brackets[1]
-            ret_omegas_lb += split_omegas[0]
-            ret_omegas_ub += split_omegas[1]
+            ret_brackets += _brackets
+            ret_bracket_growth_rates += _bracket_growth_rates
 
-    return (ret_lb, ret_ub), (ret_omegas_lb, ret_omegas_ub)
+    return ret_brackets, ret_bracket_growth_rates
 
 
 def solve_least_stable_mode_r(
