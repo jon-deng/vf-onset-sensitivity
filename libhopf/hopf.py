@@ -1426,9 +1426,9 @@ class ReducedHopfModel:
             self.hopf_model.res,
             self.hopf_model.res.control,
             prop,
-            self.hopf_model.E_MODE,
             self.LAMBDA_INTERVALS,
             bif_param_tol=self.LAMBDA_TOL,
+            eigvec_ref=self.hopf_model.E_MODE,
         )
         xhopf_0 = bv.BlockVector(xhopf_0.blocks, labels=self.hopf_model.state.labels)
 

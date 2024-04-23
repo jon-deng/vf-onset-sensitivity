@@ -407,7 +407,7 @@ def solve_linearization(hopf_model: HopfModel, prop: BVec):
     psubs = np.arange(1, 1000, 100) * 10
     xhopf_0 = hopf_model.state.copy()
     xhopf_0[:] = hopf.solve_hopf_by_range(
-        hopf_model.res, control, prop, hopf_model.E_MODE, psubs
+        hopf_model.res, control, prop, psubs, eigvec_ref=hopf_model.E_MODE
     )
     xhopf, info = hopf.solve_hopf_by_newton(hopf_model, xhopf_0, prop)
     return xhopf, info
@@ -419,6 +419,7 @@ def xhopf_prop(hopf_model: HopfModel, prop: BVec) -> BVecPair:
     Return a linearization point corresponding to a Hopf bifurcation
     """
     xhopf, info = solve_linearization(hopf_model, prop)
+    print(info)
     return xhopf, prop
 
 
@@ -432,7 +433,7 @@ def xhopf_params(hopf_model: HopfModel, param: BVec):
     return xhopf, p0, parameterization
 
 
-@pytest.fixture(params=[('emod', 10 * 1e3), ('umesh', 1.0e-3)])
+@pytest.fixture(params=[('emod', 10 * 1e3), ('umesh', 1.0e-4)])
 def dprop_dir(request):
     return request.param
 

@@ -346,8 +346,9 @@ def setup_reduced_functional(
         else:
             raise ValueError("")
 
+        control = hopf.res.control
         xhopf_0[:] = libhopf.solve_hopf_by_range(
-            hopf.res, prop, hopf.E_MODE, bifparams, bif_param_tol=bifparam_tol
+            hopf.res, control, prop, bifparams, bif_param_tol=bifparam_tol, eigvec_ref=hopf.E_MODE
         )
 
     newton_params = {
