@@ -1495,12 +1495,12 @@ class ReducedFunctional:
         self.rhopf_model = reduced_hopf_model
 
         # The current Hopf state + properties at the linearization point
-        self._props = self.rhopf_model.hopf_model.prop.copy()
+        self._prop = self.rhopf_model.hopf_model.prop.copy()
         self._state = self.rhopf_model.hopf_model.state.copy()
 
     @property
     def prop(self) -> bv.BlockVector:
-        return self._props
+        return self._prop
 
     @property
     def state(self) -> bv.BlockVector:
@@ -1544,23 +1544,20 @@ class ReducedFunctional:
             norm = bla.norm
 
         # Make sure that the input dprop has the right subvector types
-        unit_dprops = self.prop.copy()
-        unit_dprops[:] = dprop
+        unit_dprop = self.prop.copy()
+        unit_dprop[:] = dprop
 
-        norm_dprops = norm(unit_dprops)
-        unit_dprops = unit_dprops / norm_dprops
+        norm_dprop = norm(unit_dprop)
+        unit_dprop = unit_dprop / norm_dprop
 
         # Approximate the HVP with a central difference
-        def assem_grad(hopf_props):
+        def assem_grad(hopf_prop):
             hopf = self.rhopf_model.hopf_model
 
-            # hopf.set_prop(hopf_props)
-            hopf_state, info = solve_hopf_by_newton(hopf, self.state, hopf_props)
+            hopf_state, info = solve_hopf_by_newton(hopf, self.state, hopf_prop)
             assert info['status'] == 0
 
-            return solve_reduced_gradient(
-                self.func, hopf, hopf_state, hopf_props
-            ).copy()
+            return solve_reduced_gradient(self.func, hopf, hopf_state, hopf_prop).copy()
 
         # CD
         alphas = [h, -h]
@@ -1572,10 +1569,10 @@ class ReducedFunctional:
 
         prop = self.prop
         dgs = [
-            k * assem_grad(prop + alpha * unit_dprops)
+            k * assem_grad(prop + alpha * unit_dprop)
             for k, alpha in zip(kernel, alphas)
         ]
-        return norm_dprops * functools.reduce(operator.add, dgs)
+        return norm_dprop * functools.reduce(operator.add, dgs)
 
 
 def solve_reduced_gradient(
@@ -1590,7 +1587,7 @@ def solve_reduced_gradient(
         obj.set_state(state)
         obj.set_prop(prop)
 
-    dg_dprops = functional.assem_dg_dprop()
+    dg_dprop = functional.assem_dg_dprop()
     dg_dx = functional.assem_dg_dstate()
     hopf.apply_dirichlet_bvec(dg_dx)
     _dg_dx = dg_dx.to_mono_petsc()
@@ -1617,8 +1614,8 @@ def solve_reduced_gradient(
     dg_dres.set_mono(_dg_dres)
 
     # Compute the reduced gradient
-    dres_dprops = hopf.assem_dres_dprop()
-    return bla.mult_mat_vec(dres_dprops.transpose(), -dg_dres) + dg_dprops
+    dres_dprop = hopf.assem_dres_dprop()
+    return bla.mult_mat_vec(dres_dprop.transpose(), -dg_dres) + dg_dprop
 
 
 class OptGradManager:
@@ -1653,13 +1650,13 @@ class OptGradManager:
             f.create_group('parameters'), param_labels, param_bshape
         )
         h5utils.create_resizable_block_vector_group(
-            f.create_group('grad'), param_labels, param_bshape
+            f.create_group('grads'), param_labels, param_bshape
         )
         h5utils.create_resizable_block_vector_group(
             f.create_group('hopf_props'), prop_labels, prop_bshape
         )
         h5utils.create_resizable_block_vector_group(
-            f.create_group('hopf_state'),
+            f.create_group('hopf_states'),
             redu_grad.rhopf_model.hopf_model.state.labels,
             redu_grad.rhopf_model.hopf_model.state.bshape,
         )
@@ -1689,10 +1686,10 @@ class OptGradManager:
         h5utils.append_block_vector_to_group(self.f['parameters'], p)
 
         hopf_state = self.redu_grad.rhopf_model.assem_state()
-        h5utils.append_block_vector_to_group(self.f['hopf_state'], hopf_state)
+        h5utils.append_block_vector_to_group(self.f['hopf_states'], hopf_state)
 
-        hopf_props = self.redu_grad.prop
-        h5utils.append_block_vector_to_group(self.f['hopf_props'], hopf_props)
+        hopf_prop = self.redu_grad.prop
+        h5utils.append_block_vector_to_group(self.f['hopf_props'], hopf_prop)
 
         self.f['hopf_newton_num_iter'].resize(
             self.f['hopf_newton_num_iter'].size + 1, axis=0
@@ -1749,15 +1746,15 @@ class OptGradManager:
             g = self.redu_grad.assem_g()
 
             # Solve the gradient of the objective function
-            _dg_dprops = self.param.y.copy()
-            _dg_dprops[:] = self.redu_grad.assem_dg_dprop()
+            _dg_dprop = self.param.y.copy()
+            _dg_dprop[:] = self.redu_grad.assem_dg_dprop()
 
             self.param.x.set_mono(p)
-            _dg_dp = self.param.apply_vjp(self.param.x, _dg_dprops)
+            _dg_dp = self.param.apply_vjp(self.param.x, _dg_dprop)
             dg_dp = _dg_dp.to_mono_ndarray()
 
         # Record the current objective function and gradient
-        h5utils.append_block_vector_to_group(self.f['grad'], _dg_dp)
+        h5utils.append_block_vector_to_group(self.f['grads'], _dg_dp)
         self.f['objective'].resize(self.f['objective'].size + 1, axis=0)
         self.f['objective'][-1] = g
         return g, dg_dp
