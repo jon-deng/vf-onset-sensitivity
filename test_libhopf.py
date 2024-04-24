@@ -124,7 +124,7 @@ class TestHopfModel:
         dstate[:] = 0
 
         label = request.param
-        print(f"Testing along direction {label}")
+        print(f"Testing `dstate` along direction {label}")
         dstate[label] = 1e-4
 
         hopf_model.apply_dirichlet_bvec(dstate)
@@ -197,7 +197,6 @@ class TestHopfModel:
         dstate_test.set_mono(_dstate_test)
 
         err = dstate - dstate_test
-        print(err.norm())
         assert np.isclose(err.norm(), 0, rtol=1e-8, atol=1e-9)
 
     @pytest.fixture(
@@ -218,7 +217,7 @@ class TestHopfModel:
                 dprop[f'fluid{n}.{label[6:]}'][:] = value
         else:
             dprop[label] = value
-        print(f"Testing along direction {label}")
+        print(f"Testing `dprop` along direction: {label}")
         return dprop
 
     def test_assem_dres_dprop(
@@ -277,7 +276,10 @@ class TestHopfModel:
         dy = bla.mult_mat_vec(op, dx)
         dx_adj = bla.mult_mat_vec(op_adj, dy_adj)
 
-        print(bv.dot(dx_adj, dx), bv.dot(dy_adj, dy))
+        print(
+            "Functional computed with (forward, adjoint):"
+            f" {bv.dot(dx_adj, dx)}, {bv.dot(dy_adj, dy)}"
+        )
         assert np.isclose(bv.dot(dx_adj, dx), bv.dot(dy_adj, dy), rtol=1e-9, atol=1e-9)
 
 
@@ -329,7 +331,7 @@ class TestHopfUtilities:
         )
 
         xhopf_n, info = hopf.solve_hopf_by_newton(hopf_model, xhopf_0, prop)
-        print(f"Solved Hopf system from automatic initial guess with info {info}")
+        print(f"Solved Hopf system from automatic initial guess with info: {info}")
 
     @pytest.fixture()
     def setup_xhopf_0(self, hopf_model: HopfModel, prop: BVec, bound_pairs):
@@ -350,45 +352,6 @@ class TestHopfUtilities:
         xhopf_0 = setup_xhopf_0
         xhopf, info = hopf.solve_hopf_by_newton(hopf_model, xhopf_0, prop)
         print(info)
-
-
-@pytest.fixture(
-    params=[
-        transform.TractionShape,
-        # transform.Identity
-    ]
-)
-def parameterization(hopf_model: HopfModel, request):
-    """
-    Return a parameterization
-    """
-    model = hopf_model.res
-    Param = request.param
-    return Param(model)
-
-
-@pytest.fixture()
-def param(hopf_model: HopfModel, parameterization):
-    p0 = parameterization.x.copy()
-    p0['emod'][:] = 10 * 1e3 * 10
-    p0['rho'] = 1
-    p0['nu'] = 0.45
-    p0['eta'] = 5
-
-    setup.set_default_props(p0, hopf_model.res.solid.residual.mesh())
-    return p0
-
-
-@pytest.fixture(params=[('emod', 1e2), ('umesh', 1.0e-4)])
-def dparam(param: BVec, request):
-    """Return a `params` perturbation"""
-    dparams = param.copy()
-    dparams[:] = 0
-
-    key, val = request.param
-    if key in dparams:
-        dparams[key] = val
-    return dparams
 
 
 def solve_linearization(hopf_model: HopfModel, prop: BVec):
@@ -419,7 +382,6 @@ def xhopf_prop(hopf_model: HopfModel, prop: BVec) -> BVecPair:
     Return a linearization point corresponding to a Hopf bifurcation
     """
     xhopf, info = solve_linearization(hopf_model, prop)
-    print(info)
     return xhopf, prop
 
 
@@ -433,7 +395,7 @@ def xhopf_params(hopf_model: HopfModel, param: BVec):
     return xhopf, p0, parameterization
 
 
-@pytest.fixture(params=[('emod', 10 * 1e3), ('umesh', 1.0e-4)])
+@pytest.fixture(params=[('emod', 10 * 1e2), ('umesh', 1.0e-5)])
 def dprop_dir(request):
     return request.param
 
@@ -460,6 +422,7 @@ def dprop(prop: BVec, dprop_dir):
 def functional(hopf_model: HopfModel, request):
     """Return a Hopf model functional"""
     Functional = request.param
+    print(f"Testing `Functional`: {str(request.param)}")
     return Functional(hopf_model)
 
 
@@ -479,7 +442,6 @@ class TestFunctionalGradient:
 
         def res(prop):
             x, info = hopf.solve_hopf_by_newton(hopf_model, xhopf, prop)
-            # print(info)
             assert info['status'] == 0
             return x
 
@@ -487,7 +449,6 @@ class TestFunctionalGradient:
             # Set the linearization point
             x, info = hopf.solve_hopf_by_newton(hopf_model, xhopf, prop)
             assert info['status'] == 0
-            # print(info)
             hopf_model.set_state(x)
 
             # Compute the jacobian action
@@ -549,7 +510,7 @@ class TestFunctionalGradient:
                 hopf.solve_reduced_gradient(func, hopf_model, xhopf, prop), dprop
             )
 
-        taylor_convergence(prop, dprop, res, jac, norm=lambda x: x)
+        taylor_convergence(prop, dprop, res, jac, norm=lambda x: abs(x))
 
 
 @pytest.fixture()
@@ -573,33 +534,19 @@ def rfunctional(
     return hopf.ReducedFunctional(func, rhopf)
 
 
-class TestReducedFunctional:
-    """
-    Test `hopf.ReducedFunctional`
-    """
-
+class ScaledNormMixin:
     @pytest.fixture()
-    def props(self, xhopf_prop: BVecPair, dprop: BVec):
-        """Return an iterable of `Hopf.prop` vectors"""
-        _, prop = xhopf_prop
-
-        props = [
-            bv.concatenate([prop + alpha * dprop]) for alpha in np.linspace(0, 10, 3)
-        ]
-        return props
-
-    @pytest.fixture()
-    def norm(self, hopf_model: HopfModel, dprop: BVec):
+    def norm(self, hopf_model: HopfModel):
         """
         Return a scaled norm
 
         This is used to generate reasonable step sizes for
         finite differences.
         """
-        scale = dprop.copy()
+        scale = hopf_model.prop.copy()
         scale[:] = 1
         scale['emod'][:] = 1e4
-        scale['umesh'][:] = 1e-3
+        scale['umesh'][:] = 1e-4
 
         # Mass matrices for the different vector spaces
         form = hopf_model.res.solid.residual.form
@@ -625,6 +572,63 @@ class TestReducedFunctional:
 
         return scaled_norm
 
+
+@pytest.fixture(
+    params=[
+        transform.TractionShape,
+        # transform.Identity
+    ]
+)
+def parameterization(hopf_model: HopfModel, request):
+    """
+    Return a parameterization
+    """
+    model = hopf_model.res
+    Parameterization = request.param
+    return Parameterization(model)
+
+
+@pytest.fixture()
+def param(hopf_model: HopfModel, parameterization):
+    p0 = parameterization.x.copy()
+    p0['emod'][:] = 10 * 10e3
+    p0['rho'] = 1.0
+    p0['nu'] = 0.45
+    p0['eta'] = 5
+
+    setup.set_default_props(p0, hopf_model.res.solid.residual.mesh())
+    return p0
+
+
+@pytest.fixture(params=[('emod', 10 * 1e2), ('umesh', 1.0e-5), ('tmesh', 1.0e10)])
+def dparam(param: BVec, request):
+    """Return a `params` perturbation"""
+    dparam = param.copy()
+    dparam[:] = 0
+
+    key, val = request.param
+    if key in dparam:
+        dparam[key] = val
+
+    print(f"Testing `dparam` along: {key}")
+    return dparam
+
+
+class TestReducedFunctional(ScaledNormMixin):
+    """
+    Test `hopf.ReducedFunctional`
+    """
+
+    @pytest.fixture()
+    def props(self, xhopf_prop: BVecPair, dprop: BVec):
+        """Return an iterable of `Hopf.prop` vectors"""
+        _, prop = xhopf_prop
+
+        props = [
+            bv.concatenate([prop + alpha * dprop]) for alpha in np.linspace(0, 10, 3)
+        ]
+        return props
+
     def test_set_prop(self, rfunctional: hopf.ReducedFunctional, props):
         """
         Test `ReducedFunctional.set_prop` solves for a Hopf bifurcation
@@ -634,14 +638,20 @@ class TestReducedFunctional:
             # For each property in a list of properties to test, set the properties
             # of the ReducedFunctional; the ReducedFunctional should handle solving the
             # Hopf system implictly
+            # hopf_model.state.print_summary()
             rfunctional.set_prop(prop)
-            # print(redu_grad.assem_g())
+            # hopf_model.state.print_summary()
 
             # Next, check that the Hopf system was correctly solved in
             # ReducedGradient by checking the Hopf residual
             hopf_model.set_state(rfunctional.rhopf_model.assem_state())
-            hopf_model.set_prop(rfunctional.rhopf_model.prop)
-            print(bla.norm(hopf_model.assem_res()))
+            hopf_model.set_prop(prop)
+            res_norm = bla.norm(hopf_model.assem_res())
+            print(
+                "`ReducedFunctional` solved Hopf state with residual norm:"
+                f" {res_norm}"
+            )
+            assert np.isclose(res_norm, 0.0, atol=1e-6)
 
     def test_assem_dg_dprop(
         self,
@@ -680,19 +690,51 @@ class TestReducedFunctional:
         xhopf, prop = xhopf_prop
 
         def assem_grad(prop):
-            # print(bla.norm(prop))
             rfunctional.set_prop(prop)
             return rfunctional.assem_dg_dprop().copy()
 
         def assem_hvp(prop, dprop):
-            # print(bla.norm(prop))
             rfunctional.set_prop(prop)
             return rfunctional.assem_d2g_dprop2(dprop, h=h, norm=norm).copy()
 
         alphas, errs, mags, conv_rates = taylor_convergence(
             prop, dprop, assem_grad, assem_hvp, norm=bla.norm
         )
-        # print(alphas, errs, mags, conv_rates)
+
+
+class TestReducedFunctionalHessianContext(ScaledNormMixin):
+
+    @pytest.fixture()
+    def context(self, rfunctional, parameterization, norm):
+        """
+        Return a PETSc Python mat context
+        """
+        return hopf.ReducedFunctionalHessianContext(
+            rfunctional, parameterization, norm=norm, step_size=1e-10
+        )
+
+    @pytest.fixture()
+    def mat(self, context):
+        """
+        Return a PETSc Python mat
+        """
+        n = context.rfunctional.prop.mshape[0]
+        m = n
+
+        ret_mat = PETSc.Mat().createPython((m, n))
+        ret_mat.setPythonContext(context)
+        ret_mat.setUp()
+        return ret_mat
+
+    def test_mult(self, mat, context, param, dparam):
+        """
+        Test a PETSc Python mat's `mult` operation
+        """
+        context.set_param(param)
+
+        x = dparam.to_mono_petsc()
+        y = mat.getVecLeft()
+        mat.mult(x, y)
 
 
 class TestOptGradManager:
@@ -719,7 +761,7 @@ class TestOptGradManager:
                 dp[key] = subvec
         return [p0 + alpha * dp for alpha in np.linspace(0, 1, 2)]
 
-    def test_OptGradManager(self, rfunctional, parameterization, param):
+    def test_OptGradManager(self, rfunctional, parameterization, params):
         """
         Test the ReducedGradientManager object
         """
@@ -728,44 +770,9 @@ class TestOptGradManager:
         with h5py.File("out/_test_make_opt_grad.h5", mode='w') as f:
             grad_manager = hopf.OptGradManager(redu_grad, f, parameterization)
 
-            for param in param:
+            for param in params:
                 print(grad_manager.grad(param.to_mono_ndarray()))
-
-            print(f.keys())
 
             for key in list(f.keys()):
                 if 'hopf_newton_' in key:
                     print(f"{key}: {f[key][:]}")
-
-
-class TestReducedFunctionalHessianContext:
-
-    @pytest.fixture()
-    def context(self, rfunctional, parameterization):
-        """
-        Return a PETSc Python mat context
-        """
-        return hopf.ReducedFunctionalHessianContext(rfunctional, parameterization)
-
-    @pytest.fixture()
-    def mat(self, context):
-        """
-        Return a PETSc Python mat
-        """
-        n = context.rfunctional.prop.mshape[0]
-        m = n
-
-        ret_mat = PETSc.Mat().createPython((m, n))
-        ret_mat.setPythonContext(context)
-        ret_mat.setUp()
-        return ret_mat
-
-    def test_mult(self, mat, context, param, dparam):
-        """
-        Test a PETSc Python mat's `mult` operation
-        """
-        context.set_params(param)
-
-        x = dparam.to_mono_petsc()
-        y = mat.getVecLeft()
-        mat.mult(x, y)

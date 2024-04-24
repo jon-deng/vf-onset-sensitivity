@@ -35,7 +35,7 @@ def taylor_convergence(x0, dx, res, jac, norm=None):
 
     dres_exacts = [res_n - res_0 for res_n in res_ns]
 
-    errs = np.array(
+    abs_errs = np.array(
         [
             norm(dres_exact - alpha * dres_linear)
             for dres_exact, alpha in zip(dres_exacts, alphas)
@@ -48,12 +48,15 @@ def taylor_convergence(x0, dx, res, jac, norm=None):
         ]
     )
     with np.errstate(invalid='ignore'):
-        conv_rates = np.log(errs[:-1] / errs[1:]) / np.log(alphas[:-1] / alphas[1:])
-        rel_errs = errs / magnitudes
+        conv_rates = np.log(abs_errs[:-1] / abs_errs[1:]) / np.log(
+            alphas[:-1] / alphas[1:]
+        )
+        rel_errs = abs_errs / magnitudes
 
     print(
         f"||dres_linear||, ||dres_exact|| = {norm(dres_linear)}, {norm(dres_exacts[-1])}"
     )
-    print("Relative errors: ", rel_errs)
+    print("Absolute error norms: ", abs_errs)
+    print("Relative error norms: ", rel_errs)
     print("Convergence rates: ", np.array(conv_rates))
-    return alphas, errs, magnitudes, conv_rates
+    return alphas, abs_errs, magnitudes, conv_rates

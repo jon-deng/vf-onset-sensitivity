@@ -348,7 +348,12 @@ def setup_reduced_functional(
 
         control = hopf.res.control
         xhopf_0[:] = libhopf.solve_hopf_by_range(
-            hopf.res, control, prop, bifparams, bif_param_tol=bifparam_tol, eigvec_ref=hopf.E_MODE
+            hopf.res,
+            control,
+            prop,
+            bifparams,
+            bif_param_tol=bifparam_tol,
+            eigvec_ref=hopf.E_MODE,
         )
 
     newton_params = {
@@ -913,7 +918,7 @@ def run_functional_sensitivity(
         redu_hess_context = libhopf.ReducedFunctionalHessianContext(
             rfunc, transform, norm=norm, step_size=param['H']
         )
-        redu_hess_context.set_params(p0)
+        redu_hess_context.set_param(p0)
         mat = PETSc.Mat().createPython(p0.mshape * 2)
         mat.setPythonContext(redu_hess_context)
         mat.setUp()
