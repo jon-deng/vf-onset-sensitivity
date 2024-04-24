@@ -1548,7 +1548,10 @@ class ReducedFunctional:
         unit_dprop[:] = dprop
 
         norm_dprop = norm(unit_dprop)
-        unit_dprop = unit_dprop / norm_dprop
+        if norm_dprop == 0:
+            unit_dprop = unit_dprop
+        else:
+            unit_dprop = unit_dprop / norm_dprop
 
         # Approximate the HVP with a central difference
         def assem_grad(hopf_prop):
