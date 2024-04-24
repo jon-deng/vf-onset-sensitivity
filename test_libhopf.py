@@ -519,7 +519,7 @@ def rhopf(hopf_model: HopfModel):
     Return a reduced Hopf model
     """
     rhopf = hopf.ReducedHopfModel(
-        hopf_model, lambda_intervals=10 * np.array([1.0, 800.0, 1600.0])
+        hopf_model, bif_param_range=10 * np.array([1.0, 800.0, 1600.0])
     )
     return rhopf
 
