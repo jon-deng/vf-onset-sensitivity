@@ -788,7 +788,7 @@ def bracket_zero_crossings(
     num_sub_brackets: int = 2,
     tol: float = 1.0,
 ) -> Tuple[ListPair, ListPair]:
-    """
+    r"""
     Bracket inputs where a function crosses 0
 
     Parameters
@@ -1751,7 +1751,6 @@ class OptGradManager:
             # Solve the gradient of the objective function
             _dg_dprops = self.param.y.copy()
             _dg_dprops[:] = self.redu_grad.assem_dg_dprop()
-            _dg_dprops['rho_air'] = 0.0
 
             self.param.x.set_mono(p)
             _dg_dp = self.param.apply_vjp(self.param.x, _dg_dprops)
