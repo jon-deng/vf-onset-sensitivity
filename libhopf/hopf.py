@@ -1264,7 +1264,6 @@ def solve_linear_stability(
 
     eigvals = np.array([eps.getEigenvalue(jj) for jj in range(eps.getConverged())])
     omegas = -1 / eigvals
-    # print("Omegas:", omegas)
 
     eigvecs_real = [res.state.copy() for jj in range(eps.getConverged())]
     eigvecs_imag = [res.state.copy() for jj in range(eps.getConverged())]
@@ -1455,7 +1454,7 @@ class ReducedHopfModel:
         """
         Return the Hopf model state
         """
-        return self.hist_state[-1]
+        return self.hopf_model.state.copy()
 
 
 class ReducedFunctional:
@@ -1689,7 +1688,7 @@ class OptGradManager:
         # Record the current parameter set
         h5utils.append_block_vector_to_group(self.f['parameters'], p)
 
-        hopf_state = self.redu_grad.rhopf_model.hist_state[-1]
+        hopf_state = self.redu_grad.rhopf_model.assem_state()
         h5utils.append_block_vector_to_group(self.f['hopf_state'], hopf_state)
 
         hopf_props = self.redu_grad.prop
