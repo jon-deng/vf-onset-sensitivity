@@ -376,8 +376,8 @@ def setup_reduced_functional(
 
     redu_hopf_model = libhopf.ReducedHopfModel(
         hopf,
-        lambda_tol=lambda_tol,
-        lambda_intervals=lambda_intervals,
+        bif_param_tol=lambda_tol,
+        bif_param_range=lambda_intervals,
         newton_params=newton_params,
     )
     redu_functional = libhopf.ReducedFunctional(func, redu_hopf_model)
@@ -876,7 +876,8 @@ def objective_bv(p: bv.BlockVector, rfunc: 'ReducedFunctional', transform: 'Tran
         grad = transform.apply_vjp(p, grad_prop)
     except RuntimeError as err:
         warnings.warn(
-            "Couldn't solve objective function for input. Returning NaN",
+            "Couldn't solve objective function for input due to error: "
+            f"{err}",
             category=RuntimeWarning,
         )
         fun = np.nan
@@ -1004,32 +1005,40 @@ def run_optimization(
     # to interface with the gradient code, this is inserted into `_p`
     _p = transform.x.copy()
 
-    def f(p):
-        with warnings.catch_warnings():
-            warnings.simplefilter('always')
-            K = 0.0
-            C = 1e0
-            obj_reg = K * 1 / 2 * np.linalg.norm(p) ** 2
-            grad_reg = K * p
-            obj, grad = objective(p, rfunc, transform)
-            print(f"Called objective function with ||p|| {np.linalg.norm(p)}")
-            print(f"Objective function returned f {obj}")
-            print(f"Objective function returned ||grad|| {np.linalg.norm(grad)}")
-            return C * obj + obj_reg, C * grad + grad_reg
+    with h5py.File(f'optimization_hist.h5', mode='w') as h5file:
+        grad_manager = libhopf.OptGradManager(rfunc, h5file, transform)
 
-    def callback(intermediate_result):
-        print(intermediate_result)
+        def f(p):
+            with warnings.catch_warnings():
+                warnings.simplefilter('always')
+                K = 0.0
+                C = 1e0
+                obj_reg = K * 1 / 2 * np.linalg.norm(p) ** 2
+                grad_reg = K * p
 
-    opt_options = {'maxiter': 15}
-    opt_info = optimize.minimize(
-        f,
-        p0.to_mono_ndarray(),
-        method='L-BFGS-B',
-        jac=True,
-        callback=callback,
-        options=opt_options,
-    )
-    print(opt_info)
+                _p = transform.x.copy()
+                _p.set_mono(p)
+                # obj, grad_p = objective_bv(_p, rfunc, transform)
+                obj, grad_p = grad_manager.grad(_p)
+                grad = grad_p.to_mono_ndarray()
+                print(f"Called objective function with ||p||={np.linalg.norm(p)}")
+                print(f"Objective function returned f(p)={obj}")
+                print(f"Objective function returned ||grad(p)||={np.linalg.norm(grad)}")
+                return C * obj + obj_reg, C * grad + grad_reg
+
+        def callback(intermediate_result):
+            print(intermediate_result)
+
+        opt_options = {'maxiter': 10}
+        opt_info = optimize.minimize(
+            f,
+            p0.to_mono_ndarray(),
+            method='L-BFGS-B',
+            jac=True,
+            callback=callback,
+            options=opt_options,
+        )
+        print(opt_info)
     # breakpoint()
 
 
