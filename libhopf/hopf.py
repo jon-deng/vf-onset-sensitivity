@@ -1638,15 +1638,15 @@ class OptGradManager:
     """
 
     def __init__(
-        self, redu_grad: ReducedFunctional, f: h5py.Group, param: paramzn.Transform
+        self, redu_grad: ReducedFunctional, f: h5py.Group, transform: paramzn.Transform
     ):
         self.redu_grad = redu_grad
         self.f = f
-        self.param = param
+        self.transform = transform
 
         # Add groups to the h5 file to store optimization history
-        param_labels = self.param.x.labels
-        param_bshape = self.param.x.bshape
+        param_labels = self.transform.x.labels
+        param_bshape = self.transform.x.bshape
         prop_labels = self.redu_grad.prop.labels
         prop_bshape = self.redu_grad.prop.bshape
         h5utils.create_resizable_block_vector_group(
@@ -1718,9 +1718,9 @@ class OptGradManager:
         # Set properties and complex amplitude of the ReducedGradient
         # This has to convert the monolithic input parameters to the block
         # format of the ReducedGradient object
-        p_vec = self.param.x.copy()
+        p_vec = self.transform.x.copy()
         p_vec.set_mono(p)
-        p_hopf = self.param.apply(p_vec)
+        p_hopf = self.transform.apply(p_vec)
 
         # After setting `self.redu_grad` prop, the Hopf system should be solved
         hopf_state, info = self.redu_grad.set_prop(p_hopf)
@@ -1741,23 +1741,21 @@ class OptGradManager:
 
         if solver_failure:
             g = np.nan
-            _dg_dp = self.param.x.copy()
-            _dg_dp[:] = np.nan
-            dg_dp = _dg_dp.to_mono_ndarray()
+            dg_dp = self.transform.x.copy()
+            dg_dp[:] = np.nan
         else:
             # Solve the objective function value
             g = self.redu_grad.assem_g()
 
             # Solve the gradient of the objective function
-            _dg_dprop = self.param.y.copy()
-            _dg_dprop[:] = self.redu_grad.assem_dg_dprop()
+            dg_dprop = self.transform.y.copy()
+            dg_dprop[:] = self.redu_grad.assem_dg_dprop()
 
-            self.param.x.set_mono(p)
-            _dg_dp = self.param.apply_vjp(self.param.x, _dg_dprop)
-            dg_dp = _dg_dp.to_mono_ndarray()
+            self.transform.x.set_mono(p)
+            dg_dp = self.transform.apply_vjp(self.transform.x, dg_dprop)
 
         # Record the current objective function and gradient
-        h5utils.append_block_vector_to_group(self.f['grads'], _dg_dp)
+        h5utils.append_block_vector_to_group(self.f['grads'], dg_dp)
         self.f['objective'].resize(self.f['objective'].size + 1, axis=0)
         self.f['objective'][-1] = g
         return g, dg_dp
