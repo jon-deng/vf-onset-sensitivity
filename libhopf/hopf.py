@@ -1380,9 +1380,9 @@ class ReducedHopfModel:
     hopf_model : HopfModel
     newton_params : Optional[Mapping[str, Any]]
         Newton solver parameters for solving the Hopf system
-    lambda_intervals : Optional[np.ndarray]
+    bif_param_range : Optional[np.ndarray]
         Intervals of the bifurcation parameter for determining an initial guess
-    lambda_tol : Optional[np.ndarray]
+    bif_param_tol : Optional[np.ndarray]
         Tolerance on the bifurcation parameter for determining an initial guess
     """
 
@@ -1390,18 +1390,18 @@ class ReducedHopfModel:
         self,
         hopf_model: HopfModel,
         newton_params: Optional[Mapping[str, Any]] = None,
-        lambda_intervals: Optional[np.ndarray] = None,
-        lambda_tol: float = 100,
+        bif_param_range: Optional[np.ndarray] = None,
+        bif_param_tol: float = 100,
     ):
         self.hopf_model = hopf_model
 
         # Set parameters controlling the bifurcation algorithm; these are used to
         # generate the Hopf bifurcation state initial guess
-        self.LAMBDA_TOL = lambda_tol
-        if lambda_intervals is None:
-            self.LAMBDA_INTERVALS = np.arange(0, 2600, 100) * 10
+        self.BIF_PARAM_TOL = bif_param_tol
+        if bif_param_range is None:
+            self.BIF_PARAM_RANGE = np.arange(0, 2600, 100) * 10
         else:
-            self.LAMBDA_INTERVALS = np.array(lambda_intervals)
+            self.BIF_PARAM_RANGE = np.array(bif_param_range)
 
         # Set parameters controlling the Newton solution of the Hopf bifurcation state
         if newton_params is None:
@@ -1425,8 +1425,8 @@ class ReducedHopfModel:
             self.hopf_model.res,
             self.hopf_model.res.control,
             prop,
-            self.LAMBDA_INTERVALS,
-            bif_param_tol=self.LAMBDA_TOL,
+            self.BIF_PARAM_RANGE,
+            bif_param_tol=self.BIF_PARAM_TOL,
             eigvec_ref=self.hopf_model.E_MODE,
         )
         xhopf_0 = bv.BlockVector(xhopf_0.blocks, labels=self.hopf_model.state.labels)
@@ -1630,11 +1630,6 @@ class OptGradManager:
     redu_grad : ReducedGradient
     f : h5py.File
         An h5 file to record function eval information
-
-    Returns
-    -------
-    opt_obj : Callable[[array_like], float]
-    opt_grad : Callable[[array_like], array_like]
     """
 
     def __init__(
@@ -1714,27 +1709,26 @@ class OptGradManager:
         )
         self.f['hopf_newton_abs_err'][-1] = info['abs_errs'][-1]
 
-    def set_prop(self, p):
+    def set_prop(self, p: bv.BlockVector):
         # Set properties and complex amplitude of the ReducedGradient
         # This has to convert the monolithic input parameters to the block
         # format of the ReducedGradient object
-        p_vec = self.transform.x.copy()
-        p_vec.set_mono(p)
-        p_hopf = self.transform.apply(p_vec)
+        p_hopf = self.transform.apply(p)
 
         # After setting `self.redu_grad` prop, the Hopf system should be solved
         hopf_state, info = self.redu_grad.set_prop(p_hopf)
 
-        self._update_h5(hopf_state, info, p_vec)
+        self._update_h5(hopf_state, info, p)
 
-    def grad(self, p):
+    def grad(self, p: bv.BlockVector):
         try:
             self.set_prop(p)
             solver_failure = False
         except RuntimeError as err:
             warnings.warn(
-                "ReducedGradient couldn't solve/find a Hopf bifurcation for the "
-                f"current parameter set due to error '{err}'",
+                "`ReducedHopfModel` could not solve a Hopf bifurcation state for the "
+                "current parameter vector due to error: "
+                f"'{err}'",
                 category=RuntimeWarning,
             )
             solver_failure = True
@@ -1751,8 +1745,7 @@ class OptGradManager:
             dg_dprop = self.transform.y.copy()
             dg_dprop[:] = self.redu_grad.assem_dg_dprop()
 
-            self.transform.x.set_mono(p)
-            dg_dp = self.transform.apply_vjp(self.transform.x, dg_dprop)
+            dg_dp = self.transform.apply_vjp(p, dg_dprop)
 
         # Record the current objective function and gradient
         h5utils.append_block_vector_to_group(self.f['grads'], dg_dp)
