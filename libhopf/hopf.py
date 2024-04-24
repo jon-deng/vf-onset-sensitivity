@@ -1780,25 +1780,25 @@ class ReducedFunctionalHessianContext:
 
         self.rfunctional = reduced_functional
         self.transform = transform
-        self.params = transform.x.copy()
+        self.param = transform.x.copy()
 
         self._norm = norm
         self._step_size = step_size
 
-    def set_params(self, params: bv.BlockVector):
-        self.params[:] = params
-        return self.rfunctional.set_prop(self.transform.apply(params))
+    def set_param(self, param: bv.BlockVector):
+        self.param[:] = param
+        return self.rfunctional.set_prop(self.transform.apply(param))
 
     def mult(self, mat: PETSc.Mat, x: PETSc.Vec, y: PETSc.Vec):
         bx = self.transform.x.copy()
         bx.set_mono(x)
 
         # Use the transform to convert parameter -> model properties
-        dprop = self.transform.apply_jvp(self.params, bx)
+        dprop = self.transform.apply_jvp(self.param, bx)
         hy = self.rfunctional.assem_d2g_dprop2(
             dprop, norm=self._norm, h=self._step_size
         )
         # Convert dual properties -> dual parameter
-        by = self.transform.apply_vjp(self.params, hy)
+        by = self.transform.apply_vjp(self.param, hy)
 
         y.array[:] = by.to_mono_petsc()
