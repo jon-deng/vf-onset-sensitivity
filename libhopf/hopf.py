@@ -653,8 +653,7 @@ def solve_hopf_by_brackets(
         raise RuntimeError("No Hopf bifurcations detected")
     elif len(brackets) > 1:
         warnings.warn(
-            "Found more than one Hopf bifurcation parameter"
-            "; using the smallest by default",
+            "Found more than one Hopf bifurcation, will return the smallest by default",
             category=RuntimeWarning,
         )
 
@@ -950,22 +949,24 @@ def solve_fp(
         control_n, prop_n = set_bif_param(res, control_n, prop_n, psub_n)
 
         if method == 'newton':
-            xfp_n, info = solve_fp_by_newton(
+            xfp_n, step_info = solve_fp_by_newton(
                 res, xfp_n, control_n, prop_n, params=iter_params
             )
         elif method == 'picard':
-            xfp_n, info = solve_fp_by_picard(
+            xfp_n, step_info = solve_fp_by_picard(
                 res, xfp_n, control_n, prop_n, params=iter_params
             )
         else:
             raise ValueError(f"Unknown `method` {method}")
+
+        info[f'LoadStepInfo{n}'] = step_info
 
         # Decide what to do if the fixed point for current loading step converges
         if np.isclose(psub_n, psub_final):
             load_steps_complete = True
         elif n >= n_max:
             load_steps_complete = True
-        elif info['status'] != 0:
+        elif step_info['status'] != 0:
             # doesn't converge: half the loading step and try again
             psub_incr = psub_incr / 2
             if n > n_max:
@@ -977,13 +978,8 @@ def solve_fp(
         n += 1
 
     info['load_steps.num_iter'] = n
-
-    if info['status'] != 0:
-        warnings.warn(
-            "Fixed-point solver did not converge with (status, message): "
-            f"({info['status']}, {info['message']})",
-            RuntimeWarning,
-        )
+    info['status'] = info[f'LoadStepInfo{n-1}']['status']
+    info['message'] = info[f'LoadStepInfo{n-1}']['message']
 
     return xfp_n, info
 
