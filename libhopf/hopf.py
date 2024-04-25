@@ -1713,12 +1713,11 @@ class OptGradManager:
 
         # After setting `self.redu_grad` prop, the Hopf system should be solved
         hopf_state, info = self.redu_grad.set_prop(p_hopf)
-
-        self._update_h5(hopf_state, info, p)
+        return hopf_state, info
 
     def grad(self, p: bv.BlockVector):
         try:
-            self.set_prop(p)
+            hopf_state, info = self.set_prop(p)
             solver_failure = False
         except RuntimeError as err:
             warnings.warn(
@@ -1728,6 +1727,10 @@ class OptGradManager:
                 category=RuntimeWarning,
             )
             solver_failure = True
+
+            hopf_state = self.redu_grad.state.copy()
+            hopf_state[:] = np.nan
+            info = {'num_iter': 0, 'status': -1, 'abs_errs': [np.nan], 'rel_errs': [np.nan]}
 
         if solver_failure:
             g = np.nan
@@ -1744,6 +1747,8 @@ class OptGradManager:
             dg_dp = self.transform.apply_vjp(p, dg_dprop)
 
         # Record the current objective function and gradient
+        self._update_h5(hopf_state, info, p)
+
         h5utils.append_block_vector_to_group(self.f['grads'], dg_dp)
         self.f['objective'].resize(self.f['objective'].size + 1, axis=0)
         self.f['objective'][-1] = g
