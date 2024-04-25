@@ -67,6 +67,8 @@ ExpParamBasic = exputils.make_parameters(parameter_types, {})
 # This is the range of subglottal pressures to check for onset pressure
 PSUBS = np.linspace(0, 1500, 16) * 10
 
+CLSCALE = 0.5
+
 
 def setup_dyna_model(param: exputils.BaseParameters):
     """
