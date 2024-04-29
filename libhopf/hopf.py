@@ -1730,7 +1730,12 @@ class OptGradManager:
 
             hopf_state = self.redu_grad.state.copy()
             hopf_state[:] = np.nan
-            info = {'num_iter': 0, 'status': -1, 'abs_errs': [np.nan], 'rel_errs': [np.nan]}
+            info = {
+                'num_iter': 0,
+                'status': -1,
+                'abs_errs': [np.nan],
+                'rel_errs': [np.nan],
+            }
 
         if solver_failure:
             g = np.nan

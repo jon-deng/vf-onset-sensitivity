@@ -878,8 +878,7 @@ def objective_bv(p: bv.BlockVector, rfunc: 'ReducedFunctional', transform: 'Tran
         grad = transform.apply_vjp(p, grad_prop)
     except RuntimeError as err:
         warnings.warn(
-            "Couldn't solve objective function for input due to error: "
-            f"{err}",
+            "Couldn't solve objective function for input due to error: " f"{err}",
             category=RuntimeWarning,
         )
         fun = np.nan
