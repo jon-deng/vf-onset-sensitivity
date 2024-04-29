@@ -29,16 +29,20 @@ BVecPair = Tuple[BVec, BVec]
 BMat = bm.BlockMatrix
 
 
-@pytest.fixture()
-def hopf_model():
+@pytest.fixture(
+    params=[
+        # ('M5_CB_GA3_CL0.50', None),
+        ('M5_BC--GA3.00--DZ1.50e+00--NZ12--CL9.40e-01', np.linspace(0, 1.5, 13)),
+    ]
+)
+def hopf_model(request):
     """Return a Hopf bifurcation model"""
-    mesh_name = 'BC-dcov5.00e-02-cl1.00'
-    mesh_name = 'M5_CB_GA3_CL0.50'
+    mesh_name, zs = request.param
     mesh_path = path.join('./mesh', mesh_name + '.msh')
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore')
         hopf_model, *_ = setup.load_hopf_model(
-            mesh_path, sep_method='smoothmin', sep_vert_label='separation'
+            mesh_path, sep_method='smoothmin', sep_vert_label='separation', zs=zs
         )
     return hopf_model
 
@@ -75,10 +79,11 @@ class TestHopfModel:
         ) = hopf_model.labels_hopf_components
 
         # Create a pure x-shearing motion to use for displacement/velocities
+        num_dim = hopf_model.res.solid.residual.mesh().topology().dim()
         y = (
             hopf_model.res.solid.residual.form['coeff.state.u1']
             .function_space()
-            .tabulate_dof_coordinates()[1::2, 1]
+            .tabulate_dof_coordinates()[1::num_dim, 1]
         )
         ux = 1e-2 * (y - y.min()) / (y.max() - y.min())
         uy = 0
@@ -94,8 +99,8 @@ class TestHopfModel:
         suffixes = ['', '_mode_real', '_mode_imag']
         for label in disp_labels:
             for suffix in suffixes:
-                state[label + suffix][:-1:2] = ux
-                state[label + suffix][1::2] = uy
+                state[label + suffix][:-1:num_dim] = ux
+                state[label + suffix][1::num_dim] = uy
 
         state[mode_real_labels] = 1.0
         state[mode_imag_labels] = 1.0
@@ -103,6 +108,7 @@ class TestHopfModel:
         state[psub_labels] = PSUB
         state[omega_labels] = 1.0
         hopf_model.apply_dirichlet_bvec(state)
+        # breakpoint()
 
         return (state, prop)
 
@@ -136,12 +142,13 @@ class TestHopfModel:
         """Test `HopfModel.assem_dres_dstate`"""
         state, prop = xhopf_prop
         hopf_model.set_prop(prop)
+        breakpoint()
 
         def hopf_res(x):
             hopf_model.set_state(x)
             res = hopf_model.assem_res()
             hopf_model.apply_dirichlet_bvec(res)
-            return hopf_model.assem_res()
+            return res
 
         def hopf_jac(x, dx):
             hopf_model.set_state(x)

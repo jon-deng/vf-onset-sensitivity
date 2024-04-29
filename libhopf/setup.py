@@ -37,7 +37,11 @@ def dynamical_fluidtype_from_sep_method(sep_method, bifparam_key='psub'):
 
 
 def load_hopf_model(
-    mesh_path, sep_method='fixed', sep_vert_label='separation', bifparam_key='psub'
+    mesh_path,
+    sep_method='fixed',
+    sep_vert_label='separation',
+    bifparam_key='psub',
+    zs=None,
 ):
     FluidType, LinFluidType = dynamical_fluidtype_from_sep_method(
         sep_method, bifparam_key=bifparam_key
@@ -47,6 +51,7 @@ def load_hopf_model(
         'fsi_facet_labels': ('pressure',),
         'fixed_facet_labels': ('fixed',),
         'separation_vertex_label': sep_vert_label,
+        'zs': zs,
     }
     res = load.load_dynamical_fsi_model(
         mesh_path, None, SolidType=dsmd.KelvinVoigtWShape, FluidType=FluidType, **kwargs
