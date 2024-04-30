@@ -142,7 +142,7 @@ class TestHopfModel:
         """Test `HopfModel.assem_dres_dstate`"""
         state, prop = xhopf_prop
         hopf_model.set_prop(prop)
-        breakpoint()
+        # breakpoint()
 
         def hopf_res(x):
             hopf_model.set_state(x)
