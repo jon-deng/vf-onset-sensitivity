@@ -1119,7 +1119,7 @@ def solve_fp_by_picard(
             _dx_n = _jac_n.getVecRight()
             _rhs_n = rhs_n.to_mono_petsc()
 
-            subops.solve_petsc_lu(_jac_n, _rhs_n, _dx_n)
+            subops.solve_petsc_preonly_lu(_jac_n, _rhs_n, _dx_n)
 
             dx_n = rhs_n.copy()
             dx_n.set_mono(_dx_n)
@@ -1306,7 +1306,7 @@ def solve_hopf_by_newton(
     prop: bv.BlockVector,
     out=None,
     newton_params=None,
-    linear_solver='numpy',
+    linear_solver='petsc',
 ) -> Tuple[bv.BlockVector, Dict]:
     """Solve the nonlinear Hopf problem using a newton method"""
     hopf.set_prop(prop)
@@ -1330,21 +1330,20 @@ def solve_hopf_by_newton(
             """Return jac^-1 res"""
             jac_n = hopf.assem_dres_dstate()
             hopf.apply_dirichlet_bmat(jac_n)
-            _rhs_n = rhs_n.to_mono_petsc()
-            _jac_n = jac_n.to_mono_petsc()
+            _rhs_n: PETSc.Vec = rhs_n.to_mono_petsc()
+            _jac_n: PETSc.Mat = jac_n.to_mono_petsc()
 
-            if linear_solver == 'petsc':
+            if linear_solver in {'petsc', 'superlu', 'klu', 'scalapack', 'umfpack'}:
                 _dx_n = _jac_n.getVecRight()
-                _dx_n, ksp = subops.solve_petsc_lu(_jac_n, _rhs_n, out=_dx_n)
-                ksp.destroy()
-            elif linear_solver == 'superlu':
-                _dx_n = _jac_n.getVecRight()
-                _dx_n, ksp = subops.solve_superlu(_jac_n, _rhs_n, out=_dx_n)
+
+                _dx_n, ksp = subops.solve_petsc_preonly(
+                    _jac_n, _rhs_n, out=_dx_n, pc_solver_type=linear_solver
+                )
                 ksp.destroy()
             elif linear_solver == 'numpy':
                 _dx_n = np.linalg.solve(_jac_n[:, :], _rhs_n[:])
             else:
-                raise ValueError("")
+                raise ValueError(f"Unknown `linear_solver` '{linear_solver}'")
 
             dx_n = xhopf_n.copy()
             dx_n.set_mono(_dx_n)
@@ -1600,7 +1599,7 @@ def solve_reduced_gradient(
 
     # Solve the adjoint problem for the 'adjoint state'
     if linear_solver == 'petsc':
-        _dg_dres, ksp = subops.solve_petsc_lu(_dres_dx_adj, _dg_dx, out=_dg_dres)
+        _dg_dres, ksp = subops.solve_petsc_preonly_lu(_dres_dx_adj, _dg_dx, out=_dg_dres)
         ksp.destroy()
     elif linear_solver == 'superlu':
         _dg_dres, ksp = subops.solve_superlu(_dres_dx_adj, _dg_dx, out=_dg_dres)

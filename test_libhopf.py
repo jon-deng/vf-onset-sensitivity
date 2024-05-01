@@ -31,8 +31,8 @@ BMat = bm.BlockMatrix
 
 @pytest.fixture(
     params=[
-        # ('M5_CB_GA3_CL0.50', None),
-        ('M5_BC--GA3.00--DZ1.50e+00--NZ12--CL9.40e-01', np.linspace(0, 1.5, 13)),
+        ('M5_CB_GA3_CL0.50', None),
+        # ('M5_BC--GA3.00--DZ1.50e+00--NZ12--CL9.40e-01', np.linspace(0, 1.5, 13)),
     ]
 )
 def hopf_model(request):
@@ -200,7 +200,7 @@ class TestHopfModel:
         dstate_test = dres.copy()
         _dres_dstate = dres_dstate.to_mono_petsc()
         _dstate_test = _dres_dstate.getVecRight()
-        subops.solve_petsc_lu(_dres_dstate, dres.to_mono_petsc(), out=_dstate_test)
+        subops.solve_petsc_preonly_lu(_dres_dstate, dres.to_mono_petsc(), out=_dstate_test)
         dstate_test.set_mono(_dstate_test)
 
         err = dstate - dstate_test
@@ -357,7 +357,9 @@ class TestHopfUtilities:
     def test_solve_hopf_newton(self, hopf_model: HopfModel, prop: BVec, setup_xhopf_0):
         """Test `solve_hopf_newton`"""
         xhopf_0 = setup_xhopf_0
-        xhopf, info = hopf.solve_hopf_by_newton(hopf_model, xhopf_0, prop)
+        xhopf, info = hopf.solve_hopf_by_newton(
+            hopf_model, xhopf_0, prop, linear_solver='superlu'
+        )
         print(info)
 
 
@@ -469,7 +471,7 @@ class TestFunctionalGradient:
             dres_dstate = hopf_model.assem_dres_dstate()
             hopf_model.apply_dirichlet_bmat(dres_dstate)
             _dres_dstate = dres_dstate.to_mono_petsc()
-            subops.solve_petsc_lu(_dres_dstate, -1 * _dres, out=_dstate)
+            subops.solve_petsc_preonly_lu(_dres_dstate, -1 * _dres, out=_dstate)
             dstate.set_mono(_dstate)
 
             return dstate

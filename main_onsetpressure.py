@@ -65,7 +65,7 @@ parameter_types = {
 ExpParamBasic = exputils.make_parameters(parameter_types, {})
 
 # This is the range of subglottal pressures to check for onset pressure
-PSUBS = np.linspace(0, 1500, 16) * 10
+PSUBS = np.linspace(0, 1500, 6) * 10
 
 CLSCALE = 0.5
 
@@ -82,11 +82,22 @@ def setup_dyna_model(param: exputils.BaseParameters):
     mesh_name = param['MeshName']
     mesh_path = path.join('./mesh', mesh_name + '.msh')
 
+    mesh_name_parts = mesh_name.split('--')
+    dz_strs = [part for part in mesh_name_parts if 'DZ' in part]
+    nz_strs = [part for part in mesh_name_parts if 'NZ' in part]
+    if len(dz_strs) == 1:
+        dz = float(dz_strs[0][2:])
+        nz = int(nz_strs[0][2:])
+        zs = np.linspace(0, dz, nz+1)
+    else:
+        zs = None
+
     hopf, res, dres = libsetup.load_hopf_model(
         mesh_path,
         sep_method='arearatio',
         sep_vert_label=param['SepPoint'],
         bifparam_key=param['BifParam'],
+        zs=zs
     )
     return hopf, res, dres
 
@@ -247,13 +258,16 @@ def setup_transform(
             for facet in dfn.facets(residual.mesh())
             if (
                 np.dot(facet.normal()[:], [1, 0, 0]) == 0
+                and np.dot(facet.normal()[:], [0, 0, 1]) == 0
                 and facet.midpoint()[1] == 0
                 and is_on_origin(facet)
             )
         ]
         origin_facet = facets[0]
 
-        mf = dfn.MeshFunction('size_t', residual.mesh(), 1, value=0)
+        cell_dim = residual.mesh().topology().dim()
+        facet_dim = cell_dim - 1
+        mf = dfn.MeshFunction('size_t', residual.mesh(), facet_dim, value=0)
         mf.set_value(origin_facet.index(), 1)
 
         fspace = residual.form['coeff.prop.umesh'].function_space()
@@ -363,8 +377,9 @@ def setup_reduced_functional(
         'relative_tolerance': 1e-5,
         'maximum_iterations': 5,
     }
+    breakpoint()
     xhopf_n, info = libhopf.solve_hopf_by_newton(
-        hopf, xhopf_0, prop, newton_params=newton_params
+        hopf, xhopf_0, prop, newton_params=newton_params, linear_solver='superlu'
     )
     if info['status'] != 0:
         raise RuntimeError(
@@ -422,6 +437,22 @@ def make_exp_params(study_name: str):
                 {
                     'Functional': 'OnsetPressure',
                     'MeshName': f'M5_CB_GA3_CL{0.5:.2f}',
+                    'LayerType': 'discrete',
+                    'Ecov': 6e4,
+                    'Ebod': 6e4,
+                    'ParamOption': 'TractionShape',
+                    # 'ParamOption': 'Stiffness',
+                    'BifParam': 'psub',
+                }
+            )
+        ]
+        return params
+    elif study_name == 'test_3D':
+        params = [
+            default_param.substitute(
+                {
+                    'Functional': 'OnsetPressure',
+                    'MeshName': f'M5_BC--GA3.00--DZ1.50e+00--NZ12--CL9.40e-01',
                     'LayerType': 'discrete',
                     'Ecov': 6e4,
                     'Ebod': 6e4,
@@ -912,8 +943,10 @@ def run_functional_sensitivity(
         # DEBUG:
         # breakpoint()
 
+        print("Solving for gradient")
         grad_prop = rfunc.assem_dg_dprop()
         grad_param = transform.apply_vjp(p0, grad_prop)
+        print("Finished solving for gradient")
 
         ## Compute 2nd order sensitivity of the functional
         norm = make_norm(hopf)
