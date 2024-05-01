@@ -32,7 +32,7 @@ BMat = bm.BlockMatrix
 @pytest.fixture(
     params=[
         ('M5_CB_GA3_CL0.50', None),
-        # ('M5_BC--GA3.00--DZ1.50e+00--NZ12--CL9.40e-01', np.linspace(0, 1.5, 13)),
+        ('M5_BC--GA3.00--DZ1.50e+00--NZ12--CL9.40e-01', np.linspace(0, 1.5, 13)),
     ]
 )
 def hopf_model(request):
