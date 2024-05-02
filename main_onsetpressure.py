@@ -377,7 +377,6 @@ def setup_reduced_functional(
         'relative_tolerance': 1e-5,
         'maximum_iterations': 5,
     }
-    breakpoint()
     xhopf_n, info = libhopf.solve_hopf_by_newton(
         hopf, xhopf_0, prop, newton_params=newton_params, linear_solver='superlu'
     )
