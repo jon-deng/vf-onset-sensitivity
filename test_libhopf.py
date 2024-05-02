@@ -200,7 +200,7 @@ class TestHopfModel:
         dstate_test = dres.copy()
         _dres_dstate = dres_dstate.to_mono_petsc()
         _dstate_test = _dres_dstate.getVecRight()
-        subops.solve_petsc_preonly_lu(_dres_dstate, dres.to_mono_petsc(), out=_dstate_test)
+        subops.solve_petsc_preonly(_dres_dstate, dres.to_mono_petsc(), out=_dstate_test)
         dstate_test.set_mono(_dstate_test)
 
         err = dstate - dstate_test
@@ -471,7 +471,7 @@ class TestFunctionalGradient:
             dres_dstate = hopf_model.assem_dres_dstate()
             hopf_model.apply_dirichlet_bmat(dres_dstate)
             _dres_dstate = dres_dstate.to_mono_petsc()
-            subops.solve_petsc_preonly_lu(_dres_dstate, -1 * _dres, out=_dstate)
+            subops.solve_petsc_preonly(_dres_dstate, -1 * _dres, out=_dstate)
             dstate.set_mono(_dstate)
 
             return dstate

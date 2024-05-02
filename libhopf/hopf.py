@@ -1119,7 +1119,7 @@ def solve_fp_by_picard(
             _dx_n = _jac_n.getVecRight()
             _rhs_n = rhs_n.to_mono_petsc()
 
-            subops.solve_petsc_preonly_lu(_jac_n, _rhs_n, _dx_n)
+            subops.solve_petsc_preonly(_jac_n, _rhs_n, _dx_n)
 
             dx_n = rhs_n.copy()
             dx_n.set_mono(_dx_n)
@@ -1306,7 +1306,7 @@ def solve_hopf_by_newton(
     prop: bv.BlockVector,
     out=None,
     newton_params=None,
-    linear_solver='petsc',
+    linear_solver='superlu',
 ) -> Tuple[bv.BlockVector, Dict]:
     """Solve the nonlinear Hopf problem using a newton method"""
     hopf.set_prop(prop)
@@ -1578,7 +1578,7 @@ def solve_reduced_gradient(
     hopf: HopfModel,
     state: bv.BlockVector,
     prop: bv.BlockVector,
-    linear_solver='numpy',
+    linear_solver='superlu',
 ) -> bv.BlockVector:
     """Solve for the reduced gradient of a functional"""
     for obj in (functional, hopf):
@@ -1598,11 +1598,10 @@ def solve_reduced_gradient(
     _dg_dres = _dres_dx_adj.getVecRight()
 
     # Solve the adjoint problem for the 'adjoint state'
-    if linear_solver == 'petsc':
-        _dg_dres, ksp = subops.solve_petsc_preonly_lu(_dres_dx_adj, _dg_dx, out=_dg_dres)
-        ksp.destroy()
-    elif linear_solver == 'superlu':
-        _dg_dres, ksp = subops.solve_superlu(_dres_dx_adj, _dg_dx, out=_dg_dres)
+    if linear_solver in {'petsc', 'superlu', 'klu', 'scalapack', 'umfpack'}:
+        _dg_dres, ksp = subops.solve_petsc_preonly(
+            _dres_dx_adj, _dg_dx, out=_dg_dres, pc_solver_type=linear_solver
+        )
         ksp.destroy()
     elif linear_solver == 'numpy':
         _dg_dres = np.linalg.solve(_dres_dx_adj[:, :], _dg_dx[:])

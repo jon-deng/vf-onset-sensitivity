@@ -28,7 +28,7 @@ def solve_hopf_newton_step(hopf, xhopf0):
     _res = res.to_mono_petsc()
 
     _dxhopf = _dres_dstate.getVecRight()
-    _dxhopf, _ = gops.solve_petsc_preonly_lu(_dres_dstate, _res, out=_dxhopf)
+    _dxhopf, _ = gops.solve_petsc_preonly(_dres_dstate, _res, out=_dxhopf)
 
 
 if __name__ == '__main__':
