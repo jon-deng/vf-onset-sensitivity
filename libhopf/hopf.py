@@ -1768,7 +1768,7 @@ class ReducedFunctionalHessianContext:
             def norm(vec: bv.BlockVector):
                 return vec.norm()
 
-        self.rfunctional = reduced_functional
+        self.reduced_functional = reduced_functional
         self.transform = transform
         self.param = transform.x.copy()
 
@@ -1777,7 +1777,7 @@ class ReducedFunctionalHessianContext:
 
     def set_param(self, param: bv.BlockVector):
         self.param[:] = param
-        return self.rfunctional.set_prop(self.transform.apply(param))
+        return self.reduced_functional.set_prop(self.transform.apply(param))
 
     def mult(self, mat: PETSc.Mat, x: PETSc.Vec, y: PETSc.Vec):
         bx = self.transform.x.copy()
@@ -1785,10 +1785,12 @@ class ReducedFunctionalHessianContext:
 
         # Use the transform to convert parameter -> model properties
         dprop = self.transform.apply_jvp(self.param, bx)
-        hy = self.rfunctional.assem_d2g_dprop2(
+        hy = self.reduced_functional.assem_d2g_dprop2(
             dprop, norm=self._norm, h=self._step_size
         )
         # Convert dual properties -> dual parameter
         by = self.transform.apply_vjp(self.param, hy)
 
-        y.array[:] = by.to_mono_petsc()
+        # y.setArray(by.to_mono_ndarray())
+        y.array[:] = by.to_mono_ndarray()
+        y.assemble()
