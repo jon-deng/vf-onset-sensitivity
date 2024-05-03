@@ -1044,15 +1044,7 @@ def solve_fp_by_newton(
             _jac_n = jac_n.to_mono_petsc()
             _dx_n = _jac_n.getVecRight()
 
-            ksp = PETSc.KSP().create()
-            ksp.setType(ksp.Type.PREONLY)
-
-            pc = ksp.getPC()
-            pc.setType(pc.Type.LU)
-
-            ksp.setOperators(_jac_n)
-            ksp.setUp()
-            ksp.solve(_rhs_n, _dx_n)
+            _dx_n, ksp = subops.solve_petsc_preonly(_jac_n, _rhs_n, out=_dx_n)
 
             dx_n = xfp_n.copy()
             dx_n.set_mono(_dx_n)
