@@ -242,53 +242,57 @@ def setup_transform(
 
         K, NU = 1e4, 0.2
 
-        ## Apply a fixed `DirichletBC` on the first facet at the origin
-        # and a fixed y coordinate along the bottom surface
+        ## Apply `DirichletBC`s
         residual = hopf.res.solid.residual
+        func_space = residual.form['coeff.prop.umesh'].function_space()
 
-        def is_on_origin(facet):
-            facet_points = [point for point in dfn.entities(facet, 0)]
-            is_on_origins = [
-                np.all(point.midpoint()[:] == np.zeros(3)) for point in facet_points
-            ]
-            return np.any(is_on_origins)
-
-        facets = [
-            facet
-            for facet in dfn.facets(residual.mesh())
-            if (
-                np.dot(facet.normal()[:], [1, 0, 0]) == 0
-                and np.dot(facet.normal()[:], [0, 0, 1]) == 0
-                and facet.midpoint()[1] == 0
-                and is_on_origin(facet)
-            )
-        ]
-        origin_facet = facets[0]
-
-        cell_dim = residual.mesh().topology().dim()
+        mesh = residual.mesh()
+        vertex_dim = 0
+        cell_dim = mesh.topology().dim()
         facet_dim = cell_dim - 1
-        mf = dfn.MeshFunction('size_t', residual.mesh(), facet_dim, value=0)
-        mf.set_value(origin_facet.index(), 1)
 
-        fspace = residual.form['coeff.prop.umesh'].function_space()
-        fixed_dis = dfn.Constant(residual.mesh().topology().dim() * [0.0])
-        dirichlet_bc_first_facet = dfn.DirichletBC(fspace, fixed_dis, mf, 1)
-
+        # Fix the y-coordinate on the VF bottom surface
         mf = residual.mesh_function('facet')
         mf_label_to_value = residual.mesh_function_label_to_value('facet')
-        fixed_surface_ids = [
-            mf_label_to_value[name] for name in residual.fixed_facet_labels
-        ]
-        dirichlet_bcs_fixed_y = [
-            dfn.DirichletBC(fspace.sub(1), dfn.Constant(0.0), mf, facet_val)
-            for facet_val in fixed_surface_ids
-        ]
+        dir_bc_const_y = dfn.DirichletBC(
+            func_space.sub(1), 0.0, mf, mf_label_to_value['fixed']
+        )
+
+        # Fix the x-coordinate along the VF inferior edge
+        class InferiorEdge(dfn.SubDomain):
+            """
+            Mark the inferior edge of the VF
+
+            This is assumed to be at the origin
+            """
+            def inside(self, x: NDArray, on_boundary: bool):
+                return np.linalg.norm(x[:2] - (0.0, 0.0)) == 0.0
+
+        dir_bc_const_x = dfn.DirichletBC(
+            func_space.sub(0), 0.0, InferiorEdge(), method='pointwise'
+        )
+
+        # Fix the z-coordinate at the VF anterior commisure (for 3D models)
+        if mesh.topology().dim() >= 3:
+            class AnteriorCommissure(dfn.SubDomain):
+                """
+                Mark the anterior commissure
+
+                This is assumed to be at the origin as well
+                """
+                def inside(self, x: NDArray, on_boundary: bool):
+                    # The anterior commissue is on the 'z = 0' plane
+                    return (x[2] - 0.0) == 0.0
+
+            dir_bc_const_x = dfn.DirichletBC(
+                func_space.sub(2), 0.0, AnteriorCommissure(), method='pointwise'
+            )
 
         traction_shape = tfrm.TractionShape(
             hopf.res,
             lame_lambda=(3 * K * NU) / (1 + NU),
             lame_mu=(3 * K * (1 - 2 * NU)) / (2 * (1 + NU)),
-            dirichlet_bcs=[dirichlet_bc_first_facet] + dirichlet_bcs_fixed_y,
+            dirichlet_bcs=[dir_bc_const_y, dir_bc_const_x],
         )
         extract = tfrm.ExtractSubset(traction_shape.x, keys_to_extract=('tmesh',))
 
@@ -948,15 +952,19 @@ def run_functional_sensitivity(
         print("Finished solving for gradient")
 
         ## Compute 2nd order sensitivity of the functional
+        print("Solving for eigenvalues of Hessian")
         norm = make_norm(hopf)
         redu_hess_context = libhopf.ReducedFunctionalHessianContext(
             rfunc, transform, norm=norm, step_size=param['H']
         )
+
+        print("Setting Hessian linearization point")
         redu_hess_context.set_param(p0)
         mat = PETSc.Mat().createPython(p0.mshape * 2)
         mat.setPythonContext(redu_hess_context)
         mat.setUp()
 
+        print("Creating `SLEPc` eigenvalue solver")
         eps = SLEPc.EPS().create()
         eps.setOperators(mat)
         eps.setDimensions(5, 25)
@@ -971,11 +979,13 @@ def run_functional_sensitivity(
         eps.setWhichEigenpairs(which_eig)
         eps.setUp()
 
+        print("Solving `SLEPc` eigenvalues")
+        eigvecs = []
+        eigvals = []
+
         eps.solve()
 
         neig = eps.getConverged()
-        eigvecs = []
-        eigvals = []
         _real_evec = mat.getVecRight()
         for n in range(neig):
             eigval = eps.getEigenpair(n, _real_evec)
