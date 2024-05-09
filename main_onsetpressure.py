@@ -251,12 +251,15 @@ def setup_transform(
         cell_dim = mesh.topology().dim()
         facet_dim = cell_dim - 1
 
+        dir_bcs = []
+
         # Fix the y-coordinate on the VF bottom surface
         mf = residual.mesh_function('facet')
         mf_label_to_value = residual.mesh_function_label_to_value('facet')
         dir_bc_const_y = dfn.DirichletBC(
             func_space.sub(1), 0.0, mf, mf_label_to_value['fixed']
         )
+        dir_bcs.append(dir_bc_const_y)
 
         # Fix the x-coordinate along the VF inferior edge
         class InferiorEdge(dfn.SubDomain):
@@ -272,8 +275,9 @@ def setup_transform(
         dir_bc_const_x = dfn.DirichletBC(
             func_space.sub(0), 0.0, InferiorEdge(), method='pointwise'
         )
+        dir_bcs.append(dir_bc_const_x)
 
-        # Fix the z-coordinate at the VF anterior commisure (for 3D models)
+        # Fix the z-coordinate at the VF anterior commissure (for 3D models)
         if mesh.topology().dim() >= 3:
 
             class AnteriorCommissure(dfn.SubDomain):
@@ -287,15 +291,15 @@ def setup_transform(
                     # The anterior commissue is on the 'z = 0' plane
                     return (x[2] - 0.0) == 0.0
 
-            dir_bc_const_x = dfn.DirichletBC(
+            dir_bc_const_z = dfn.DirichletBC(
                 func_space.sub(2), 0.0, AnteriorCommissure(), method='pointwise'
             )
+            dir_bcs.append(dir_bc_const_z)
 
+        lame_lambda = (3 * K * NU) / (1 + NU)
+        lame_mu = (3 * K * (1 - 2 * NU)) / (2 * (1 + NU))
         traction_shape = tfrm.TractionShape(
-            hopf.res,
-            lame_lambda=(3 * K * NU) / (1 + NU),
-            lame_mu=(3 * K * (1 - 2 * NU)) / (2 * (1 + NU)),
-            dirichlet_bcs=[dir_bc_const_y, dir_bc_const_x],
+            hopf.res, lame_lambda=lame_lambda, lame_mu=lame_mu, dirichlet_bcs=dir_bcs
         )
         extract = tfrm.ExtractSubset(traction_shape.x, keys_to_extract=('tmesh',))
 
