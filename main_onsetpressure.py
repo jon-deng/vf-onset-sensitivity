@@ -88,7 +88,7 @@ def setup_dyna_model(param: exputils.BaseParameters):
     if len(dz_strs) == 1:
         dz = float(dz_strs[0][2:])
         nz = int(nz_strs[0][2:])
-        zs = np.linspace(0, dz, nz+1)
+        zs = np.linspace(0, dz, nz + 1)
     else:
         zs = None
 
@@ -97,7 +97,7 @@ def setup_dyna_model(param: exputils.BaseParameters):
         sep_method='arearatio',
         sep_vert_label=param['SepPoint'],
         bifparam_key=param['BifParam'],
-        zs=zs
+        zs=zs,
     )
     return hopf, res, dres
 
@@ -265,6 +265,7 @@ def setup_transform(
 
             This is assumed to be at the origin
             """
+
             def inside(self, x: NDArray, on_boundary: bool):
                 return np.linalg.norm(x[:2] - (0.0, 0.0)) == 0.0
 
@@ -274,12 +275,14 @@ def setup_transform(
 
         # Fix the z-coordinate at the VF anterior commisure (for 3D models)
         if mesh.topology().dim() >= 3:
+
             class AnteriorCommissure(dfn.SubDomain):
                 """
                 Mark the anterior commissure
 
                 This is assumed to be at the origin as well
                 """
+
                 def inside(self, x: NDArray, on_boundary: bool):
                     # The anterior commissue is on the 'z = 0' plane
                     return (x[2] - 0.0) == 0.0
@@ -853,7 +856,7 @@ def make_exp_params(study_name: str):
         raise ValueError("Unknown `study_name` '{study_name}'")
 
 
-def make_norm(hopf_model: libhopf.HopfModel):
+def setup_norm(hopf_model: libhopf.HopfModel):
     """
     Return a norm for the model properties vector
 
@@ -903,12 +906,14 @@ def make_norm(hopf_model: libhopf.HopfModel):
     return norm
 
 
-def objective_bv(p: bv.BlockVector, rfunc: 'ReducedFunctional', transform: 'Transform'):
+def objective_bv(
+    p: bv.BlockVector, redu_func: 'ReducedFunctional', transform: 'Transform'
+):
     prop = transform.apply(p)
     try:
-        rfunc.set_prop(prop)
-        fun = rfunc.assem_g()
-        grad_prop = rfunc.assem_dg_dprop()
+        redu_func.set_prop(prop)
+        fun = redu_func.assem_g()
+        grad_prop = redu_func.assem_dg_dprop()
         grad = transform.apply_vjp(p, grad_prop)
     except RuntimeError as err:
         warnings.warn(
@@ -922,11 +927,11 @@ def objective_bv(p: bv.BlockVector, rfunc: 'ReducedFunctional', transform: 'Tran
     return fun, grad
 
 
-def objective(p, rfunc, transform):
+def objective(p, redu_func, transform):
     _p = transform.x.copy()
     _p.set_mono(p)
 
-    fun, grad = objective_bv(_p, rfunc, transform)
+    fun, grad = objective_bv(_p, redu_func, transform)
 
     return fun, grad.to_mono_ndarray()
 
@@ -937,25 +942,25 @@ def run_functional_sensitivity(
     """
     Run an experiment where the sensitivity of a functional is saved
     """
-    rfunc, hopf, xhopf_n, p0, transform = setup_reduced_functional(param)
+    redu_func, hopf, xhopf_n, p0, transform = setup_reduced_functional(param)
     fpath = path.join(output_dir, param.to_str() + '.h5')
     if not path.isfile(fpath) or overwrite:
         ## Compute 1st order sensitivity of the functional
-        rfunc.set_prop(transform.apply(p0))
+        redu_func.set_prop(transform.apply(p0))
 
         # DEBUG:
         # breakpoint()
 
         print("Solving for gradient")
-        grad_prop = rfunc.assem_dg_dprop()
+        grad_prop = redu_func.assem_dg_dprop()
         grad_param = transform.apply_vjp(p0, grad_prop)
         print("Finished solving for gradient")
 
         ## Compute 2nd order sensitivity of the functional
         print("Solving for eigenvalues of Hessian")
-        norm = make_norm(hopf)
+        norm = setup_norm(hopf)
         redu_hess_context = libhopf.ReducedFunctionalHessianContext(
-            rfunc, transform, norm=norm, step_size=param['H']
+            redu_func, transform, norm=norm, step_size=param['H']
         )
 
         print("Setting Hessian linearization point")
@@ -1037,7 +1042,7 @@ def run_functional_sensitivity(
 def run_optimization(
     param: exputils.BaseParameters, output_dir='out/optimization', overwrite=False
 ):
-    rfunc, hopf, xhopf_n, p0, transform = setup_reduced_functional(
+    redu_func, hopf, xhopf_n, p0, transform = setup_reduced_functional(
         param, lambda_tol=10.0, lambda_intervals=10 * np.array([0, 500, 1000, 1500])
     )
     # breakpoint()
@@ -1049,7 +1054,7 @@ def run_optimization(
     _p = transform.x.copy()
 
     with h5py.File(f'optimization_hist.h5', mode='w') as h5file:
-        grad_manager = libhopf.OptGradManager(rfunc, h5file, transform)
+        grad_manager = libhopf.OptGradManager(redu_func, h5file, transform)
 
         def f(p):
             with warnings.catch_warnings():
@@ -1061,7 +1066,7 @@ def run_optimization(
 
                 _p = transform.x.copy()
                 _p.set_mono(p)
-                # obj, grad_p = objective_bv(_p, rfunc, transform)
+                # obj, grad_p = objective_bv(_p, redu_func, transform)
                 obj, grad_p = grad_manager.grad(_p)
                 grad = grad_p.to_mono_ndarray()
                 print(f"Called objective function with ||p||={np.linalg.norm(p)}")
@@ -1088,11 +1093,11 @@ def run_optimization(
 def run_test(
     param: exputils.BaseParameters, output_dir='out/optimization', overwrite=False
 ):
-    rfunc, hopf, xhopf_n, p0, transform = setup_reduced_functional(param)
+    redu_func, hopf, xhopf_n, p0, transform = setup_reduced_functional(param)
 
     breakpoint()
-    psub_0, grad_0 = objective_bv(p0, rfunc, transform)
-    # psub_0, grad_0 = objective(p0.to_mono_ndarray(), rfunc, transform)
+    psub_0, grad_0 = objective_bv(p0, redu_func, transform)
+    # psub_0, grad_0 = objective(p0.to_mono_ndarray(), redu_func, transform)
 
     dp = p0.copy()
     dp[:] = 0
@@ -1105,7 +1110,7 @@ def run_test(
     dhs = dh_base * 2 ** np.arange(0, 7)
     psubs = []
     for dh in dhs:
-        psub, grad = objective((p0 + dh * dp).to_mono_ndarray(), rfunc, transform)
+        psub, grad = objective((p0 + dh * dp).to_mono_ndarray(), redu_func, transform)
         psubs.append(float(psub))
         print(psub, np.linalg.norm(grad))
 
