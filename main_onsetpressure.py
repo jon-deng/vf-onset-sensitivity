@@ -280,19 +280,18 @@ def setup_transform(
         # Fix the z-coordinate at the VF anterior commissure (for 3D models)
         if mesh.topology().dim() >= 3:
 
-            class AnteriorCommissure(dfn.SubDomain):
+            class Origin(dfn.SubDomain):
                 """
-                Mark the anterior commissure
+                Mark the origin
 
                 This is assumed to be at the origin as well
                 """
 
                 def inside(self, x: NDArray, on_boundary: bool):
-                    # The anterior commissue is on the 'z = 0' plane
-                    return (x[2] - 0.0) == 0.0
+                    return np.all(x == (0.0, 0.0, 0.0))
 
             dir_bc_const_z = dfn.DirichletBC(
-                func_space.sub(2), 0.0, AnteriorCommissure(), method='pointwise'
+                func_space.sub(2), 0.0, Origin(), method='pointwise'
             )
             dir_bcs.append(dir_bc_const_z)
 
