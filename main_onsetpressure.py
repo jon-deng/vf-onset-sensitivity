@@ -978,6 +978,7 @@ def run_functional_sensitivity(
         eps.setOperators(mat)
         eps.setDimensions(5, 25)
         eps.setProblemType(SLEPc.EPS.ProblemType.HEP)
+        eps.setType(SLEPc.EPS.Type.KRYLOVSCHUR)
 
         if param['EigTarget'] == 'LARGEST_MAGNITUDE':
             which_eig = SLEPc.EPS.Which.LARGEST_MAGNITUDE
