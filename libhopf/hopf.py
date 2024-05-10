@@ -233,46 +233,6 @@ class HopfModel:
             submat = mat.sub[row, col]
             submat.zeroRows(self.IDX_DIRICHLET, diag=0.0)
 
-    def assem_res(self):
-        """Return the Hopf system residual"""
-        ## Bind common required local variables
-        res, dres = self.res, self.dres
-        mode_real_labels, mode_imag_labels = (
-            self.labels_mode_real,
-            self.labels_mode_imag,
-        )
-        x = self.state
-        ee = self.E_MODE
-
-        mode_real = x[mode_real_labels]
-        mode_imag = x[mode_imag_labels]
-        omega = x['omega'][0]
-
-        ## Set appropriate linearization directions
-        res_state = res.assem_res().copy()
-
-        dres.set_dstate(mode_real)
-        dres.set_dstatet(-float(omega) * mode_imag)
-        res_mode_real = dres.assem_res().copy()
-
-        dres.set_dstate(mode_imag)
-        dres.set_dstatet(float(omega) * mode_real)
-        res_mode_imag = dres.assem_res().copy()
-
-        res_psub = x[[self.bifparam_key]].copy()
-        res_psub[self.bifparam_key][0] = bla.dot(ee, mode_real)
-
-        res_omega = x[['omega']].copy()
-        res_omega['omega'][0] = bla.dot(ee, mode_imag) - 1.0
-
-        ret_bvec = bv.concatenate(
-            (res_state, res_mode_real, res_mode_imag, res_psub, res_omega),
-            labels=self.state.labels,
-        )
-
-        self.apply_dirichlet_bvec(ret_bvec)
-        return ret_bvec
-
     ## The below are commonly used NULL block matrices
     @functools.cached_property
     def _NULL_MAT_STATE_STATE(self):
@@ -321,6 +281,62 @@ class HopfModel:
         mats = [subops.diag_mat(1, diag=0.0)]
         return bm.BlockMatrix(mats, shape=(1, 1), labels=((), ()))
 
+    def decorate_petsc_clean(fun):
+        """
+        Decorate an `assem` function so that PETSc garbage objects are cleared
+        """
+
+        def dec_fun(self):
+            result = fun(self)
+            PETSc.garbage_cleanup()
+            return result
+
+        dec_fun.__doc__ = fun.__doc__
+
+        return dec_fun
+
+    @decorate_petsc_clean
+    def assem_res(self):
+        """Return the Hopf system residual"""
+        ## Bind common required local variables
+        res, dres = self.res, self.dres
+        mode_real_labels, mode_imag_labels = (
+            self.labels_mode_real,
+            self.labels_mode_imag,
+        )
+        x = self.state
+        ee = self.E_MODE
+
+        mode_real = x[mode_real_labels]
+        mode_imag = x[mode_imag_labels]
+        omega = x['omega'][0]
+
+        ## Set appropriate linearization directions
+        res_state = res.assem_res().copy()
+
+        dres.set_dstate(mode_real)
+        dres.set_dstatet(-float(omega) * mode_imag)
+        res_mode_real = dres.assem_res().copy()
+
+        dres.set_dstate(mode_imag)
+        dres.set_dstatet(float(omega) * mode_real)
+        res_mode_imag = dres.assem_res().copy()
+
+        res_psub = x[[self.bifparam_key]].copy()
+        res_psub[self.bifparam_key][0] = bla.dot(ee, mode_real)
+
+        res_omega = x[['omega']].copy()
+        res_omega['omega'][0] = bla.dot(ee, mode_imag) - 1.0
+
+        ret_bvec = bv.concatenate(
+            (res_state, res_mode_real, res_mode_imag, res_psub, res_omega),
+            labels=self.state.labels,
+        )
+
+        self.apply_dirichlet_bvec(ret_bvec)
+        return ret_bvec
+
+    @decorate_petsc_clean
     def assem_dres_dstate(self):
         """Return the Hopf system jacobian"""
         # Bind commonly used local vars
@@ -404,6 +420,7 @@ class HopfModel:
         ret_bmat = bm.concatenate(ret_mats, labels=ret_labels)
         return ret_bmat
 
+    @decorate_petsc_clean
     def assem_dres_dprop(self):
         """Return the Hopf system jacobian wrt. model properties"""
         # Bind commonly used local vars
