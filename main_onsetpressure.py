@@ -206,6 +206,41 @@ def setup_functional(param: exputils.BaseParameters, model: dbase.BaseDynamicalM
     return functionals[param['Functional']]
 
 
+class APLine(dfn.SubDomain):
+    """
+    Mark an anterior-posterior line (z direction)
+    """
+
+    def __init__(self, x: float=0.0, y: float=0.0):
+        super().__init__()
+        self._x = x
+        self._y = y
+
+    def inside(self, x: NDArray, on_boundary: bool):
+        return np.linalg.norm(x[:2] - (self._x, self._y)) == 0.0
+
+class CoronalPlane(dfn.SubDomain):
+    """
+    Mark a coronal plane (x-y)
+    """
+
+    def __init__(self, z: float=0.0):
+        super().__init__()
+        self._z = z
+
+    def inside(self, x: NDArray, on_boundary: bool):
+        return x[2] == self._z
+
+class Origin(dfn.SubDomain):
+    """
+    Mark the origin
+
+    This is assumed to be at the origin as well
+    """
+
+    def inside(self, x: NDArray, on_boundary: bool):
+        return np.all(x == (0.0, 0.0, 0.0))
+
 def setup_transform(
     param: exputils.BaseParameters, hopf: libhopf.HopfModel, prop: bv.BlockVector
 ):
@@ -237,7 +272,7 @@ def setup_transform(
         scale = tfrm.Scale(hopf.res.prop, scale=parameter_scales)
         const_subset = tfrm.ConstantSubset(hopf.res.prop, const_vals=const_vals)
         transform = scale * const_subset
-    elif param['ParamOption'] == 'TractionShape':
+    elif 'TractionShape' in param['ParamOption']:
         const_vals.pop('umesh')
 
         K, NU = 1e4, 0.2
@@ -253,6 +288,21 @@ def setup_transform(
 
         dir_bcs = []
 
+        # Fix the x-coordinate along the VF
+        # inferior edge
+        dir_bc_const_x = dfn.DirichletBC(
+            func_space.sub(0), 0.0, APLine(), method='pointwise'
+        )
+        dir_bcs.append(dir_bc_const_x)
+
+        # and superior edge
+        if param['ParamOption'] == 'TractionShapeAll':
+            x_max = mesh.coordinates()[:, 0].max()
+            dir_bc_const_x = dfn.DirichletBC(
+                func_space.sub(0), 0.0, APLine(x=x_max, y=0), method='pointwise'
+            )
+            dir_bcs.append(dir_bc_const_x)
+
         # Fix the y-coordinate on the VF bottom surface
         mf = residual.mesh_function('facet')
         mf_label_to_value = residual.mesh_function_label_to_value('facet')
@@ -261,37 +311,17 @@ def setup_transform(
         )
         dir_bcs.append(dir_bc_const_y)
 
-        # Fix the x-coordinate along the VF inferior edge
-        class InferiorEdge(dfn.SubDomain):
-            """
-            Mark the inferior edge of the VF
-
-            This is assumed to be at the origin
-            """
-
-            def inside(self, x: NDArray, on_boundary: bool):
-                return np.linalg.norm(x[:2] - (0.0, 0.0)) == 0.0
-
-        dir_bc_const_x = dfn.DirichletBC(
-            func_space.sub(0), 0.0, InferiorEdge(), method='pointwise'
-        )
-        dir_bcs.append(dir_bc_const_x)
-
-        # Fix the z-coordinate at the VF anterior commissure (for 3D models)
+        # Fix the z-coordinate at the anterior/posterior ends
         if mesh.topology().dim() >= 3:
-
-            class Origin(dfn.SubDomain):
-                """
-                Mark the origin
-
-                This is assumed to be at the origin as well
-                """
-
-                def inside(self, x: NDArray, on_boundary: bool):
-                    return np.all(x == (0.0, 0.0, 0.0))
-
             dir_bc_const_z = dfn.DirichletBC(
-                func_space.sub(2), 0.0, Origin(), method='pointwise'
+                func_space.sub(2), 0.0, CoronalPlane(z=0), method='pointwise'
+            )
+            dir_bcs.append(dir_bc_const_z)
+
+            # TODO: `z = 1.5` is hardcoded for a 1.5 cm long VF
+            z_max = mesh.coordinates()[:, 2].max()
+            dir_bc_const_z = dfn.DirichletBC(
+                func_space.sub(2), 0.0, CoronalPlane(z=z_max), method='pointwise'
             )
             dir_bcs.append(dir_bc_const_z)
 
@@ -449,11 +479,12 @@ def make_exp_params(study_name: str):
                     'LayerType': 'discrete',
                     'Ecov': 6e4,
                     'Ebod': 6e4,
-                    'ParamOption': 'TractionShape',
+                    'ParamOption': param_option,
                     # 'ParamOption': 'Stiffness',
                     'BifParam': 'psub',
                 }
             )
+            for param_option in ['TractionShape', 'TractionShapeAll']
         ]
         return params
     elif study_name == 'test_3D':
@@ -465,11 +496,12 @@ def make_exp_params(study_name: str):
                     'LayerType': 'discrete',
                     'Ecov': 6e4,
                     'Ebod': 6e4,
-                    'ParamOption': 'TractionShape',
+                    'ParamOption': param_option,
                     # 'ParamOption': 'Stiffness',
                     'BifParam': 'psub',
                 }
             )
+            for param_option in ['TractionShape', 'TractionShapeAll']
         ]
         return params
     elif study_name == 'test_traction_shape':
