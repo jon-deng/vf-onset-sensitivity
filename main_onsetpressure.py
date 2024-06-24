@@ -504,6 +504,23 @@ def make_exp_params(study_name: str):
             for param_option in ['TractionShape', 'TractionShapeAll']
         ]
         return params
+    elif study_name == 'test_3D_fine':
+        params = [
+            default_param.substitute(
+                {
+                    'Functional': 'OnsetPressure',
+                    'MeshName': f'M5_BC--GA3.00--DZ1.50e+00--NZ15--CL7.50e-01',
+                    'LayerType': 'discrete',
+                    'Ecov': 6e4,
+                    'Ebod': 6e4,
+                    'ParamOption': param_option,
+                    # 'ParamOption': 'Stiffness',
+                    'BifParam': 'psub',
+                }
+            )
+            for param_option in ['TractionShape', 'TractionShapeAll']
+        ]
+        return params
     elif study_name == 'test_traction_shape':
         # Modify this one as you need for different tests
         emods = [6e4]
