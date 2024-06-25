@@ -1106,7 +1106,8 @@ def run_optimization(
     # to interface with the gradient code, this is inserted into `_p`
     _p = transform.x.copy()
 
-    with h5py.File(f'{output_dir}/optimization_hist.h5', mode='w') as h5file:
+    fpath = path.join(output_dir, f'optimization_hist_{param.to_str()}.h5')
+    with h5py.File(fpath, mode='w') as h5file:
         grad_manager = libhopf.OptGradManager(redu_func, h5file, transform)
 
         def f(p):
