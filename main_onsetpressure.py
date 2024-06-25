@@ -984,6 +984,8 @@ def objective(p, redu_func, transform):
     _p.set_mono(p)
 
     fun, grad = objective_bv(_p, redu_func, transform)
+    PETSc.garbage_cleanup()
+    SLEPc.garbage_cleanup()
 
     return fun, grad.to_mono_ndarray()
 
