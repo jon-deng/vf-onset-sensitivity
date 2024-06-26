@@ -1109,40 +1109,43 @@ def run_optimization(
     _p = transform.x.copy()
 
     fpath = path.join(output_dir, f'optimization_hist_{param.to_str()}.h5')
-    with h5py.File(fpath, mode='w') as h5file:
-        grad_manager = libhopf.OptGradManager(redu_func, h5file, transform)
+    if not path.isfile(fpath):
+        with h5py.File(fpath, mode='w') as h5file:
+            grad_manager = libhopf.OptGradManager(redu_func, h5file, transform)
 
-        def f(p):
-            with warnings.catch_warnings():
-                warnings.simplefilter('always')
-                K = 0.0
-                C = 1e0
-                obj_reg = K * 1 / 2 * np.linalg.norm(p) ** 2
-                grad_reg = K * p
+            def f(p):
+                with warnings.catch_warnings():
+                    warnings.simplefilter('always')
+                    K = 0.0
+                    C = 1e0
+                    obj_reg = K * 1 / 2 * np.linalg.norm(p) ** 2
+                    grad_reg = K * p
 
-                _p = transform.x.copy()
-                _p.set_mono(p)
-                # obj, grad_p = objective_bv(_p, redu_func, transform)
-                obj, grad_p = grad_manager.grad(_p)
-                grad = grad_p.to_mono_ndarray()
-                print(f"Called objective function with ||p||={np.linalg.norm(p)}")
-                print(f"Objective function returned f(p)={obj}")
-                print(f"Objective function returned ||grad(p)||={np.linalg.norm(grad)}")
-                return C * obj + obj_reg, C * grad + grad_reg
+                    _p = transform.x.copy()
+                    _p.set_mono(p)
+                    # obj, grad_p = objective_bv(_p, redu_func, transform)
+                    obj, grad_p = grad_manager.grad(_p)
+                    grad = grad_p.to_mono_ndarray()
+                    print(f"Called objective function with ||p||={np.linalg.norm(p)}")
+                    print(f"Objective function returned f(p)={obj}")
+                    print(f"Objective function returned ||grad(p)||={np.linalg.norm(grad)}")
+                    return C * obj + obj_reg, C * grad + grad_reg
 
-        def callback(intermediate_result):
-            print(intermediate_result)
+            def callback(intermediate_result):
+                print(intermediate_result)
 
-        opt_options = {'maxiter': 10}
-        opt_info = optimize.minimize(
-            f,
-            p0.to_mono_ndarray(),
-            method='L-BFGS-B',
-            jac=True,
-            callback=callback,
-            options=opt_options,
-        )
-        print(opt_info)
+            opt_options = {'maxiter': 10}
+            opt_info = optimize.minimize(
+                f,
+                p0.to_mono_ndarray(),
+                method='L-BFGS-B',
+                jac=True,
+                callback=callback,
+                options=opt_options,
+            )
+            print(opt_info)
+    else:
+        print(f"File: {fpath} already exists")
     # breakpoint()
 
 
