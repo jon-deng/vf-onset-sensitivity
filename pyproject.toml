@@ -1,0 +1,7 @@
+[project]
+name = "vf-onset-sensitivity"
+readme = "README.md"
+version = "0.0.0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
