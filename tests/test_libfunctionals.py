@@ -18,7 +18,7 @@ from libhopf import functional as libfuncs
 from libhopf.setup import load_hopf_model, set_default_props
 from libhopf import hopf
 
-from libtest import taylor_convergence
+from .libtest import taylor_convergence
 
 
 # pylint: disable=redefined-outer-name

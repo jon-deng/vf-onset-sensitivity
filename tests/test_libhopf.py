@@ -18,7 +18,7 @@ from petsc4py import PETSc
 from blockarray import linalg as bla, blockvec as bv, blockmat as bm, subops
 
 from libhopf import hopf, functional as libfunctional, setup
-from libtest import taylor_convergence
+from .libtest import taylor_convergence
 
 # pylint: disable=redefined-outer-name
 # pylint: disable=no-member, invalid-name
