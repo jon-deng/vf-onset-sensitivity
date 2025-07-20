@@ -47,11 +47,18 @@ if __name__ == '__main__':
 
     def make_control(lmbda):
         control = res.control.copy()
-        control[BIFPARAM_KEY] = lmbda
+        control[f'fluid0.{BIFPARAM_KEY}'] = lmbda
         return control
 
+    def set_bif_param(model, control, prop, bifparam, name='psub'):
+        ret_control = control.copy()
+        ret_prop = prop.copy()
+        for n in range(len(model.fluids)):
+            ret_control[f'fluid{n}.{name}'] = bifparam
+        return ret_control, ret_prop
+
     xfps_info = [
-        hopf.solve_fp(res, make_control(lmbda), props0, bifparam_key=BIFPARAM_KEY)
+        hopf.solve_fp(res, make_control(lmbda), props0, lmbdas[-1], set_bif_param=set_bif_param)
         for lmbda in lmbdas
     ]
     bad_fps = [xfp_info[1]['status'] != 0 for xfp_info in xfps_info]
