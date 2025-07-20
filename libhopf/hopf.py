@@ -52,7 +52,7 @@ from slepc4py import SLEPc
 import h5py
 
 import nonlineq as nleq
-from femvf.models.dynamical import base as dynbase, coupled as dyncoup
+from femvf.models.dynamical import BaseDynamicalModel, BaseLinearizedDynamicalModel
 from femvf.parameters import transform as paramzn
 from blockarray import h5utils, subops
 from blockarray import blockvec as bv, blockmat as bm, linalg as bla
@@ -63,16 +63,14 @@ from . import functional
 # pylint: disable=invalid-name
 ListPair = List[Tuple[float, float]]
 
-DynamicalModel = dynbase.BaseDynamicalModel
-
 SolverInfo = Mapping[str, Any]
 SolveFixedPoint = Callable[
-    [DynamicalModel, bv.BlockVector, bv.BlockVector, float],
+    [BaseDynamicalModel, bv.BlockVector, bv.BlockVector, float],
     Tuple[bv.BlockVector, SolverInfo],
 ]
 
 SetBifParam = Callable[
-    [DynamicalModel, bv.BlockVector, bv.BlockVector, float],
+    [BaseDynamicalModel, bv.BlockVector, bv.BlockVector, float],
     Tuple[bv.BlockVector, bv.BlockVector],
 ]
 
@@ -80,8 +78,7 @@ SetBifParam = Callable[
 def set_bif_param_fluid(model, control, prop, bifparam, name='psub'):
     ret_control = control.copy()
     ret_prop = prop.copy()
-    for n in range(len(model.fluids)):
-        ret_control[f'fluid{n}.{name}'] = bifparam
+    ret_control['psub'] = bifparam
     return ret_control, ret_prop
 
 
@@ -116,8 +113,8 @@ class HopfModel:
 
     def __init__(
         self,
-        res: dyncoup.BaseDynamicalFSIModel,
-        dres: dyncoup.BaseLinearizedDynamicalFSIModel,
+        res: BaseDynamicalModel,
+        dres: BaseLinearizedDynamicalModel,
         e_mode: Optional[bv.BlockVector] = None,
         set_bif_param=None,
         assem_dcontrol_dlambda=None,
@@ -143,7 +140,7 @@ class HopfModel:
         self.IDX_DIRICHLET = np.concatenate(
             [
                 list(bc.get_boundary_values().keys())
-                for bc in res.solid.residual.dirichlet_bcs
+                for bc in res.solid.residual.dirichlet_bcs['state/u1']
             ],
             dtype=np.int32,
         )
@@ -506,7 +503,7 @@ def _gen_hopf_state(
 
 ## Functions for finding/bracketing Hopf bifurcations
 def solve_hopf_by_range(
-    dyn_model: DynamicalModel,
+    dyn_model: BaseDynamicalModel,
     control: bv.BlockVector,
     prop: bv.BlockVector,
     bif_param_range: np.ndarray,
@@ -522,7 +519,7 @@ def solve_hopf_by_range(
 
     Parameters
     ----------
-    dyn_model: DynamicalModel
+    dyn_model: BaseDynamicalModel
         The dynamical system model
     control, prop: bv.BlockVector
         The dynamical system's control and property vectors
@@ -594,7 +591,7 @@ def solve_hopf_by_range(
 
 
 def solve_hopf_by_brackets(
-    dyn_model: DynamicalModel,
+    dyn_model: BaseDynamicalModel,
     control: bv.BlockVector,
     prop: bv.BlockVector,
     bif_param_brackets: ListPair,
@@ -610,7 +607,7 @@ def solve_hopf_by_brackets(
 
     Parameters
     ----------
-    dyn_model: DynamicalModel
+    dyn_model: BaseDynamicalModel
         The dynamical system model
     control, prop: bv.BlockVector
         The dynamical system's control and property vectors
@@ -699,7 +696,7 @@ def solve_hopf_by_brackets(
 
 
 def bracket_bif_param(
-    dyn_model: DynamicalModel,
+    dyn_model: BaseDynamicalModel,
     control: bv.BlockVector,
     prop: bv.BlockVector,
     bif_param_brackets: ListPair,
@@ -714,7 +711,7 @@ def bracket_bif_param(
 
     Parameters
     ----------
-    dyn_model: DynamicalModel
+    dyn_model: BaseDynamicalModel
         The dynamical system model
     control, prop: bv.BlockVector
         The dynamical system's control and property vectors
@@ -762,7 +759,7 @@ def bracket_bif_param(
 
 
 def solve_least_stable_mode_r(
-    dyn_model: DynamicalModel,
+    dyn_model: BaseDynamicalModel,
     control: bv.BlockVector,
     prop: bv.BlockVector,
     bif_param: float,
@@ -774,7 +771,7 @@ def solve_least_stable_mode_r(
 
     Parameters
     ----------
-    dyn_model: DynamicalModel
+    dyn_model: BaseDynamicalModel
         The dynamical system model
     control, prop: bv.BlockVector
         The dynamical system's control and property vectors
@@ -922,7 +919,7 @@ def normalize_eigvec_by_norm(
 # The dynamical system corresponds to one block of the larger Hopf system
 # (i.e. `Hopf.res`)
 def solve_fp(
-    res: dyncoup.BaseDynamicalFSIModel,
+    res: BaseDynamicalModel,
     control: bv.BlockVector,
     prop: bv.BlockVector,
     psub_fin: float,
@@ -1002,7 +999,7 @@ def solve_fp(
 
 
 def solve_fp_by_newton(
-    res: dyncoup.BaseDynamicalFSIModel,
+    res: BaseDynamicalModel,
     xfp_0: bv.BlockVector,
     control: bv.BlockVector,
     prop: bv.BlockVector,
@@ -1037,7 +1034,7 @@ def solve_fp_by_newton(
     IDX_DIRICHLET = np.concatenate(
         [
             list(bc.get_boundary_values().keys())
-            for bc in res.solid.residual.dirichlet_bcs
+            for bc in res.solid.residual.dirichlet_bcs['state/u1']
         ],
         dtype=np.int32,
     )
@@ -1078,7 +1075,7 @@ def solve_fp_by_newton(
 
 
 def solve_fp_by_picard(
-    res: dyncoup.BaseDynamicalFSIModel,
+    res: BaseDynamicalModel,
     xfp_0: bv.BlockVector,
     control: bv.BlockVector,
     prop: bv.BlockVector,
@@ -1107,7 +1104,7 @@ def solve_fp_by_picard(
     IDX_DIRICHLET = np.concatenate(
         [
             list(bc.get_boundary_values().keys())
-            for bc in res.solid.residual.dirichlet_bcs
+            for bc in res.solid.residual.dirichlet_bcs['state/u1']
         ],
         dtype=np.int32,
     )
@@ -1197,7 +1194,7 @@ def _apply_dirichlet_bmat(mat, idx, diag=1.0):
 
 
 def solve_linear_stability(
-    res: DynamicalModel,
+    res: BaseDynamicalModel,
     xfp: bv.BlockVector,
     control: bv.BlockVector,
     prop: bv.BlockVector,
@@ -1229,7 +1226,7 @@ def solve_linear_stability(
     IDX_DIRICHLET = np.concatenate(
         [
             list(bc.get_boundary_values().keys())
-            for bc in res.solid.residual.dirichlet_bcs
+            for bc in res.solid.residual.dirichlet_bcs['state/u1']
         ],
         dtype=np.int32,
     )
@@ -1285,7 +1282,7 @@ def solve_linear_stability(
 
 
 def solve_least_stable_mode(
-    res: DynamicalModel,
+    res: BaseDynamicalModel,
     xfp: bv.BlockVector,
     control: bv.BlockVector,
     prop: bv.BlockVector,

@@ -2,7 +2,10 @@
 This modules sets up a 'standard' Hopf model to test
 """
 
-from femvf.models.transient import solid as tsmd, fluid as tfmd
+import dolfin as dfn
+
+from femvf.models import transient
+from femvf.residuals import fluid as tfmd, solid as tsmd
 from femvf.models.dynamical import solid as dsmd, fluid as dfmd
 from femvf import load
 
@@ -23,15 +26,15 @@ def transient_fluidtype_from_sep_method(sep_method):
 def dynamical_fluidtype_from_sep_method(sep_method, bifparam_key='psub'):
     if sep_method == 'fixed':
         if bifparam_key == 'qsub':
-            return dfmd.BernoulliFlowFixedSep, dfmd.LinearizedBernoulliFlowFixedSep
+            return dfmd.BernoulliFlowFixedSep
         elif bifparam_key == 'psub':
-            return dfmd.BernoulliFixedSep, dfmd.LinearizedBernoulliFixedSep
+            return dfmd.BernoulliFixedSep
         else:
             raise ValueError("")
     elif sep_method == 'smoothmin':
-        return dfmd.BernoulliSmoothMinSep, dfmd.LinearizedBernoulliSmoothMinSep
+        return dfmd.BernoulliSmoothMinSep
     elif sep_method == 'arearatio':
-        return dfmd.BernoulliAreaRatioSep, dfmd.LinearizedBernoulliAreaRatioSep
+        return dfmd.BernoulliAreaRatioSep
     else:
         raise ValueError("")
 
@@ -43,42 +46,96 @@ def load_hopf_model(
     bifparam_key='psub',
     zs=None,
 ):
-    FluidType, LinFluidType = dynamical_fluidtype_from_sep_method(
+    FluidResidual = dynamical_fluidtype_from_sep_method(
         sep_method, bifparam_key=bifparam_key
     )
 
-    kwargs = {
-        'fsi_facet_labels': ('pressure',),
-        'fixed_facet_labels': ('fixed',),
-        'separation_vertex_label': sep_vert_label,
+    # First load a dummy solid model so you can find a separation point
+    if zs is None:
+        mesh_dim = 2
+    else:
+        mesh_dim = 3
+    solid_kwargs = {
+        'dirichlet_bcs': {
+            'state/u1': [(dfn.Constant(mesh_dim*[0]), 'facet', 'fixed')]
+        }
+        # 'fsi_facet_labels': ('pressure',),
+        # 'fixed_facet_labels': ('fixed',),
+    }
+    if sep_method == 'fixed':
+        _solid_model = load.load_fenics_model(
+            mesh_path,
+            tsmd.KelvinVoigtWShape,
+            **solid_kwargs,
+        )
+        _idx_sep = load.locate_separation_vertex(
+            _solid_model.residual, separation_vertex_label=sep_vert_label
+        )
+        fluid_kwargs = {
+            'idx_sep': _idx_sep
+        }
+    else:
+        fluid_kwargs = {}
+
+    model_kwargs = {
         'zs': zs,
     }
-    res = load.load_dynamical_fsi_model(
-        mesh_path, None, SolidType=dsmd.KelvinVoigtWShape, FluidType=FluidType, **kwargs
+    res = load.load_fsi_model(
+        mesh_path,
+        dsmd.KelvinVoigtWShape,
+        FluidResidual,
+        solid_kwargs,
+        fluid_kwargs,
+        model_type='dynamical',
+        **model_kwargs
     )
 
-    dres = load.load_dynamical_fsi_model(
+    dres = load.load_fsi_model(
         mesh_path,
-        None,
-        SolidType=dsmd.LinearizedKelvinVoigtWShape,
-        FluidType=LinFluidType,
-        **kwargs,
+        dsmd.KelvinVoigtWShape,
+        FluidResidual,
+        solid_kwargs,
+        fluid_kwargs,
+        model_type='linearized_dynamical',
+        **model_kwargs,
     )
 
     res_hopf = hopf.HopfModel(res, dres)
     return res_hopf, res, dres
 
 
-def load_transient_model(mesh_path, sep_method='fixed', sep_vert_label='separation'):
-    FluidType = transient_fluidtype_from_sep_method(sep_method)
+def load_transient_model(mesh_path, sep_method='fixed', sep_vert_label='separation', zs=None):
+    FluidResidual = transient_fluidtype_from_sep_method(sep_method)
 
-    return load.load_transient_fsi_model(
+    solid_kwargs = {
+        'fsi_facet_labels': ('pressure',),
+        'fixed_facet_labels': ('fixed',),
+    }
+    _solid_model = load.load_fenics_model(
         mesh_path,
-        None,
-        SolidType=tsmd.KelvinVoigt,
-        FluidType=FluidType,
+        tsmd.KelvinVoigtWShape,
+        dirichlet_bcs,
+    )
+    _idx_sep = load.locate_separation_vertex(
+        _solid_model.residual, separation_vertex_label=sep_vert_label
+    )
+    fluid_kwargs = {
+        'idx_sep': _idx_sep
+    }
+
+    model_kwargs = {
+        'zs': zs,
+    }
+
+    return load.load_fsi_model(
+        mesh_path,
+        tsmd.KelvinVoigt,
+        FluidResidual,
+        solid_kwargs,
+        fluid_kwargs,
+        model_type='transient',
         coupling='explicit',
-        separation_vertex_label=sep_vert_label,
+        **model_kwargs
     )
 
 
@@ -87,7 +144,7 @@ EBODY = 5e3 * 10
 PSUB = 450 * 10
 
 
-def set_default_props(prop, mesh, nfluid=1):
+def set_default_props(prop, mesh):
     """
     Set the model properties
     """
@@ -100,7 +157,7 @@ def set_default_props(prop, mesh, nfluid=1):
     return prop
 
 
-def set_constant_props(prop, mesh, nfluid=1):
+def set_constant_props(prop, mesh):
     prop['eta'][:] = 5.0
     prop['rho'][:] = 1.0
     prop['nu'][:] = 0.45
@@ -112,10 +169,9 @@ def set_constant_props(prop, mesh, nfluid=1):
         'r_sep': 1.0,
         'rho_air': 1.293e-3,
     }
-    for n in range(nfluid):
-        for key, value in fluid_values.items():
-            if f'fluid{n}.{key}' in prop:
-                prop[f'fluid{n}.{key}'][:] = value
+    for key, value in fluid_values.items():
+        if key in prop:
+            prop[key][:] = value
 
     # Contact and midline symmetry properties
     # y_gap = 0.5 / 10 # Set y gap to 0.5 mm

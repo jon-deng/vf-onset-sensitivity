@@ -11,9 +11,8 @@ import jax
 import dolfin as dfn
 import ufl
 
-from femvf.models.assemblyutils import CachedFormAssembler
-from femvf.models.equations import uflcontinuum
-from blockarray import blockvec as bvec
+from femvf.models.assemblyutils import CachedUFLFormAssembler
+from femvf.equations import uflcontinuum
 
 from . import signal
 
@@ -427,19 +426,19 @@ class StrainEnergyFunctional(BaseFunctional):
         form = model.res.solid.residual.form
         mesh = model.res.solid.residual.mesh()
 
-        emod = form['coeff.prop.emod']
-        nu = form['coeff.prop.nu']
+        emod = form['prop/emod']
+        nu = form['prop/nu']
         dis = form['coeff.state.u1']
         inf_strain = uflcontinuum.strain_inf(dis)
         cauchy_stress = uflcontinuum.stress_isotropic(inf_strain, emod, nu)
         dx = dfn.Measure('dx', mesh)
 
         strain_energy = ufl.inner(cauchy_stress, inf_strain) * dx
-        self.assem_strain_energy = CachedFormAssembler(strain_energy)
+        self.assem_strain_energy = CachedUFLFormAssembler(strain_energy)
         dstrain_energy_du = dfn.derivative(strain_energy, dis)
-        self.assem_dstrain_energy_du = CachedFormAssembler(dstrain_energy_du)
+        self.assem_dstrain_energy_du = CachedUFLFormAssembler(dstrain_energy_du)
         dstrain_energy_demod = dfn.derivative(strain_energy, emod)
-        self.assem_dstrain_energy_demod = CachedFormAssembler(dstrain_energy_demod)
+        self.assem_dstrain_energy_demod = CachedUFLFormAssembler(dstrain_energy_demod)
 
     def assem_g(self):
         return self.assem_strain_energy.assemble()
@@ -470,7 +469,7 @@ class ModulusGradientNormSqr(BaseFunctional):
         # Define the modulus gradient
         form = model.res.solid.residual.form
         mesh = model.res.solid.residual.mesh()
-        emod = form['coeff.prop.emod']
+        emod = form['prop/emod']
         dx = dfn.Measure('dx', mesh)
         # TODO: This won't work if E is from a function space without a gradient! (for example, 'DG0')
         grad_emod = ufl.grad(emod)

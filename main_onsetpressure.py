@@ -3,20 +3,19 @@ Conduct a sensitivity study of onset pressure and frequency
 """
 
 from typing import Mapping, Optional, Any
-from numpy.typing import NDArray
-
 import argparse
 import os.path as path
 import multiprocessing as mp
 import itertools
 import warnings
+
+from numpy.typing import NDArray
 from tqdm import tqdm
 
 # NOTE: The import order for `dolfin` and other packages (numpy, scipy, etc.)
 # seems to cause issues sometimes (at least on my installation)
 import dolfin as dfn
 
-dfn.set_log_level(50)
 import h5py
 import numpy as np
 from petsc4py import PETSc
@@ -24,13 +23,14 @@ from slepc4py import SLEPc
 from scipy import optimize
 
 from blockarray import blockvec as bv, linalg as bla, h5utils
-from femvf.models.dynamical import base as dbase
+from femvf.models.dynamical import BaseDynamicalModel
 from femvf.parameters import transform as tfrm
 from femvf.meshutils import process_celllabel_to_dofs_from_residual
+from exputils import exputils
 
 from libhopf import hopf as libhopf, setup as libsetup, functional as libfuncs
 
-from exputils import exputils
+dfn.set_log_level(50)
 
 # pylint: disable=redefined-outer-name
 
@@ -102,7 +102,7 @@ def setup_dyna_model(param: exputils.BaseParameters):
     return hopf, res, dres
 
 
-def setup_prop(param: exputils.BaseParameters, model: dbase.BaseDynamicalModel):
+def setup_prop(param: exputils.BaseParameters, model: BaseDynamicalModel):
     """
     Return model properties
 
@@ -116,7 +116,7 @@ def setup_prop(param: exputils.BaseParameters, model: dbase.BaseDynamicalModel):
     prop = model.prop.copy()
     region_to_dofs = process_celllabel_to_dofs_from_residual(
         model.res.solid.residual,
-        model.res.solid.residual.form['coeff.prop.emod'].function_space().dofmap(),
+        model.res.solid.residual.form['prop/emod'].function_space().dofmap(),
     )
     prop = set_prop(
         prop,
@@ -142,7 +142,7 @@ def set_prop(
     """
     # Set any constant properties
     prop = libsetup.set_default_props(
-        prop, hopf.res.solid.residual.mesh(), nfluid=len(hopf.res.fluids)
+        prop, hopf.res.solid.residual.mesh()
     )
 
     # Set cover and body layer properties
@@ -158,7 +158,7 @@ def set_prop(
         emod[dofs_share] = 1 / 2 * (emod_cov + emod_bod)
     elif layer_type == 'linear':
         coord = (
-            hopf.res.solid.residual.form['coeff.prop.emod']
+            hopf.res.solid.residual.form['prop/emod']
             .function_space()
             .tabulate_dof_coordinates()
         )
@@ -184,7 +184,7 @@ def set_prop(
     return prop
 
 
-def setup_functional(param: exputils.BaseParameters, model: dbase.BaseDynamicalModel):
+def setup_functional(param: exputils.BaseParameters, model: BaseDynamicalModel):
     """
     Return a functional
 
@@ -279,7 +279,7 @@ def setup_transform(
 
         ## Apply `DirichletBC`s
         residual = hopf.res.solid.residual
-        func_space = residual.form['coeff.prop.umesh'].function_space()
+        func_space = residual.form['prop/umesh'].function_space()
 
         mesh = residual.mesh()
         vertex_dim = 0
@@ -305,7 +305,7 @@ def setup_transform(
 
         # Fix the y-coordinate on the VF bottom surface
         mf = residual.mesh_function('facet')
-        mf_label_to_value = residual.mesh_function_label_to_value('facet')
+        mf_label_to_value = residual.mesh_subdomain('facet')
         dir_bc_const_y = dfn.DirichletBC(
             func_space.sub(1), 0.0, mf, mf_label_to_value['fixed']
         )
@@ -933,13 +933,13 @@ def setup_norm(hopf_model: libhopf.HopfModel):
     # Mass matrix for the space of elastic moduli:
     form = hopf_model.res.solid.residual.form
     dx = hopf_model.res.solid.residual.measure('dx')
-    u = dfn.TrialFunction(form['coeff.prop.emod'].function_space())
-    v = dfn.TestFunction(form['coeff.prop.emod'].function_space())
+    u = dfn.TrialFunction(form['prop/emod'].function_space())
+    v = dfn.TestFunction(form['prop/emod'].function_space())
     M_EMOD = dfn.assemble(dfn.inner(u, v) * dx, tensor=dfn.PETScMatrix()).mat()
 
     # Mass matrix for the space of mesh deformations:
-    u = dfn.TrialFunction(form['coeff.prop.umesh'].function_space())
-    v = dfn.TestFunction(form['coeff.prop.umesh'].function_space())
+    u = dfn.TrialFunction(form['prop/umesh'].function_space())
+    v = dfn.TestFunction(form['prop/umesh'].function_space())
     M_UMESH = dfn.assemble(dfn.inner(u, v) * dx, tensor=dfn.PETScMatrix()).mat()
 
     def norm(x):

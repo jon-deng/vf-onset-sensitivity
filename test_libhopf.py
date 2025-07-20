@@ -562,14 +562,14 @@ class ScaledNormMixin:
         import dolfin as dfn
 
         dx = hopf_model.res.solid.residual.measure('dx')
-        u = dfn.TrialFunction(form['coeff.prop.emod'].function_space())
-        v = dfn.TestFunction(form['coeff.prop.emod'].function_space())
+        u = dfn.TrialFunction(form['prop/emod'].function_space())
+        v = dfn.TestFunction(form['prop/emod'].function_space())
         M_EMOD = dfn.assemble(dfn.inner(u, v) * dx, tensor=dfn.PETScMatrix()).mat()
 
         # The `...[0]` is hard-coded because I did something weird with storing the
         # mesh displacement/shape property
-        u = dfn.TrialFunction(form['coeff.prop.umesh'].function_space())
-        v = dfn.TestFunction(form['coeff.prop.umesh'].function_space())
+        u = dfn.TrialFunction(form['prop/umesh'].function_space())
+        v = dfn.TestFunction(form['prop/umesh'].function_space())
         M_SHAPE = dfn.assemble(dfn.inner(u, v) * dx, tensor=dfn.PETScMatrix()).mat()
 
         def scaled_norm(x):

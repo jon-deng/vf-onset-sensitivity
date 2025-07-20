@@ -5,8 +5,7 @@ Contains functions that return time-varying signals from a Hopf system
 import numpy as np
 from jax import numpy as jnp
 
-# from femvf.models.dynamical.fluid import smooth_min_weight, wavg
-from femvf.models.equations.fluid import smooth_min_weight, wavg
+from femvf.equations.smoothapproximation import smooth_min_weight, wavg
 
 
 def _split_mono_hopf_state(state, sizes):
