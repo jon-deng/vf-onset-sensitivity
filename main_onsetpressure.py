@@ -631,33 +631,9 @@ def make_exp_params(study_name: str):
     elif study_name == 'main_sensitivity':
         functional_names = ['OnsetPressure', 'OnsetFrequency']
         param_options = ['Stiffness', 'TractionShape']
-        emod_covs = (
-            np.concatenate(
-                [
-                    (1) * np.arange(2, 18, 4),
-                    (1 / 2) * np.arange(2, 18, 4),
-                    (1 / 3) * np.arange(2, 18, 4),
-                    (1 / 4) * np.arange(2, 18, 4),
-                ]
-            )
-            * 10
-            * 1e3
-        )
-        emod_bods = (
-            np.concatenate(
-                [
-                    1 * np.arange(2, 18, 4),
-                    1 * np.arange(2, 18, 4),
-                    1 * np.arange(2, 18, 4),
-                    1 * np.arange(2, 18, 4),
-                ]
-            )
-            * 10
-            * 1e3
-        )
 
-        # emod_covs = np.array([6, 3]) * 10 * 1e3
-        # emod_bods = np.array([6, 6]) * 10 * 1e3
+        emod_bods = np.array([6, 6, 6, 6]) * 10 * 1e3
+        emod_covs = [1, 1/2, 1/3, 1/4] * emod_bods
 
         assert len(emod_covs) == len(emod_bods)
 
