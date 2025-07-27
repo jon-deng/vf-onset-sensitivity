@@ -630,7 +630,7 @@ def make_exp_params(study_name: str):
         return params
     elif study_name == 'main_sensitivity':
         functional_names = ['OnsetPressure', 'OnsetFrequency']
-        param_options = ['const_shape']
+        param_options = ['Stiffness', 'TractionShape']
         emod_covs = (
             np.concatenate(
                 [
@@ -683,7 +683,7 @@ def make_exp_params(study_name: str):
             'SubglottalPressure',
             'SubglottalFlowRate',
         ]
-        param_options = ['const_shape']
+        param_options = ['Stiffness']
         emod_covs = np.array([6.0e4])
         emod_bods = np.array([6.0e4])
 
@@ -707,7 +707,7 @@ def make_exp_params(study_name: str):
         return params
     elif study_name == 'main_coarse_sensitivity':
         functional_names = ['OnsetPressure', 'OnsetFrequency']
-        param_options = ['const_shape']
+        param_options = ['Stiffness']
         emod_covs = (
             np.concatenate(
                 [
@@ -752,7 +752,7 @@ def make_exp_params(study_name: str):
         return params
     elif study_name == 'test_sensitivity':
         functional_names = ['OnsetPressure', 'OnsetFrequency']
-        param_options = ['const_shape']
+        param_options = ['Stiffness']
         emod_covs = 1e4 * np.array([2])
         emod_bods = 1e4 * np.array([2])
 
@@ -775,7 +775,7 @@ def make_exp_params(study_name: str):
         return params
     elif study_name == 'separation_effect':
         functional_names = ['OnsetPressure']
-        param_options = ['const_shape']
+        param_options = ['Stiffness']
         eig_targets = ['LARGEST_MAGNITUDE']
         layer_types = ['discrete']  # , 'linear'
 
@@ -839,7 +839,7 @@ def make_exp_params(study_name: str):
     elif study_name == 'independence':
         functional_names = ['OnsetPressure']
 
-        param_options = ['const_shape']
+        param_options = ['Stiffness']
 
         eig_targets = ['LARGEST_MAGNITUDE']
 
@@ -873,7 +873,7 @@ def make_exp_params(study_name: str):
     elif study_name == 'eig_target_effect':
         functional_names = ['OnsetPressure']
 
-        param_options = ['const_shape']
+        param_options = ['Stiffness']
 
         eig_targets = ['LARGEST_REAL']
 
@@ -905,7 +905,7 @@ def make_exp_params(study_name: str):
         )
         return params
     else:
-        raise ValueError("Unknown `study_name` '{study_name}'")
+        raise ValueError(f"Unknown `study_name` '{study_name}'")
 
 
 def setup_norm(hopf_model: libhopf.HopfModel):
@@ -1184,9 +1184,9 @@ if __name__ == '__main__':
     # Load the Hopf system
 
     argparser = argparse.ArgumentParser()
-    argparser.add_argument('--study-name', type=str, default='none')
-    argparser.add_argument('--num-proc', type=int, default=1)
-    argparser.add_argument('--clscale', type=float, default=1.0)
+    argparser.add_argument('--study-name', type=str, default='none', help="The name of a study to conduct (see `make_exp_params`)")
+    argparser.add_argument('--num-proc', type=int, default=1, help="")
+    argparser.add_argument('--clscale', type=float, default=1.0, help="The mesh size scale factor")
     argparser.add_argument('--overwrite', action='store_true')
     argparser.add_argument('--output-dir', type=str, default='out')
     argparser.add_argument('--study-type', type=str, default='sensitivity')
